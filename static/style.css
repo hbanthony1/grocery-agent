@@ -94,6 +94,15 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .notice { padding: 10px 14px; border-radius: var(--r); background: var(--warn-light); border: 1px solid #D4956A; font-size: 12px; color: var(--warn); font-family: var(--mono); margin-bottom: 12px; }
 .error-box { padding: 12px 14px; border-radius: var(--r); background: var(--error-light); border: 1px solid var(--error); font-size: 12px; color: var(--error); font-family: var(--mono); margin-bottom: 12px; white-space: pre-wrap; word-break: break-all; }
 
+.hh-label { display: flex; align-items: baseline; gap: 6px; }
+.hh-label span { color: var(--accent); }
+.hh-loading { font-size: 11px; font-family: var(--mono); color: var(--text3); }
+.hh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-top: 4px; }
+.hh-item { display: flex; align-items: flex-start; gap: 7px; padding: 5px 0; cursor: pointer; }
+.hh-item input[type="checkbox"] { accent-color: var(--accent); width: 13px; height: 13px; margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+.hh-item-name { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.hh-item input:checked ~ .hh-item-name { color: var(--text); font-weight: 500; }
+
 .schedule-grid { display: flex; flex-direction: column; gap: 6px; }
 .schedule-row { display: grid; grid-template-columns: 32px 72px 1fr; align-items: center; gap: 8px; }
 .schedule-day { font-size: 12px; font-family: var(--mono); color: var(--text3); }

@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
-import anthropic, os, json, traceback
+import anthropic, os, json, re, traceback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,6 +20,11 @@ def ping():
     return jsonify({"ok": True})
 
 
+@app.route('/household-items', methods=['GET'])
+def get_household_items():
+    return jsonify({"items": _parse_household_items()})
+
+
 @app.route('/preferences', methods=['GET'])
 def get_preferences():
     prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
@@ -33,9 +38,10 @@ def get_preferences():
 @app.route('/build-cart', methods=['POST'])
 def build_cart():
     try:
-        data     = request.json
-        meals    = data.get('meals', [])
-        zip_code = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
+        data      = request.json
+        meals     = data.get('meals', [])
+        household = data.get('household', [])
+        zip_code  = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
 
         print(f"\n=== BUILD CART REQUEST ===")
         print(f"Meals: {meals}")
@@ -92,6 +98,24 @@ def build_cart():
             print(f"  ERROR loading staples: {e}")
             traceback.print_exc()
 
+        # Add household / non-grocery items selected by user
+        if household:
+            print("\nProcessing household items...")
+            for item_name in household:
+                try:
+                    product = search_product(item_name)
+                    if product:
+                        item_id = str(product['itemId'])
+                        if item_id not in seen_ids:
+                            seen_ids.add(item_id)
+                            cart_items.append({"itemId": item_id, "quantity": 1})
+                            all_products.append(product)
+                            print(f"  ✓ {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
+                    else:
+                        print(f"  - No result: {item_name}")
+                except Exception as e:
+                    print(f"  - Search error for '{item_name}': {e}")
+
         cart_url = build_cart_url(cart_items, staple_items=[])
         total    = sum(float(p.get('salePrice', p.get('msrp', 0))) for p in all_products)
 
@@ -108,6 +132,30 @@ def build_cart():
         print(f"\n=== CART BUILD ERROR ===")
         traceback.print_exc()
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+def _parse_household_items() -> list[str]:
+    """Extract bullet points from the Household / non-grocery section of preferences.md."""
+    prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
+    try:
+        prefs = open(prefs_path, encoding='utf-8').read()
+    except FileNotFoundError:
+        return []
+    items = []
+    in_section = False
+    for line in prefs.split('\n'):
+        if line.startswith('## Household') and 'non-grocery' in line:
+            in_section = True
+            continue
+        if in_section:
+            if line.startswith('## '):
+                break
+            if line.startswith('- '):
+                item = line[2:].strip()
+                item = re.sub(r'\s*\*\(.*?\)\*', '', item).strip()
+                if item:
+                    items.append(item)
+    return items
 
 
 def get_search_queries_for_meal(meal_name: str) -> list[dict]:

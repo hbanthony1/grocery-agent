@@ -4,6 +4,46 @@ let swappingIndex = -1;
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
+const LS_HOUSEHOLD_KEY = 'grocery_household_checked';
+let householdItems = [];
+let householdChecked = new Set(JSON.parse(localStorage.getItem(LS_HOUSEHOLD_KEY) || '[]'));
+
+function renderHousehold() {
+  const grid = document.getElementById('hhGrid');
+  if (!householdItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
+  grid.innerHTML = householdItems.map(name => {
+    const checked = householdChecked.has(name);
+    const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return `<label class="hh-item">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
+      <span class="hh-item-name">${name}</span>
+    </label>`;
+  }).join('');
+  updateHhCount();
+}
+
+function toggleHousehold(name, checked) {
+  checked ? householdChecked.add(name) : householdChecked.delete(name);
+  localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
+  updateHhCount();
+}
+
+function updateHhCount() {
+  const n = householdChecked.size;
+  document.getElementById('hhCount').textContent = n === 0 ? '0 selected' : `${n} selected`;
+}
+
+async function loadHouseholdItems() {
+  try {
+    const resp = await fetch('/household-items');
+    const data = await resp.json();
+    householdItems = data.items || [];
+    renderHousehold();
+  } catch(e) {
+    document.getElementById('hhGrid').innerHTML = '<span class="hh-loading">server not running</span>';
+  }
+}
+
 const SCHEDULE_DAYS = [
   { key: 'Monday',    short: 'Mon', default: 'normal' },
   { key: 'Tuesday',   short: 'Tue', default: 'normal' },
@@ -202,7 +242,7 @@ async function approveMealPlan() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, zip: '59047' })
+      body: JSON.stringify({ meals: mealNames, household: [...householdChecked], zip: '59047' })
     });
 
     const data = await resp.json();
@@ -262,3 +302,4 @@ async function loadPreferences() {
 goToStep(0);
 renderSchedule();
 loadPreferences();
+loadHouseholdItems();
