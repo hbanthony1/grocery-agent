@@ -140,9 +140,10 @@ async function removeRecipe(id) {
 }
 
 function starsHtml(rating, size = 'display') {
-  return Array.from({length: 5}, (_, i) =>
+  const stars = Array.from({length: 5}, (_, i) =>
     `<span class="star-${size} ${i < rating ? 'filled' : ''}">${i < rating ? '★' : '☆'}</span>`
   ).join('');
+  return `<span class="star-row">${stars}</span>`;
 }
 
 function starPickerHtml(pickerId, currentRating, onClickFn) {

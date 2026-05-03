@@ -139,6 +139,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .btn-icon.danger:hover { border-color: var(--error); color: var(--error); background: var(--error-light); }
 
 /* Stars */
+.star-row { display: inline-flex; gap: 1px; }
 .star-display { font-size: 13px; color: var(--border); }
 .star-display.filled { color: #C8902A; }
 .star-picker { display: inline-flex; gap: 2px; }
