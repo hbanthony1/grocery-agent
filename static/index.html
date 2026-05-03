@@ -10,6 +10,7 @@
     <span class="header-title">weekly grocery planner</span>
     <span class="header-sub">Hannah · Livingston, MT 59047</span>
     <button class="recipes-link" onclick="toggleRecipesPanel()">recipe book</button>
+    <button class="recipes-link" onclick="togglePantryPanel()">pantry</button>
   </div>
 
   <div class="steps">
@@ -93,6 +94,17 @@
       <button class="btn" onclick="goToStep(1)">← back to meals</button>
       <button class="btn primary" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
     </div>
+  </div>
+
+  <!-- PANTRY PANEL (overlay) -->
+  <div id="pantryPanel" class="recipes-panel" style="display:none">
+    <div class="recipes-header">
+      <span class="recipes-title">pantry</span>
+      <button class="btn primary" onclick="addPantryItem()">+ add</button>
+      <button class="btn" onclick="togglePantryPanel()">close</button>
+    </div>
+    <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
+    <div id="pantryList"></div>
   </div>
 
   <!-- RECIPE BOOK PANEL (overlay) -->

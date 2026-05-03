@@ -10,6 +10,7 @@ app = Flask(__name__)
 CORS(app, origins="*")
 
 RECIPES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'recipes.json')
+PANTRY_PATH  = os.path.join(os.path.dirname(__file__), 'data', 'pantry.json')
 
 # Seeded from confirmed meal patterns in preferences.md — runs once on first launch
 _SEED_RECIPES = [
@@ -53,6 +54,48 @@ def get_preferences():
         return jsonify({"content": content})
     except FileNotFoundError:
         return jsonify({"content": ""})
+
+
+@app.route('/pantry', methods=['GET'])
+def get_pantry():
+    return jsonify(_load_pantry())
+
+
+@app.route('/pantry', methods=['POST'])
+def add_pantry_item():
+    pantry = _load_pantry()
+    body = request.json
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+    item = {
+        'id':        str(int(time.time() * 1000)),
+        'name':      name,
+        'amount':    body.get('amount', ''),
+        'unit':      body.get('unit', ''),
+        'expiresOn': body.get('expiresOn', ''),
+        'addedOn':   body.get('addedOn', ''),
+    }
+    pantry.append(item)
+    _save_pantry(pantry)
+    return jsonify(item), 201
+
+
+@app.route('/pantry/<item_id>', methods=['PATCH'])
+def update_pantry_item(item_id):
+    pantry = _load_pantry()
+    for item in pantry:
+        if item['id'] == item_id:
+            item.update({k: v for k, v in request.json.items() if k != 'id'})
+            _save_pantry(pantry)
+            return jsonify(item)
+    return jsonify({'error': 'not found'}), 404
+
+
+@app.route('/pantry/<item_id>', methods=['DELETE'])
+def delete_pantry_item(item_id):
+    _save_pantry([i for i in _load_pantry() if i['id'] != item_id])
+    return jsonify({'ok': True})
 
 
 @app.route('/recipes', methods=['GET'])
@@ -205,6 +248,18 @@ def build_cart():
         print(f"\n=== CART BUILD ERROR ===")
         traceback.print_exc()
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+def _load_pantry() -> list:
+    try:
+        return json.load(open(PANTRY_PATH, encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_pantry(pantry: list) -> None:
+    os.makedirs(os.path.dirname(PANTRY_PATH), exist_ok=True)
+    json.dump(pantry, open(PANTRY_PATH, 'w', encoding='utf-8'), indent=2)
 
 
 def _load_recipes() -> list:

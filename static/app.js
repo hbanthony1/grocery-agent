@@ -3,6 +3,7 @@ let currentStep = 0;
 let meals = [];
 let swappingIndex = -1;
 let recipes = [];
+let pantry = [];
 const pendingRatings = {};
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -278,6 +279,196 @@ function buildRecipeRepoPrompt() {
   return `\nRECIPE BOOK (prioritize these when planning — sorted by rating):\n${lines.join('\n')}\n`;
 }
 
+// ===== PANTRY =====
+async function loadPantry() {
+  try {
+    const resp = await fetch('/pantry');
+    pantry = await resp.json();
+  } catch(e) {}
+}
+
+async function savePantryItem(data) {
+  const resp = await fetch('/pantry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const item = await resp.json();
+  await loadPantry();
+  return item;
+}
+
+async function patchPantryItem(id, data) {
+  await fetch(`/pantry/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  await loadPantry();
+}
+
+async function removePantryItem(id) {
+  await fetch(`/pantry/${id}`, { method: 'DELETE' });
+  await loadPantry();
+  renderPantryPanel();
+}
+
+function pantryExpiryStatus(expiresOn) {
+  if (!expiresOn) return 'none';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp   = new Date(expiresOn + 'T00:00:00');
+  const days  = Math.round((exp - today) / 86400000);
+  if (days < 0)  return 'expired';
+  if (days <= 3) return 'soon';
+  if (days <= 7) return 'week';
+  return 'ok';
+}
+
+function pantryExpiryLabel(expiresOn) {
+  if (!expiresOn) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp   = new Date(expiresOn + 'T00:00:00');
+  const days  = Math.round((exp - today) / 86400000);
+  if (days < 0)  return `expired ${Math.abs(days)}d ago`;
+  if (days === 0) return 'expires today';
+  if (days === 1) return 'expires tomorrow';
+  return `expires in ${days}d`;
+}
+
+function togglePantryPanel() {
+  const panel = document.getElementById('pantryPanel');
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'flex';
+  if (!visible) { document.getElementById('pantrySearch').value = ''; renderPantryPanel(); }
+}
+
+function renderPantryPanel() {
+  const query = (document.getElementById('pantrySearch')?.value || '').toLowerCase();
+  let filtered = query
+    ? pantry.filter(i => i.name.toLowerCase().includes(query))
+    : [...pantry];
+
+  // Sort: expired first, then expiring soon, then by name
+  const order = { expired: 0, soon: 1, week: 2, ok: 3, none: 4 };
+  filtered.sort((a, b) => {
+    const diff = order[pantryExpiryStatus(a.expiresOn)] - order[pantryExpiryStatus(b.expiresOn)];
+    return diff !== 0 ? diff : a.name.localeCompare(b.name);
+  });
+
+  document.getElementById('pantryList').innerHTML = filtered.length
+    ? filtered.map(i => pantryItemHtml(i)).join('')
+    : '<div class="hh-loading" style="padding:12px 20px">pantry is empty — add items you have at home</div>';
+}
+
+function pantryItemHtml(item) {
+  const status = pantryExpiryStatus(item.expiresOn);
+  const label  = pantryExpiryLabel(item.expiresOn);
+  const amtStr = [item.amount, item.unit].filter(Boolean).join(' ');
+  return `<div class="pantry-item ${status}" id="pi-${item.id}">
+    <div class="pantry-item-main">
+      <div>
+        <span class="pantry-name">${item.name}</span>
+        ${amtStr ? `<span class="pantry-amt">${amtStr}</span>` : ''}
+      </div>
+      <div class="pantry-right">
+        ${label ? `<span class="pantry-expiry ${status}">${label}</span>` : ''}
+        <div class="recipe-actions">
+          <button class="btn-icon" onclick="editPantryItem('${item.id}')">edit</button>
+          <button class="btn-icon danger" onclick="removePantryItem('${item.id}')">×</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function editPantryItem(id) {
+  const item = pantry.find(i => i.id === id);
+  if (!item) return;
+  const el = document.getElementById(`pi-${id}`);
+  el.innerHTML = `<div class="pantry-edit-form">
+    <input class="recipe-edit-name" id="pe-name-${id}" value="${item.name.replace(/"/g,'&quot;')}" placeholder="item name" />
+    <div class="pantry-edit-row">
+      <input class="schedule-note" id="pe-amt-${id}"  value="${item.amount||''}"     placeholder="amount (e.g. 2)" style="width:80px" />
+      <input class="schedule-note" id="pe-unit-${id}" value="${item.unit||''}"       placeholder="unit (e.g. lbs)" style="width:90px" />
+      <input class="schedule-note" id="pe-exp-${id}"  value="${item.expiresOn||''}"  type="date" />
+    </div>
+    <div class="recipe-edit-actions">
+      <button class="btn" onclick="renderPantryPanel()">cancel</button>
+      <button class="btn primary" onclick="commitPantryEdit('${id}')">save</button>
+    </div>
+  </div>`;
+}
+
+async function commitPantryEdit(id) {
+  const name      = document.getElementById(`pe-name-${id}`).value.trim();
+  const amount    = document.getElementById(`pe-amt-${id}`).value.trim();
+  const unit      = document.getElementById(`pe-unit-${id}`).value.trim();
+  const expiresOn = document.getElementById(`pe-exp-${id}`).value;
+  await patchPantryItem(id, { name, amount, unit, expiresOn });
+  renderPantryPanel();
+}
+
+function addPantryItem() {
+  const list = document.getElementById('pantryList');
+  if (document.getElementById('pantry-add-form')) return;
+  const form = document.createElement('div');
+  form.className = 'pantry-item';
+  form.id = 'pantry-add-form';
+  form.innerHTML = `<div class="pantry-edit-form">
+    <input class="recipe-edit-name" id="pa-name" placeholder="item name..." />
+    <div class="pantry-edit-row">
+      <input class="schedule-note" id="pa-amt"  placeholder="amount" style="width:80px" />
+      <input class="schedule-note" id="pa-unit" placeholder="unit"   style="width:90px" />
+      <input class="schedule-note" id="pa-exp"  type="date" />
+    </div>
+    <div class="recipe-edit-actions">
+      <button class="btn" onclick="document.getElementById('pantry-add-form').remove()">cancel</button>
+      <button class="btn primary" onclick="submitNewPantryItem()">add</button>
+    </div>
+  </div>`;
+  list.prepend(form);
+  document.getElementById('pa-name').focus();
+}
+
+async function submitNewPantryItem() {
+  const name      = (document.getElementById('pa-name')?.value || '').trim();
+  if (!name) return;
+  const amount    = document.getElementById('pa-amt')?.value.trim()  || '';
+  const unit      = document.getElementById('pa-unit')?.value.trim() || '';
+  const expiresOn = document.getElementById('pa-exp')?.value         || '';
+  const today     = new Date().toISOString().split('T')[0];
+  await savePantryItem({ name, amount, unit, expiresOn, addedOn: today });
+  renderPantryPanel();
+}
+
+function buildPantryPrompt() {
+  if (!pantry.length) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const expiringSoon = pantry.filter(i => {
+    const s = pantryExpiryStatus(i.expiresOn);
+    return s === 'expired' || s === 'soon' || s === 'week';
+  });
+  const onHand = pantry.filter(i => !['expired','soon','week'].includes(pantryExpiryStatus(i.expiresOn)));
+
+  let lines = [];
+  if (expiringSoon.length) {
+    lines.push('PANTRY — USE THESE UP FIRST (expiring soon or expired):');
+    expiringSoon.forEach(i => {
+      const amt = [i.amount, i.unit].filter(Boolean).join(' ');
+      lines.push(`  - ${i.name}${amt ? ' ('+amt+')' : ''} — ${pantryExpiryLabel(i.expiresOn)}`);
+    });
+  }
+  if (onHand.length) {
+    lines.push('PANTRY — already stocked (avoid buying duplicates):');
+    onHand.forEach(i => {
+      const amt = [i.amount, i.unit].filter(Boolean).join(' ');
+      lines.push(`  - ${i.name}${amt ? ' ('+amt+')' : ''}`);
+    });
+  }
+  return lines.length ? '\n' + lines.join('\n') + '\n' : '';
+}
+
 // Swap picker with recipe integration
 function renderSwapPicker(query) {
   const picker = document.getElementById('swapRecipePicker');
@@ -363,7 +554,7 @@ async function runMealPlan() {
 
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
-${buildRecipeRepoPrompt()}
+${buildRecipeRepoPrompt()}${buildPantryPrompt()}
 PREFERENCES:
 ${prefs}
 
@@ -550,3 +741,4 @@ renderSchedule();
 loadPreferences();
 loadHouseholdItems();
 loadRecipes();
+loadPantry();
