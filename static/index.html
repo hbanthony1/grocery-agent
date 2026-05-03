@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <span class="header-title">weekly grocery planner</span>
+    <span class="header-sub">Hannah · Livingston, MT 59047</span>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="tab0"><span class="step-num">1</span> preferences</div>
+    <div class="step" id="tab1"><span class="step-num">2</span> meal plan</div>
+    <div class="step" id="tab2"><span class="step-num">3</span> cart</div>
+  </div>
+
+  <!-- STEP 0: Preferences -->
+  <div id="step0">
+    <div class="card">
+      <div class="card-label">preferences.md — paste your current preferences below</div>
+      <textarea class="prefs-area" id="prefsText" placeholder="Paste preferences.md content here..."></textarea>
+      <div class="new-meal-toggle">
+        <input type="checkbox" id="includeNew" checked />
+        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: Meal Plan -->
+  <div id="step1" style="display:none">
+    <div id="loadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="loadingMsg">Generating your meal plan...</span></div>
+    <div id="mealPlanCard" class="card" style="display:none">
+      <div class="card-label">this week's meals — approve or swap</div>
+      <div class="meal-grid" id="mealGrid"></div>
+      <div class="swap-input-row" id="swapRow">
+        <input class="swap-input" id="swapInput" placeholder="What would you like instead?" />
+        <button class="btn" onclick="applySwap()">swap</button>
+        <button class="btn" onclick="cancelSwap()">cancel</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(0)">← back</button>
+      <button class="btn primary" id="approveBtn" onclick="approveMealPlan()" style="display:none">Approve & build cart →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Cart -->
+  <div id="step2" style="display:none">
+    <div id="cartLoadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="cartLoadingMsg">Building your Walmart cart...</span></div>
+    <div id="cartError" class="error-box" style="display:none"></div>
+    <div class="notice" id="serverNotice" style="display:none">
+      server not running · open Terminal → cd grocery_agent → python server.py
+    </div>
+    <div id="cartCard" class="card" style="display:none">
+      <div class="card-label">cart summary</div>
+      <div class="cart-list" id="cartList"></div>
+      <div class="total-row">
+        <span class="total-label">estimated total</span>
+        <span class="total-val" id="cartTotal">$0</span>
+      </div>
+      <div class="cart-url-box" id="cartUrlBox" style="display:none">
+        <span class="cart-url-text" id="cartUrlText"></span>
+        <button class="open-btn" id="openCartBtn">open in Walmart →</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(1)">← back to meals</button>
+      <button class="btn primary" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

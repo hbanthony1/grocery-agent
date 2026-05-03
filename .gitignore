@@ -1,0 +1,18 @@
+# Credentials — never commit
+.env
+walmart_private_key.pem
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Data files — personal, versioned separately or kept local
+data/recipes.json
+data/pantry.json
+
+# OS
+.DS_Store
+Thumbs.db
