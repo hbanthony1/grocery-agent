@@ -1,13 +1,33 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
-import anthropic, os, json, re, traceback
+import anthropic, os, json, re, time, traceback
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app, origins="*")
+
+RECIPES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'recipes.json')
+
+# Seeded from confirmed meal patterns in preferences.md — runs once on first launch
+_SEED_RECIPES = [
+    {"name": "Chicken Pot Pie",                "rating": 5, "tags": ["kid-friendly", "comfort-food"], "notes": "household favorite — 3× ordered, most repeated meal"},
+    {"name": "Lasagna",                        "rating": 5, "tags": ["weekend", "comfort-food"],      "notes": "big batch Sunday cook, feeds family 2 nights"},
+    {"name": "Pasta with Meat Sauce",          "rating": 4, "tags": ["comfort-food"],                 "notes": "Rao's Marinara + 80/20 ground beef"},
+    {"name": "Fettuccine Alfredo with Chicken","rating": 4, "tags": ["comfort-food"],                 "notes": "heavy cream + parmesan + chicken thighs"},
+    {"name": "Tacos",                          "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "taco seasoning + ROTEL + beans + avocado"},
+    {"name": "Chili",                          "rating": 4, "tags": ["comfort-food"],                 "notes": "ROTEL + beans + crushed tomatoes — pairs with a taco week"},
+    {"name": "Stuffed Crust Pizza",            "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Great Value frozen 3-meat — reliable Friday night"},
+    {"name": "Butter Chicken with Naan",       "rating": 4, "tags": ["quick"],                        "notes": "frozen butter chicken meal + Stonefire mini naan"},
+    {"name": "Meatball Subs",                  "rating": 4, "tags": ["kid-friendly"],                 "notes": "frozen meatballs + crescent rolls"},
+    {"name": "Lit'l Smokies Pigs in Blankets", "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Hillshire Farm + Sweet Baby Ray's + crescent rolls"},
+    {"name": "Hot Dogs",                       "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Nathan's beef hot dogs + Martin's Long Rolls"},
+    {"name": "Beef Birria Tacos",              "rating": 4, "tags": ["quick"],                        "notes": "Del Real Foods slow-cooked — just heat and serve"},
+    {"name": "Rigatoni with Chicken Sausage",  "rating": 4, "tags": [],                               "notes": "Aidells Chicken Sausage with Mozzarella"},
+    {"name": "Panera Soup Night",              "rating": 3, "tags": ["quick"],                        "notes": "Panera ready-to-heat soups — good for winter"},
+]
 
 
 @app.route('/')
@@ -33,6 +53,59 @@ def get_preferences():
         return jsonify({"content": content})
     except FileNotFoundError:
         return jsonify({"content": ""})
+
+
+@app.route('/recipes', methods=['GET'])
+def get_recipes():
+    return jsonify(_load_recipes())
+
+
+@app.route('/recipes', methods=['POST'])
+def add_recipe():
+    recipes = _load_recipes()
+    body = request.json
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+    for r in recipes:
+        if r['name'].lower() == name.lower():
+            r['timesPlanned'] = r.get('timesPlanned', 0) + body.get('timesPlanned', 1)
+            r['lastPlanned'] = body.get('lastPlanned', r.get('lastPlanned', ''))
+            if body.get('rating'):
+                r['rating'] = body['rating']
+            if body.get('notes'):
+                r['notes'] = body['notes']
+            _save_recipes(recipes)
+            return jsonify(r), 200
+    recipe = {
+        'id': str(int(time.time() * 1000)),
+        'name': name,
+        'rating': body.get('rating', 0),
+        'tags': body.get('tags', []),
+        'notes': body.get('notes', ''),
+        'timesPlanned': body.get('timesPlanned', 1),
+        'lastPlanned': body.get('lastPlanned', ''),
+    }
+    recipes.append(recipe)
+    _save_recipes(recipes)
+    return jsonify(recipe), 201
+
+
+@app.route('/recipes/<recipe_id>', methods=['PATCH'])
+def update_recipe(recipe_id):
+    recipes = _load_recipes()
+    for r in recipes:
+        if r['id'] == recipe_id:
+            r.update({k: v for k, v in request.json.items() if k != 'id'})
+            _save_recipes(recipes)
+            return jsonify(r)
+    return jsonify({'error': 'not found'}), 404
+
+
+@app.route('/recipes/<recipe_id>', methods=['DELETE'])
+def delete_recipe(recipe_id):
+    _save_recipes([r for r in _load_recipes() if r['id'] != recipe_id])
+    return jsonify({'ok': True})
 
 
 @app.route('/build-cart', methods=['POST'])
@@ -134,6 +207,28 @@ def build_cart():
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
+def _load_recipes() -> list:
+    try:
+        return json.load(open(RECIPES_PATH, encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_recipes(recipes: list) -> None:
+    os.makedirs(os.path.dirname(RECIPES_PATH), exist_ok=True)
+    json.dump(recipes, open(RECIPES_PATH, 'w', encoding='utf-8'), indent=2)
+
+
+def _seed_recipes_if_empty() -> None:
+    if _load_recipes():
+        return
+    seeded = [
+        {**r, 'id': str(int(time.time() * 1000) + i), 'timesPlanned': 0, 'lastPlanned': ''}
+        for i, r in enumerate(_SEED_RECIPES)
+    ]
+    _save_recipes(seeded)
+
+
 def _parse_household_items() -> list[str]:
     """Extract bullet points from the Household / non-grocery section of preferences.md."""
     prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
@@ -214,6 +309,7 @@ Use descriptive terms that work on Walmart search (e.g. "organic bananas bunch" 
 
 
 if __name__ == '__main__':
+    _seed_recipes_if_empty()
     print("=" * 50)
     print("Grocery agent server running at http://localhost:5000")
     print("Health check: http://localhost:5000/ping")

@@ -9,6 +9,7 @@
   <div class="header">
     <span class="header-title">weekly grocery planner</span>
     <span class="header-sub">Hannah · Livingston, MT 59047</span>
+    <button class="recipes-link" onclick="toggleRecipesPanel()">recipe book</button>
   </div>
 
   <div class="steps">
@@ -17,7 +18,7 @@
     <div class="step" id="tab2"><span class="step-num">3</span> cart</div>
   </div>
 
-  <!-- STEP 0: Preferences -->
+  <!-- STEP 0: Preferences + Schedule + Household -->
   <div id="step0">
     <div class="card">
       <div class="card-label">preferences.md — paste your current preferences below</div>
@@ -47,9 +48,12 @@
       <div class="card-label">this week's meals — approve or swap</div>
       <div class="meal-grid" id="mealGrid"></div>
       <div class="swap-input-row" id="swapRow">
-        <input class="swap-input" id="swapInput" placeholder="What would you like instead?" />
-        <button class="btn" onclick="applySwap()">swap</button>
-        <button class="btn" onclick="cancelSwap()">cancel</button>
+        <div id="swapRecipePicker" class="swap-recipe-picker"></div>
+        <div class="swap-input-inner">
+          <input class="swap-input" id="swapInput" placeholder="or type a different meal..." oninput="renderSwapPicker(this.value)" />
+          <button class="btn" onclick="applySwap()">swap</button>
+          <button class="btn" onclick="cancelSwap()">cancel</button>
+        </div>
       </div>
     </div>
     <div class="actions">
@@ -77,10 +81,29 @@
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
     </div>
+    <div id="ratingPanel" class="card" style="display:none">
+      <div class="card-label">how did this week's meals go? — optional</div>
+      <div id="ratingList" class="rating-list"></div>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn" onclick="skipRating()">skip</button>
+        <button class="btn primary" onclick="saveRatings()">save to recipe book →</button>
+      </div>
+    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(1)">← back to meals</button>
       <button class="btn primary" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
     </div>
+  </div>
+
+  <!-- RECIPE BOOK PANEL (overlay) -->
+  <div id="recipesPanel" class="recipes-panel" style="display:none">
+    <div class="recipes-header">
+      <span class="recipes-title">recipe book</span>
+      <button class="btn primary" onclick="addRecipeManual()">+ add</button>
+      <button class="btn" onclick="toggleRecipesPanel()">close</button>
+    </div>
+    <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />
+    <div id="recipesList"></div>
   </div>
 </div>
 
