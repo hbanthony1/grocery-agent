@@ -4,6 +4,52 @@ let swappingIndex = -1;
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
+const SCHEDULE_DAYS = [
+  { key: 'Monday',    short: 'Mon', default: 'normal' },
+  { key: 'Tuesday',   short: 'Tue', default: 'normal' },
+  { key: 'Wednesday', short: 'Wed', default: 'normal' },
+  { key: 'Thursday',  short: 'Thu', default: 'normal' },
+  { key: 'Friday',    short: 'Fri', default: 'quick'  },
+  { key: 'Saturday',  short: 'Sat', default: 'open'   },
+  { key: 'Sunday',    short: 'Sun', default: 'open'   },
+];
+const COMPLEXITY_CYCLE = ['normal', 'quick', 'open'];
+const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open' };
+const COMPLEXITY_DESC  = {
+  quick:  'QUICK — 30 min or less (frozen, heat-and-eat, or simple assembly)',
+  normal: 'NORMAL — standard weeknight (30–60 min)',
+  open:   'OPEN — plenty of time (elaborate recipes welcome: lasagna, slow cooker, etc.)',
+};
+
+let schedule = {};
+SCHEDULE_DAYS.forEach(d => { schedule[d.key] = { complexity: d.default, note: '' }; });
+
+function renderSchedule() {
+  document.getElementById('scheduleGrid').innerHTML = SCHEDULE_DAYS.map(d => {
+    const { complexity, note } = schedule[d.key];
+    return `
+      <div class="schedule-row">
+        <span class="schedule-day">${d.short}</span>
+        <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')">${COMPLEXITY_LABEL[complexity]}</button>
+        <input class="schedule-note" type="text" placeholder="notes (optional)" value="${note.replace(/"/g, '&quot;')}"
+               oninput="schedule['${d.key}'].note = this.value" />
+      </div>`;
+  }).join('');
+}
+
+function cycleComplexity(day) {
+  const idx = COMPLEXITY_CYCLE.indexOf(schedule[day].complexity);
+  schedule[day].complexity = COMPLEXITY_CYCLE[(idx + 1) % COMPLEXITY_CYCLE.length];
+  renderSchedule();
+}
+
+function buildSchedulePrompt() {
+  return SCHEDULE_DAYS.map(d => {
+    const { complexity, note } = schedule[d.key];
+    return `- ${d.key}: ${COMPLEXITY_DESC[complexity]}${note ? ' — ' + note : ''}`;
+  }).join('\n');
+}
+
 function goToStep(n) {
   [0,1,2].forEach(i => {
     document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
@@ -37,13 +83,16 @@ Based on the preferences below, generate exactly 7 dinners for the week — one 
 PREFERENCES:
 ${prefs}
 
+SCHEDULE (match meal complexity to each day's availability):
+${buildSchedulePrompt()}
+
 ${newMealInstruction}
 
 Rules:
+- Match each meal's cook time and effort to the schedule above — QUICK days need ≤30 min meals, OPEN days can have elaborate recipes
 - Never repeat a meal from the "Do NOT repeat" list
 - Vary proteins: no same protein two days in a row
 - Keep meals practical and kid-friendly
-- Friday should be an easy/quick meal (pizza, hot dogs, or similar)
 - Assign one meal per day of the week
 
 Return ONLY a JSON array of exactly 7 objects, no other text, no markdown:
@@ -211,4 +260,5 @@ async function loadPreferences() {
 }
 
 goToStep(0);
+renderSchedule();
 loadPreferences();
