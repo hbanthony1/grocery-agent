@@ -279,6 +279,45 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .pantry-edit-form { display: flex; flex-direction: column; gap: 8px; }
 .pantry-edit-row  { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+/* Preferences summary (Step 0 card) */
+.prefs-summary-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.prefs-chip { background: var(--parch-200); border-radius: var(--r); padding: 6px 10px; display: flex; gap: 6px; align-items: baseline; }
+.prefs-chip-label { font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; color: var(--text3); flex-shrink: 0; }
+.prefs-chip-val { font-size: 12px; color: var(--text); font-weight: 500; }
+.prefs-chip-skip { background: var(--terra-50); }
+.prefs-chip-skip .prefs-chip-label { color: var(--terra-500); }
+.prefs-summary-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 8px; }
+
+/* Preferences editor */
+.prefs-editor-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.prefs-editor-title { font-family: var(--display); font-size: 30px; font-weight: 700; color: var(--text); letter-spacing: -.01em; font-variation-settings: 'opsz' 36, 'SOFT' 100, 'WONK' 1; }
+
+.prefs-household-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.prefs-field { display: flex; flex-direction: column; gap: 5px; }
+.prefs-field label { font-size: 11px; font-family: var(--mono); color: var(--text3); letter-spacing: .04em; text-transform: uppercase; }
+.prefs-field input { border: 1px solid var(--border); border-radius: var(--r); padding: 7px 10px; font-family: var(--sans); font-size: 13px; background: var(--surface2); color: var(--text); outline: none; width: 100%; transition: border-color 0.15s, box-shadow 0.15s; }
+.prefs-field input:focus { border-color: var(--terra-400); box-shadow: 0 0 0 3px rgba(212,71,42,.12); }
+.prefs-field-wide { grid-column: span 2; }
+
+.prefs-sublabel { font-size: 11px; font-family: var(--mono); color: var(--text3); letter-spacing: .04em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.prefs-notes-area { width: 100%; border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; font-family: var(--sans); font-size: 13px; color: var(--text2); background: var(--surface2); outline: none; resize: vertical; min-height: 72px; transition: border-color 0.15s, box-shadow 0.15s; }
+.prefs-notes-area:focus { border-color: var(--terra-400); box-shadow: 0 0 0 3px rgba(212,71,42,.12); }
+
+.prefs-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.prefs-list-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); transition: border-color 120ms; }
+.prefs-list-item:focus-within { border-color: var(--terra-400); }
+.prefs-list-input { flex: 1; border: none; background: transparent; font-family: var(--sans); font-size: 13px; color: var(--text); outline: none; }
+.prefs-remove-btn { background: none; border: none; font-size: 16px; color: var(--text3); cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; transition: color 120ms; }
+.prefs-remove-btn:hover { color: var(--urgent-red-text); }
+.prefs-add-btn { font-size: 12px; padding: 6px 12px; }
+
+.prefs-brand-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.prefs-brand-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); transition: border-color 120ms; }
+.prefs-brand-row:focus-within { border-color: var(--terra-400); }
+.prefs-brand-item { width: 130px; flex-shrink: 0; border: none; background: transparent; font-family: var(--mono); font-size: 12px; color: var(--text2); outline: none; }
+.prefs-brand-arrow { color: var(--text3); font-size: 13px; flex-shrink: 0; }
+.prefs-brand-value { flex: 1; border: none; background: transparent; font-family: var(--sans); font-size: 13px; color: var(--text); outline: none; }
+
 /* Post-order rating panel */
 .rating-list { display: flex; flex-direction: column; gap: 10px; }
 .rating-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }

@@ -1,0 +1,67 @@
+{
+  "household": {
+    "adults": 2,
+    "kids": 2,
+    "kidsAges": "ages ~10 and toddler",
+    "zip": "59047",
+    "budgetTarget": 175,
+    "budgetMax": 225
+  },
+  "dietaryNotes": [
+    "Whole milk household — toddler needs whole milk",
+    "High protein preference: chicken, Barebells bars, Kodiak waffles",
+    "Comfort food leaning: lasagna, tacos, chili, chicken pot pie, butter chicken",
+    "Fresh fruit every week — bananas non-negotiable",
+    "Diet Coke is a weekly non-negotiable staple",
+    "Coffee: Folgers Half Caff or 1850 Expedition only — never full caff or decaf",
+    "Salad or fresh greens every week"
+  ],
+  "weeklyStaples": [
+    "Marketside Fresh Organic Bananas, bunch",
+    "Meadow Gold or Great Value Whole Milk, 1 gallon",
+    "Great Value Distilled Water, 1 gallon",
+    "Diet Coke, 24-pack cans",
+    "Fresh apples, 3 lb bag (Gala or Honeycrisp, alternate)",
+    "Kodiak Protein-Packed Waffles, 8 ct",
+    "EXTRA Spearmint Gum, 35-stick pack",
+    "Barebells Protein Bars, 4 ct — rotate flavors weekly"
+  ],
+  "frequentStaples": [
+    "Fresh blueberries or other seasonal fruit",
+    "Fresh avocados, 5-6 ct bag",
+    "Great Value Mozzarella String Cheese, 24 oz bag",
+    "Annie's Super! Mac Microwave Cups, 4 ct",
+    "Lance Sandwich Crackers Variety Pack, 10 ct",
+    "Great Value Iced Oatmeal Baked Bars, 18 ct",
+    "Odom's Tennessee Pride Sausage & Buttermilk Biscuits, 24 ct"
+  ],
+  "brandRules": [
+    { "item": "Milk", "brand": "Meadow Gold Vitamin D Whole Milk OR Great Value Whole Milk, gallon" },
+    { "item": "Chicken (fresh)", "brand": "Perdue Harvestland Free Range Boneless Skinless Thighs" },
+    { "item": "Pasta sauce", "brand": "Rao's Homemade Marinara (32 oz) OR Prego Traditional (24 oz)" },
+    { "item": "Parmesan", "brand": "BelGioioso Freshly Grated OR Great Value Finely Shredded" },
+    { "item": "Bread", "brand": "Franz San Juan Island 9 Whole Grain, 24 oz" },
+    { "item": "Sandwich rolls", "brand": "Martin's Potato rolls" },
+    { "item": "Paper towels", "brand": "Brawny Tear-a-Square" },
+    { "item": "Dishwasher pods", "brand": "Cascade Complete Lemon" },
+    { "item": "Coffee", "brand": "Folgers Half Caff Medium Roast OR Folgers 1850 Expedition Blend" },
+    { "item": "BBQ sauce", "brand": "Sweet Baby Ray's Original, 40 oz" },
+    { "item": "Butter", "brand": "Great Value Sweet Cream Unsalted OR Breakstone's All Natural Salted" }
+  ],
+  "storeOk": "Flour, pasta (lasagna, fettuccine, rigatoni, angel hair), canned goods (beans, tomatoes, corn, green beans), shredded cheeses, heavy cream, butter, storage bags, spices, taco seasoning, ricotta, mozzarella string cheese, crushed tomatoes, frozen potatoes, distilled water, vinegar, crackers, meatballs",
+  "doNotRepeat": [],
+  "notes": "Great Value store brand preferred for all pantry staples. Both Rao's and Prego acceptable — Rao's for nicer nights, Prego for lasagna. Fresh > frozen when price difference < $2/lb. Diet Coke Caffeine Free acceptable as backup when regular is out of stock.",
+  "householdItems": [
+    "Brawny Tear-a-Square Paper Towels, 12 double rolls",
+    "Scott 1000 Toilet Paper, 24 rolls",
+    "Clorox Disinfecting Wipes, 3-pack",
+    "Cascade Complete Dishwasher Pods, Lemon, 78 ct",
+    "OxiClean Max Force Laundry Stain Remover Spray, 16 oz",
+    "Great Value Gallon Storage Bags, 80 ct",
+    "Nature Made Men's Multivitamin Gummies, 120 ct",
+    "Papatui Men's Antiperspirant, 2.6 oz",
+    "Schick Hydro Sensitive 5-Blade Razor Refills, 6 ct",
+    "Suave Kids 3-in-1 Shampoo Conditioner, 18 oz",
+    "Purina Tidy Cats Cat Litter, 20 lb jug"
+  ]
+}

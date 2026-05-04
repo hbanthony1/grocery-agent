@@ -4,6 +4,7 @@ let meals = [];
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
+let prefs = {};
 const pendingRatings = {};
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -557,7 +558,7 @@ async function runMealPlan() {
   document.getElementById('mealPlanCard').style.display = 'none';
   document.getElementById('approveBtn').style.display = 'none';
 
-  const prefs = document.getElementById('prefsText').value;
+  const prefsText = buildPreferencesPrompt();
   const includeNew = document.getElementById('includeNew').checked;
 
   const newMealInstruction = includeNew
@@ -572,7 +573,7 @@ async function runMealPlan() {
 Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
 ${buildRecipeRepoPrompt()}${buildPantryPrompt()}
 PREFERENCES:
-${prefs}
+${prefsText}
 
 SCHEDULE (match meal complexity to each day's availability):
 ${buildSchedulePrompt()}
@@ -778,18 +779,179 @@ function confirmOrder() {
 }
 
 // ===== PREFERENCES =====
-async function loadPreferences() {
+async function loadPrefs() {
   try {
-    const resp = await fetch('/preferences');
-    const data = await resp.json();
-    if (data.content) document.getElementById('prefsText').value = data.content;
+    const resp = await fetch('/prefs');
+    prefs = await resp.json();
+  } catch(e) { prefs = {}; }
+  renderPrefsSummary();
+}
+
+function buildPreferencesPrompt() {
+  const h = prefs.household || {};
+  const lines = [];
+  lines.push(`HOUSEHOLD: Family of ${h.adults || 2} adults + ${h.kids || 0} kids (${h.kidsAges || ''}), zip ${h.zip || '59047'}`);
+  lines.push(`BUDGET: Target ~$${h.budgetTarget || 175}, flex to $${h.budgetMax || 225}`);
+  if (prefs.dietaryNotes?.length) {
+    lines.push('\nDIETARY NOTES:');
+    prefs.dietaryNotes.forEach(n => lines.push(`- ${n}`));
+  }
+  if (prefs.weeklyStaples?.length) {
+    lines.push('\nWEEKLY STAPLES (include every order):');
+    prefs.weeklyStaples.forEach(s => lines.push(`- ${s}`));
+  }
+  if (prefs.brandRules?.length) {
+    lines.push('\nBRAND RULES (always use these brands):');
+    prefs.brandRules.forEach(r => lines.push(`- ${r.item}: ${r.brand}`));
+  }
+  if (prefs.storeOk) lines.push(`\nSTORE BRAND / GREAT VALUE OK: ${prefs.storeOk}`);
+  if (prefs.doNotRepeat?.length) lines.push(`\nDO NOT INCLUDE this week: ${prefs.doNotRepeat.join(', ')}`);
+  if (prefs.notes) lines.push(`\nNOTES: ${prefs.notes}`);
+  return lines.join('\n');
+}
+
+function renderPrefsSummary() {
+  const el = document.getElementById('prefsSummary');
+  if (!el) return;
+  const h = prefs.household || {};
+  const kids = h.kids > 0 ? `, ${h.kids} kid${h.kids !== 1 ? 's' : ''}` : '';
+  const skipping = prefs.doNotRepeat?.length ? prefs.doNotRepeat.join(', ') : null;
+  el.innerHTML = `
+    <div class="prefs-summary-grid">
+      <div class="prefs-chip"><span class="prefs-chip-label">household</span><span class="prefs-chip-val">${h.adults || 2} adults${kids} · ${h.zip || '59047'}</span></div>
+      <div class="prefs-chip"><span class="prefs-chip-label">budget</span><span class="prefs-chip-val">~$${h.budgetTarget || 175} / week</span></div>
+      <div class="prefs-chip"><span class="prefs-chip-label">weekly staples</span><span class="prefs-chip-val">${(prefs.weeklyStaples||[]).length} items</span></div>
+      <div class="prefs-chip"><span class="prefs-chip-label">brand rules</span><span class="prefs-chip-val">${(prefs.brandRules||[]).length} rules</span></div>
+      ${skipping ? `<div class="prefs-chip prefs-chip-skip"><span class="prefs-chip-label">skipping</span><span class="prefs-chip-val">${skipping}</span></div>` : ''}
+    </div>`;
+}
+
+// ===== PREFERENCES EDITOR =====
+function openPrefsEditor() {
+  document.getElementById('step0').style.display = 'none';
+  document.getElementById('prefsEditor').style.display = 'block';
+  renderPrefsEditor();
+}
+
+function closePrefsEditor() {
+  document.getElementById('prefsEditor').style.display = 'none';
+  document.getElementById('step0').style.display = 'block';
+}
+
+async function saveAndClosePrefsEditor() {
+  const btn = document.querySelector('#prefsEditor .btn.mustard');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+  prefs.household = {
+    adults:       parseInt(document.getElementById('pf-adults').value) || 2,
+    kids:         parseInt(document.getElementById('pf-kids').value) || 0,
+    kidsAges:     document.getElementById('pf-kidsAges').value.trim(),
+    zip:          document.getElementById('pf-zip').value.trim(),
+    budgetTarget: parseInt(document.getElementById('pf-budgetTarget').value) || 175,
+    budgetMax:    parseInt(document.getElementById('pf-budgetMax').value) || 225,
+  };
+  prefs.dietaryNotes    = readPrefsList('pf-dietList');
+  prefs.weeklyStaples   = readPrefsList('pf-weeklyList');
+  prefs.frequentStaples = readPrefsList('pf-frequentList');
+  prefs.doNotRepeat     = readPrefsList('pf-doNotRepeatList');
+  prefs.householdItems  = readPrefsList('pf-hhList');
+  prefs.brandRules      = readBrandRules();
+  prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
+  prefs.notes           = document.getElementById('pf-notes').value.trim();
+
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prefs),
+    });
   } catch(e) {}
+
+  renderPrefsSummary();
+  loadHouseholdItems();
+  closePrefsEditor();
+}
+
+function readPrefsList(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .prefs-list-input`)]
+    .map(el => el.value.trim()).filter(Boolean);
+}
+
+function readBrandRules() {
+  return [...document.querySelectorAll('#pf-brandList .prefs-brand-row')]
+    .map(row => ({
+      item:  row.querySelector('.prefs-brand-item').value.trim(),
+      brand: row.querySelector('.prefs-brand-value').value.trim(),
+    }))
+    .filter(r => r.item && r.brand);
+}
+
+function renderPrefsEditor() {
+  const h = prefs.household || {};
+  document.getElementById('pf-adults').value       = h.adults ?? 2;
+  document.getElementById('pf-kids').value         = h.kids ?? 0;
+  document.getElementById('pf-kidsAges').value     = h.kidsAges || '';
+  document.getElementById('pf-zip').value          = h.zip || '59047';
+  document.getElementById('pf-budgetTarget').value = h.budgetTarget ?? 175;
+  document.getElementById('pf-budgetMax').value    = h.budgetMax ?? 225;
+  document.getElementById('pf-notes').value        = prefs.notes || '';
+  document.getElementById('pf-storeOk').value      = prefs.storeOk || '';
+
+  renderPrefsList('pf-dietList',        prefs.dietaryNotes    || []);
+  renderPrefsList('pf-weeklyList',      prefs.weeklyStaples   || []);
+  renderPrefsList('pf-frequentList',    prefs.frequentStaples || []);
+  renderPrefsList('pf-doNotRepeatList', prefs.doNotRepeat     || []);
+  renderPrefsList('pf-hhList',          prefs.householdItems  || []);
+  renderBrandList(prefs.brandRules      || []);
+
+  // Reset save button state
+  document.querySelectorAll('#prefsEditor .btn.mustard').forEach(b => {
+    b.textContent = 'Save →'; b.disabled = false;
+  });
+}
+
+function renderPrefsList(containerId, items) {
+  document.getElementById(containerId).innerHTML = items.map(v => prefItemHtml(v)).join('');
+}
+
+function prefItemHtml(value = '') {
+  const esc = value.replace(/"/g, '&quot;');
+  return `<div class="prefs-list-item">
+    <input class="prefs-list-input" type="text" value="${esc}" />
+    <button class="prefs-remove-btn" onclick="this.parentElement.remove()" title="remove">×</button>
+  </div>`;
+}
+
+function addPrefItem(key) {
+  const map = { diet:'pf-dietList', weekly:'pf-weeklyList', frequent:'pf-frequentList', doNotRepeat:'pf-doNotRepeatList', householdItems:'pf-hhList' };
+  const el = document.getElementById(map[key]);
+  if (!el) return;
+  el.insertAdjacentHTML('beforeend', prefItemHtml(''));
+  el.querySelector('.prefs-list-item:last-child .prefs-list-input').focus();
+}
+
+function renderBrandList(rules) {
+  document.getElementById('pf-brandList').innerHTML = rules.map(r => brandRuleHtml(r.item, r.brand)).join('');
+}
+
+function brandRuleHtml(item = '', brand = '') {
+  return `<div class="prefs-brand-row">
+    <input class="prefs-brand-item" type="text" placeholder="item" value="${item.replace(/"/g,'&quot;')}" />
+    <span class="prefs-brand-arrow">→</span>
+    <input class="prefs-brand-value" type="text" placeholder="brand or description" value="${brand.replace(/"/g,'&quot;')}" />
+    <button class="prefs-remove-btn" onclick="this.parentElement.remove()" title="remove">×</button>
+  </div>`;
+}
+
+function addBrandRule() {
+  document.getElementById('pf-brandList').insertAdjacentHTML('beforeend', brandRuleHtml('', ''));
+  document.querySelector('#pf-brandList .prefs-brand-row:last-child .prefs-brand-item').focus();
 }
 
 // ===== INIT =====
 goToStep(0);
 renderSchedule();
-loadPreferences();
+loadPrefs();
 loadHouseholdItems();
 loadRecipes();
 loadPantry();

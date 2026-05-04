@@ -11,6 +11,7 @@ CORS(app, origins="*")
 
 RECIPES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'recipes.json')
 PANTRY_PATH  = os.path.join(os.path.dirname(__file__), 'data', 'pantry.json')
+PREFS_PATH   = os.path.join(os.path.dirname(__file__), 'data', 'prefs.json')
 
 # Seeded from confirmed meal patterns in preferences.md — runs once on first launch
 _SEED_RECIPES = [
@@ -43,7 +44,28 @@ def ping():
 
 @app.route('/household-items', methods=['GET'])
 def get_household_items():
-    return jsonify({"items": _parse_household_items()})
+    try:
+        p = json.load(open(PREFS_PATH, encoding='utf-8'))
+        if p.get('householdItems'):
+            return jsonify({'items': p['householdItems']})
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    return jsonify({'items': _parse_household_items()})
+
+
+@app.route('/prefs', methods=['GET'])
+def get_prefs():
+    try:
+        return jsonify(json.load(open(PREFS_PATH, encoding='utf-8')))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return jsonify({})
+
+
+@app.route('/prefs', methods=['POST'])
+def save_prefs():
+    os.makedirs(os.path.dirname(PREFS_PATH), exist_ok=True)
+    json.dump(request.json, open(PREFS_PATH, 'w', encoding='utf-8'), indent=2)
+    return jsonify({'ok': True})
 
 
 @app.route('/preferences', methods=['GET'])
@@ -338,20 +360,42 @@ Rules:
 
 
 def get_staple_queries() -> list[dict]:
-    """Read preferences.md and extract weekly staples as Walmart search queries."""
-    prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
-    prefs = open(prefs_path, encoding='utf-8').read()
+    """Return weekly staples from prefs.json as Walmart search queries via Claude."""
+    # Load staples from prefs.json, fall back to parsing preferences.md
+    staples = []
+    try:
+        p = json.load(open(PREFS_PATH, encoding='utf-8'))
+        staples = p.get('weeklyStaples', [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
 
+    if not staples:
+        # Legacy fallback: parse preferences.md
+        prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
+        try:
+            in_section = False
+            for line in open(prefs_path, encoding='utf-8'):
+                if '## Weekly staples' in line:
+                    in_section = True
+                    continue
+                if in_section:
+                    if line.startswith('## '):
+                        break
+                    if line.startswith('- '):
+                        staples.append(line[2:].strip())
+        except FileNotFoundError:
+            return []
+
+    staples_text = '\n'.join(f'- {s}' for s in staples)
     client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
     msg = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=400,
         messages=[{
             "role": "user",
-            "content": f"""From the preferences below, extract ONLY the items listed under "Weekly staples — order every single week" as Walmart search queries.
+            "content": f"""Convert these weekly grocery staples to Walmart search queries:
 
-PREFERENCES:
-{prefs}
+{staples_text}
 
 Return ONLY a JSON array, no markdown:
 [{{"search_query": "descriptive product search string", "qty": 1}}, ...]

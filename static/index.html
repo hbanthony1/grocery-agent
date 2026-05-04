@@ -21,14 +21,89 @@
     <div class="step-w" id="tab2"><div class="step-c s-todo">3</div><div class="step-lbl lbl-todo">cart</div></div>
   </div>
 
+  <!-- PREFERENCES EDITOR (shown instead of step content) -->
+  <div id="prefsEditor" style="display:none">
+    <div class="prefs-editor-header">
+      <span class="prefs-editor-title">Preferences</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closePrefsEditor()">← back</button>
+        <button class="btn mustard" onclick="saveAndClosePrefsEditor()">Save →</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">household</div>
+      <div class="prefs-household-grid">
+        <div class="prefs-field"><label>adults</label><input type="number" id="pf-adults" min="1" max="10" /></div>
+        <div class="prefs-field"><label>kids</label><input type="number" id="pf-kids" min="0" max="10" /></div>
+        <div class="prefs-field prefs-field-wide"><label>kids ages</label><input type="text" id="pf-kidsAges" placeholder="e.g. ages ~10 and toddler" /></div>
+        <div class="prefs-field"><label>zip code</label><input type="text" id="pf-zip" /></div>
+        <div class="prefs-field"><label>budget target ($)</label><input type="number" id="pf-budgetTarget" /></div>
+        <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">diet & preferences</div>
+      <div id="pf-dietList" class="prefs-list"></div>
+      <button class="btn prefs-add-btn" onclick="addPrefItem('diet')">+ add note</button>
+      <div style="margin-top:14px">
+        <span class="prefs-sublabel">general notes</span>
+        <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">weekly staples — ordered every week</div>
+      <div id="pf-weeklyList" class="prefs-list"></div>
+      <button class="btn prefs-add-btn" onclick="addPrefItem('weekly')">+ add staple</button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">frequent staples — ordered most weeks</div>
+      <div id="pf-frequentList" class="prefs-list"></div>
+      <button class="btn prefs-add-btn" onclick="addPrefItem('frequent')">+ add staple</button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">brand rules</div>
+      <div id="pf-brandList" class="prefs-brand-list"></div>
+      <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
+      <div style="margin-top:14px">
+        <span class="prefs-sublabel">store brand / Great Value ok for</span>
+        <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">do not repeat this week</div>
+      <div id="pf-doNotRepeatList" class="prefs-list"></div>
+      <button class="btn prefs-add-btn" onclick="addPrefItem('doNotRepeat')">+ add meal to skip</button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">household & non-grocery items</div>
+      <div id="pf-hhList" class="prefs-list"></div>
+      <button class="btn prefs-add-btn" onclick="addPrefItem('householdItems')">+ add item</button>
+    </div>
+
+    <div class="actions" style="margin-bottom:32px">
+      <button class="btn" onclick="closePrefsEditor()">← back</button>
+      <button class="btn mustard" onclick="saveAndClosePrefsEditor()">Save →</button>
+    </div>
+  </div>
+
   <!-- STEP 0: Preferences + Schedule + Household -->
   <div id="step0">
     <div class="card">
-      <div class="card-label">preferences.md — paste your current preferences below</div>
-      <textarea class="prefs-area" id="prefsText" placeholder="Paste preferences.md content here..."></textarea>
-      <div class="new-meal-toggle">
-        <input type="checkbox" id="includeNew" checked />
-        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+      <div class="card-label">your preferences</div>
+      <div id="prefsSummary" class="prefs-summary"></div>
+      <div class="prefs-summary-actions">
+        <div class="new-meal-toggle">
+          <input type="checkbox" id="includeNew" checked />
+          <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+        </div>
+        <button class="btn" onclick="openPrefsEditor()">edit preferences →</button>
       </div>
     </div>
     <div class="card">
