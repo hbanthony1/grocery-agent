@@ -7,13 +7,29 @@ let pantry = [];
 const pendingRatings = {};
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
 
 // ===== NAVIGATION =====
 function goToStep(n) {
   [0,1,2].forEach(i => {
     document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
-    const tab = document.getElementById('tab'+i);
-    tab.className = 'step' + (i===n ? ' active' : i<n ? ' done' : '');
+    const w = document.getElementById('tab'+i);
+    const c = w.querySelector('.step-c');
+    const l = w.querySelector('.step-lbl');
+    const line = document.getElementById('line'+i);
+    if (i < n) {
+      c.className = 'step-c s-done'; c.textContent = '✓';
+      l.className = 'step-lbl lbl-done';
+      if (line) line.className = 'step-line sl-done';
+    } else if (i === n) {
+      c.className = 'step-c s-active'; c.textContent = String(i+1);
+      l.className = 'step-lbl lbl-active';
+      if (line) line.className = 'step-line sl-todo';
+    } else {
+      c.className = 'step-c s-todo'; c.textContent = String(i+1);
+      l.className = 'step-lbl lbl-todo';
+      if (line) line.className = 'step-line sl-todo';
+    }
   });
   currentStep = n;
 }
@@ -610,21 +626,56 @@ Set isNew:true only for the brand new recipes.`;
   renderMeals();
 }
 
+function getUpcomingWeekDates() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dow = today.getDay();
+  const toMon = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
+  const mon = new Date(today); mon.setDate(today.getDate() + toMon);
+  const result = {};
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach((d,i) => {
+    const dt = new Date(mon); dt.setDate(mon.getDate()+i);
+    result[d] = dt.getDate();
+  });
+  return result;
+}
+
+function lookupTags(mealName) {
+  const name = mealName.replace(' [NEW]','').trim().toLowerCase();
+  const r = recipes.find(r => r.name.toLowerCase() === name);
+  return r?.tags || [];
+}
+
 function renderMeals() {
   document.getElementById('mealPlanCard').style.display = 'block';
-  document.getElementById('approveBtn').style.display = 'inline-block';
+  document.getElementById('approveBtn').style.display = 'inline-flex';
+  const dates = getUpcomingWeekDates();
   const grid = document.getElementById('mealGrid');
-  grid.innerHTML = meals.map((m,i) => `
-    <div class="meal-item ${m.isNew ? 'new-meal' : ''} ${swappingIndex===i ? 'swapping' : ''}" id="meal${i}">
-      <div>
-        <div class="meal-day">${m.day}</div>
-        <div class="meal-name">${m.meal.replace(' [NEW]','')}</div>
-        ${m.isNew ? '<span class="new-badge">✦ new recipe</span>' : ''}
-      </div>
-      <div class="meal-action">
-        <button class="swap-btn ${swappingIndex===i?'active':''}" onclick="startSwap(${i})">↺</button>
-      </div>
-    </div>`).join('');
+  grid.innerHTML = meals.map((m,i) => {
+    const isSwapping = swappingIndex === i;
+    const tags = lookupTags(m.meal);
+    const tagsHtml = tags.map(t => `<span class="tag">${t}</span>`).join('');
+    const cx = schedule[m.day]?.complexity || 'normal';
+    const cxLabel = COMPLEXITY_LABEL[cx] || 'Normal';
+    const dom = dates[m.day] || '';
+    const dow = DAY_ABBR[m.day] || m.day.slice(0,3);
+    const mealName = m.meal.replace(' [NEW]','');
+    return `
+      <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''}" id="meal${i}">
+        <div class="day-badge">
+          <span class="dow">${dow}</span>
+          <span class="dom">${dom}</span>
+        </div>
+        <div class="meal-info">
+          <div class="meal-name">${mealName}</div>
+          <div class="meal-tags">
+            ${m.isNew ? '<span class="new-badge">✦ new</span>' : ''}
+            ${tagsHtml}
+          </div>
+        </div>
+        <span class="cx cx-${cx}">${cxLabel}</span>
+        <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})">↺</button>
+      </div>`;
+  }).join('');
 }
 
 function startSwap(i) {
@@ -700,7 +751,7 @@ async function approveMealPlan() {
 
 function renderCart(items, total, url) {
   document.getElementById('cartCard').style.display = 'block';
-  document.getElementById('doneBtn').style.display = 'inline-block';
+  document.getElementById('doneBtn').style.display = 'inline-flex';
 
   const list = document.getElementById('cartList');
   list.innerHTML = items.map(item => `
@@ -722,7 +773,7 @@ function confirmOrder() {
   const btn = document.getElementById('doneBtn');
   btn.textContent = '✓ order placed';
   btn.disabled = true;
-  btn.className = 'btn';
+  btn.className = 'btn mustard';
   showRatingPanel();
 }
 
