@@ -48,7 +48,7 @@
   --urgent-ok-text:    #1A4050;
   --urgent-ok-border:  #ACCDD8;
 
-  --bg:      var(--parch-100);
+  --bg:      #FAFAF8;
   --surface: #FFFFFF;
   --surface2: var(--parch-200);
   --border:  var(--parch-300);
@@ -75,7 +75,7 @@
 
 body { background: var(--bg); font-family: var(--sans); color: var(--text); font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
-.app { max-width: 700px; margin: 0 auto; padding: 24px 20px 48px; }
+.app { max-width: 1100px; margin: 0 auto; padding: 32px 48px 64px; }
 
 /* Header */
 .header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 28px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
@@ -100,7 +100,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 
 /* Cards */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
-.card-label { font-size: 11px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px; }
+.card-label { font-size: 11px; font-family: var(--mono); color: var(--parch-600); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px; }
 
 /* Preferences */
 .prefs-area { width: 100%; height: 160px; resize: vertical; border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; font-family: var(--mono); font-size: 11px; color: var(--text2); background: var(--surface2); outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
@@ -111,7 +111,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .new-meal-toggle label { cursor: pointer; }
 
 /* Meal grid */
-.meal-grid { display: grid; gap: 10px; }
+.meal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* Meal card */
 .meal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-sm); transition: all 200ms var(--ease-out); }
