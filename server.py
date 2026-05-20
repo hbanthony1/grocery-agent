@@ -173,6 +173,37 @@ def delete_recipe(recipe_id):
     return jsonify({'ok': True})
 
 
+@app.route('/generate-recipe', methods=['POST'])
+def generate_recipe():
+    meal_name = (request.json or {}).get('meal', '').strip()
+    if not meal_name:
+        return jsonify({'error': 'meal name required'}), 400
+    try:
+        h = {}
+        try:
+            p = json.load(open(PREFS_PATH, encoding='utf-8'))
+            h = p.get('household', {})
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        servings = int(h.get('adults', 2)) + int(h.get('kids', 0))
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=800,
+            messages=[{
+                'role': 'user',
+                'content': f'''Generate a complete recipe for "{meal_name}" for {servings} people.
+Return ONLY a JSON object, no markdown, no explanation:
+{{"ingredients": ["amount + ingredient name", ...], "steps": ["Step description", ...]}}
+Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step should be one clear sentence.'''
+            }]
+        )
+        text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
+        return jsonify(json.loads(text))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/build-cart', methods=['POST'])
 def build_cart():
     try:

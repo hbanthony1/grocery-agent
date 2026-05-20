@@ -6,6 +6,7 @@ let recipes = [];
 let pantry = [];
 let prefs = {};
 const pendingRatings = {};
+let _pendingGeneratedRecipe = null;
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
@@ -211,11 +212,47 @@ function recipeCardHtml(r) {
         ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
       </div>
       <div class="recipe-actions">
+        <button class="btn-icon" id="rd-btn-${r.id}" onclick="toggleRecipeDetail('${r.id}')">view ▾</button>
         <button class="btn-icon" onclick="editRecipeInline('${r.id}')">edit</button>
         <button class="btn-icon danger" onclick="removeRecipe('${r.id}')">×</button>
       </div>
     </div>
+    <div class="recipe-detail" id="rd-${r.id}" style="display:none">
+      ${recipeDetailHtml(r)}
+    </div>
   </div>`;
+}
+
+function recipeDetailHtml(r) {
+  const ingredients = r.ingredients || [];
+  const steps = r.steps || [];
+  if (!ingredients.length && !steps.length) {
+    return `<div class="recipe-detail-empty">No ingredients or steps yet — click edit to add them.</div>`;
+  }
+  let html = '<div class="recipe-detail-inner">';
+  if (ingredients.length) {
+    html += `<div class="recipe-detail-section">
+      <div class="recipe-detail-label">ingredients</div>
+      <ul class="recipe-ingredient-list">${ingredients.map(i => `<li>${i}</li>`).join('')}</ul>
+    </div>`;
+  }
+  if (steps.length) {
+    html += `<div class="recipe-detail-section">
+      <div class="recipe-detail-label">steps</div>
+      <ol class="recipe-step-list">${steps.map(s => `<li>${s}</li>`).join('')}</ol>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function toggleRecipeDetail(id) {
+  const detail = document.getElementById(`rd-${id}`);
+  const btn    = document.getElementById(`rd-btn-${id}`);
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : 'block';
+  if (btn) btn.textContent = isOpen ? 'view ▾' : 'hide ▴';
 }
 
 function editRecipeInline(id) {
@@ -223,6 +260,8 @@ function editRecipeInline(id) {
   if (!r) return;
   const card = document.getElementById(`rc-${id}`);
   const pickerId = `ep-${id}`;
+  const ingredients = (r.ingredients || []);
+  const steps = (r.steps || []);
   card.innerHTML = `<div class="recipe-edit-form">
     <input class="recipe-edit-name" id="en-${id}" value="${r.name.replace(/"/g,'&quot;')}" />
     <div class="star-picker" id="${pickerId}" data-rating="${r.rating||0}">${starPickerHtml(pickerId, r.rating||0, 'setStar')}</div>
@@ -232,6 +271,12 @@ function editRecipeInline(id) {
         `<label class="tag-option"><input type="checkbox" ${(r.tags||[]).includes(t)?'checked':''} value="${t}" data-edit="${id}"> ${t}</label>`
       ).join('')}
     </div>
+    <div class="recipe-detail-label" style="margin-top:6px">ingredients</div>
+    <div class="prefs-list" id="re-ing-${id}">${ingredients.map(v => prefItemHtml(v)).join('')}</div>
+    <button class="btn prefs-add-btn" onclick="addRecipeListItem('re-ing-${id}')">+ add ingredient</button>
+    <div class="recipe-detail-label" style="margin-top:6px">steps</div>
+    <div class="prefs-list" id="re-steps-${id}">${steps.map(v => prefItemHtml(v)).join('')}</div>
+    <button class="btn prefs-add-btn" onclick="addRecipeListItem('re-steps-${id}')">+ add step</button>
     <div class="recipe-edit-actions">
       <button class="btn" onclick="renderRecipesPanel()">cancel</button>
       <button class="btn primary" onclick="commitRecipeEdit('${id}')">save</button>
@@ -245,7 +290,9 @@ async function commitRecipeEdit(id) {
   const picker = document.getElementById(`ep-${id}`);
   const rating = parseInt(picker?.dataset.rating || 0);
   const tags = [...document.querySelectorAll(`input[data-edit="${id}"]:checked`)].map(el => el.value);
-  await patchRecipe(id, { name, notes, rating, tags });
+  const ingredients = [...document.querySelectorAll(`#re-ing-${id} .prefs-list-input`)].map(el => el.value.trim()).filter(Boolean);
+  const steps = [...document.querySelectorAll(`#re-steps-${id} .prefs-list-input`)].map(el => el.value.trim()).filter(Boolean);
+  await patchRecipe(id, { name, notes, rating, tags, ingredients, steps });
   renderRecipesPanel();
 }
 
@@ -265,6 +312,12 @@ function addRecipeManual() {
         `<label class="tag-option"><input type="checkbox" value="${t}" class="new-tag"> ${t}</label>`
       ).join('')}
     </div>
+    <div class="recipe-detail-label" style="margin-top:6px">ingredients</div>
+    <div class="prefs-list" id="new-ing"></div>
+    <button class="btn prefs-add-btn" onclick="addRecipeListItem('new-ing')">+ add ingredient</button>
+    <div class="recipe-detail-label" style="margin-top:6px">steps</div>
+    <div class="prefs-list" id="new-steps"></div>
+    <button class="btn prefs-add-btn" onclick="addRecipeListItem('new-steps')">+ add step</button>
     <div class="recipe-edit-actions">
       <button class="btn" onclick="document.getElementById('add-form').remove()">cancel</button>
       <button class="btn primary" onclick="submitNewRecipe()">add recipe</button>
@@ -280,7 +333,9 @@ async function submitNewRecipe() {
   const notes  = document.getElementById('new-notes')?.value.trim() || '';
   const rating = parseInt(document.getElementById('new-star-picker')?.dataset.rating || 0);
   const tags   = [...document.querySelectorAll('.new-tag:checked')].map(el => el.value);
-  await saveRecipe({ name, rating, notes, tags, timesPlanned: 0, lastPlanned: '' });
+  const ingredients = [...document.querySelectorAll('#new-ing .prefs-list-input')].map(el => el.value.trim()).filter(Boolean);
+  const steps       = [...document.querySelectorAll('#new-steps .prefs-list-input')].map(el => el.value.trim()).filter(Boolean);
+  await saveRecipe({ name, rating, notes, tags, timesPlanned: 0, lastPlanned: '', ingredients, steps });
   renderRecipesPanel();
 }
 
@@ -667,7 +722,7 @@ function renderMeals() {
           <span class="dom">${dom}</span>
         </div>
         <div class="meal-info">
-          <div class="meal-name">${mealName}</div>
+          <div class="meal-name meal-name-link" onclick="openMealRecipe(${i})">${mealName}</div>
           <div class="meal-tags">
             ${m.isNew ? '<span class="new-badge">✦ new</span>' : ''}
             ${tagsHtml}
@@ -922,6 +977,13 @@ function prefItemHtml(value = '') {
   </div>`;
 }
 
+function addRecipeListItem(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.insertAdjacentHTML('beforeend', prefItemHtml(''));
+  el.querySelector('.prefs-list-item:last-child .prefs-list-input').focus();
+}
+
 function addPrefItem(key) {
   const map = { diet:'pf-dietList', weekly:'pf-weeklyList', frequent:'pf-frequentList', doNotRepeat:'pf-doNotRepeatList', householdItems:'pf-hhList' };
   const el = document.getElementById(map[key]);
@@ -946,6 +1008,85 @@ function brandRuleHtml(item = '', brand = '') {
 function addBrandRule() {
   document.getElementById('pf-brandList').insertAdjacentHTML('beforeend', brandRuleHtml('', ''));
   document.querySelector('#pf-brandList .prefs-brand-row:last-child .prefs-brand-item').focus();
+}
+
+// ===== RECIPE MODAL =====
+async function openMealRecipe(i) {
+  const mealObj = meals[i];
+  if (!mealObj) return;
+  const name = mealObj.meal.replace(' [NEW]', '').trim();
+  const r = recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
+
+  document.getElementById('recipeModalName').textContent = name;
+  const body = document.getElementById('recipeModalBody');
+  document.getElementById('recipeModal').style.display = 'flex';
+
+  if (r) {
+    const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
+    body.innerHTML = `
+      <div class="recipe-modal-meta">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${starsHtml(r.rating)}
+          ${r.timesPlanned ? `<span class="recipe-times">${r.timesPlanned}× planned</span>` : ''}
+        </div>
+        ${tags ? `<div class="recipe-tags" style="margin-top:5px">${tags}</div>` : ''}
+        ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
+      </div>
+      ${recipeDetailHtml(r)}`;
+    return;
+  }
+
+  // Not in recipe book — generate it
+  _pendingGeneratedRecipe = null;
+  body.innerHTML = `<div class="recipe-modal-generating"><div class="dot"></div><span>Generating recipe...</span></div>`;
+
+  try {
+    const resp = await fetch('/generate-recipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meal: name }),
+    });
+    if (!resp.ok) throw new Error('Server error');
+    const generated = await resp.json();
+    if (generated.error) throw new Error(generated.error);
+
+    _pendingGeneratedRecipe = { name, ingredients: generated.ingredients || [], steps: generated.steps || [] };
+
+    body.innerHTML = `
+      <div class="recipe-modal-ai-note">✦ AI-generated — review before saving</div>
+      ${recipeDetailHtml(_pendingGeneratedRecipe)}
+      <div class="actions" style="margin-top:14px;justify-content:flex-start">
+        <button class="btn mustard" id="saveGenBtn" onclick="saveGeneratedRecipe()">save to recipe book →</button>
+      </div>`;
+  } catch(e) {
+    body.innerHTML = `
+      <div class="recipe-modal-not-found">Couldn't generate recipe — make sure the server is running.</div>
+      <div class="actions" style="margin-top:10px;justify-content:flex-start">
+        <button class="btn" onclick="document.getElementById('recipeModal').style.display='none'; toggleRecipesPanel()">open recipe book →</button>
+      </div>`;
+  }
+}
+
+async function saveGeneratedRecipe() {
+  if (!_pendingGeneratedRecipe) return;
+  const btn = document.getElementById('saveGenBtn');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  await saveRecipe({
+    name:         _pendingGeneratedRecipe.name,
+    rating:       0,
+    tags:         [],
+    notes:        '',
+    timesPlanned: 0,
+    lastPlanned:  '',
+    ingredients:  _pendingGeneratedRecipe.ingredients,
+    steps:        _pendingGeneratedRecipe.steps,
+  });
+  _pendingGeneratedRecipe = null;
+  if (btn) { btn.textContent = '✓ saved to recipe book'; btn.disabled = true; }
+}
+
+function closeRecipeModal(e) {
+  if (e.target === e.currentTarget) document.getElementById('recipeModal').style.display = 'none';
 }
 
 // ===== INIT =====

@@ -173,6 +173,17 @@
     </div>
   </div>
 
+  <!-- RECIPE MODAL -->
+  <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
+    <div class="recipe-modal-card" onclick="event.stopPropagation()">
+      <div class="recipe-modal-header">
+        <span class="recipe-modal-name" id="recipeModalName"></span>
+        <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'">×</button>
+      </div>
+      <div id="recipeModalBody"></div>
+    </div>
+  </div>
+
   <!-- PANTRY PANEL (overlay) -->
   <div id="pantryPanel" class="recipes-panel" style="display:none">
     <div class="recipes-header">
