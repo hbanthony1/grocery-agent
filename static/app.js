@@ -13,7 +13,7 @@ const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu',
 
 // ===== NAVIGATION =====
 function goToStep(n) {
-  [0,1,2].forEach(i => {
+  [0,1,2,3].forEach(i => {
     document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
     const w = document.getElementById('tab'+i);
     const c = w.querySelector('.step-c');
@@ -179,10 +179,21 @@ function setStar(rating, pickerId) {
 }
 
 // Recipe panel
+function _syncPanelOpen() {
+  const prefsOpen   = document.getElementById('prefsEditor').style.display  !== 'none';
+  const recipesOpen = document.getElementById('recipesPanel').style.display !== 'none';
+  const pantryOpen  = document.getElementById('pantryPanel').style.display  !== 'none';
+  document.querySelector('.app').classList.toggle('panel-open', prefsOpen || recipesOpen || pantryOpen);
+  document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
+  document.getElementById('navRecipes').classList.toggle('active', recipesOpen);
+  document.getElementById('navPantry').classList.toggle('active', pantryOpen);
+}
+
 function toggleRecipesPanel() {
   const panel = document.getElementById('recipesPanel');
   const visible = panel.style.display !== 'none';
   panel.style.display = visible ? 'none' : 'block';
+  _syncPanelOpen();
   if (!visible) { document.getElementById('recipesSearch').value = ''; renderRecipesPanel(); }
 }
 
@@ -411,6 +422,7 @@ function togglePantryPanel() {
   const panel = document.getElementById('pantryPanel');
   const visible = panel.style.display !== 'none';
   panel.style.display = visible ? 'none' : 'flex';
+  _syncPanelOpen();
   if (!visible) { document.getElementById('pantrySearch').value = ''; renderPantryPanel(); }
 }
 
@@ -763,6 +775,10 @@ function cancelSwap() {
 // ===== CART =====
 async function approveMealPlan() {
   goToStep(2);
+}
+
+async function startCartBuild() {
+  goToStep(3);
   document.getElementById('cartLoadingBar').style.display = 'flex';
   document.getElementById('cartLoadingMsg').textContent = 'Connecting to local server...';
   document.getElementById('cartCard').style.display = 'none';
@@ -839,7 +855,6 @@ async function loadPrefs() {
     const resp = await fetch('/prefs');
     prefs = await resp.json();
   } catch(e) { prefs = {}; }
-  renderPrefsSummary();
 }
 
 function buildPreferencesPrompt() {
@@ -882,15 +897,19 @@ function renderPrefsSummary() {
 }
 
 // ===== PREFERENCES EDITOR =====
-function openPrefsEditor() {
-  document.getElementById('step0').style.display = 'none';
-  document.getElementById('prefsEditor').style.display = 'block';
-  renderPrefsEditor();
+function togglePrefsPanel() {
+  const panel = document.getElementById('prefsEditor');
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'flex';
+  _syncPanelOpen();
+  if (!visible) renderPrefsEditor();
 }
+
+function openPrefsEditor() { togglePrefsPanel(); }
 
 function closePrefsEditor() {
   document.getElementById('prefsEditor').style.display = 'none';
-  document.getElementById('step0').style.display = 'block';
+  _syncPanelOpen();
 }
 
 async function saveAndClosePrefsEditor() {
