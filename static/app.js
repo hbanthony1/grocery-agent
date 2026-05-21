@@ -102,10 +102,10 @@ function renderSchedule() {
   document.getElementById('scheduleGrid').innerHTML = SCHEDULE_DAYS.map(d => {
     const { complexity, note } = schedule[d.key];
     return `
-      <div class="schedule-row">
-        <span class="schedule-day">${d.short}</span>
+      <div class="schedule-col">
+        <div class="schedule-day">${d.short}</div>
         <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')">${COMPLEXITY_LABEL[complexity]}</button>
-        <input class="schedule-note" type="text" placeholder="notes (optional)" value="${note.replace(/"/g, '&quot;')}"
+        <input class="schedule-note" type="text" placeholder="notes…" value="${note.replace(/"/g, '&quot;')}"
                oninput="schedule['${d.key}'].note = this.value" />
       </div>`;
   }).join('');
