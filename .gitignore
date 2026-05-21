@@ -12,6 +12,7 @@ venv/
 # Data files — personal, versioned separately or kept local
 data/recipes.json
 data/pantry.json
+data/google_token.json
 
 # OS
 .DS_Store

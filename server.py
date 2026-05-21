@@ -1,13 +1,29 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
 import anthropic, os, json, re, time, traceback
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Allow OAuth over plain HTTP for localhost
+os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
+
+try:
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request as GRequest
+    from google_auth_oauthlib.flow import Flow
+    from googleapiclient.discovery import build as gcal_build
+    _GCAL_AVAILABLE = True
+except ImportError:
+    _GCAL_AVAILABLE = False
+
 app = Flask(__name__)
 CORS(app, origins="*")
+
+GOOGLE_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'data', 'google_token.json')
+GOOGLE_SCOPES     = ['https://www.googleapis.com/auth/calendar.readonly']
 
 RECIPES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'recipes.json')
 PANTRY_PATH  = os.path.join(os.path.dirname(__file__), 'data', 'pantry.json')
@@ -303,6 +319,136 @@ def build_cart():
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
+# ── Google Calendar ────────────────────────────────────────────────────────
+
+@app.route('/calendar/status')
+def calendar_status():
+    if not _GCAL_AVAILABLE:
+        return jsonify({'connected': False, 'setup': False, 'reason': 'google libraries not installed'})
+    if not os.getenv('GOOGLE_CLIENT_ID'):
+        return jsonify({'connected': False, 'setup': False, 'reason': 'GOOGLE_CLIENT_ID not set in .env'})
+    creds = _load_google_creds()
+    return jsonify({'connected': bool(creds and creds.valid), 'setup': True})
+
+
+@app.route('/calendar/auth')
+def calendar_auth():
+    if not _GCAL_AVAILABLE or not os.getenv('GOOGLE_CLIENT_ID'):
+        return 'Google Calendar not configured', 400
+    flow = _make_google_flow()
+    auth_url, _ = flow.authorization_url(access_type='offline', prompt='consent')
+    return redirect(auth_url)
+
+
+@app.route('/calendar/callback')
+def calendar_callback():
+    code = request.args.get('code')
+    if not code:
+        return 'Authorization failed — no code returned', 400
+    flow = _make_google_flow()
+    flow.fetch_token(code=code)
+    _save_google_creds(flow.credentials)
+    return redirect('/')
+
+
+@app.route('/calendar/week')
+def calendar_week():
+    if not _GCAL_AVAILABLE:
+        return jsonify({'error': 'google libraries not installed'}), 503
+    creds = _load_google_creds()
+    if not creds:
+        return jsonify({'error': 'not connected'}), 401
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(GRequest())
+            _save_google_creds(creds)
+        except Exception as e:
+            return jsonify({'error': f'token refresh failed: {e}'}), 401
+
+    service = gcal_build('calendar', 'v3', credentials=creds)
+
+    today  = datetime.now()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    time_min = monday.replace(hour=0,  minute=0,  second=0,  microsecond=0).isoformat() + 'Z'
+    time_max = sunday.replace(hour=23, minute=59, second=59, microsecond=0).isoformat() + 'Z'
+
+    try:
+        result = service.events().list(
+            calendarId='primary',
+            timeMin=time_min, timeMax=time_max,
+            singleEvents=True, orderBy='startTime', maxResults=50
+        ).execute()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    by_day = {d: [] for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']}
+
+    for event in result.get('items', []):
+        start  = event.get('start', {})
+        dt_str = start.get('dateTime') or start.get('date')
+        if not dt_str:
+            continue
+        try:
+            if start.get('dateTime'):
+                clean = re.sub(r'[+-]\d{2}:\d{2}$', '', dt_str).split('.')[0]
+                dt = datetime.fromisoformat(clean)
+                h, m = dt.hour, dt.minute
+                am_pm = 'am' if h < 12 else 'pm'
+                h12   = h % 12 or 12
+                time_str = f"{h12}:{m:02d}{am_pm}" if m else f"{h12}{am_pm}"
+            else:
+                dt = datetime.fromisoformat(dt_str)
+                time_str = 'all day'
+            day_name = dt.strftime('%A')
+            if day_name in by_day:
+                by_day[day_name].append({'time': time_str, 'title': event.get('summary', 'Untitled')})
+        except Exception:
+            continue
+
+    return jsonify(by_day)
+
+
+@app.route('/calendar/disconnect', methods=['POST'])
+def calendar_disconnect():
+    if os.path.exists(GOOGLE_TOKEN_PATH):
+        os.remove(GOOGLE_TOKEN_PATH)
+    return jsonify({'ok': True})
+
+
+def _make_google_flow():
+    return Flow.from_client_config(
+        {'web': {
+            'client_id':     os.getenv('GOOGLE_CLIENT_ID'),
+            'client_secret': os.getenv('GOOGLE_CLIENT_SECRET'),
+            'auth_uri':      'https://accounts.google.com/o/oauth2/auth',
+            'token_uri':     'https://oauth2.googleapis.com/token',
+            'redirect_uris': ['http://localhost:5000/calendar/callback'],
+        }},
+        scopes=GOOGLE_SCOPES,
+        redirect_uri='http://localhost:5000/calendar/callback'
+    )
+
+
+def _load_google_creds():
+    if not os.path.exists(GOOGLE_TOKEN_PATH):
+        return None
+    try:
+        return Credentials.from_authorized_user_info(
+            json.load(open(GOOGLE_TOKEN_PATH)), GOOGLE_SCOPES
+        )
+    except Exception:
+        return None
+
+
+def _save_google_creds(creds):
+    os.makedirs(os.path.dirname(GOOGLE_TOKEN_PATH), exist_ok=True)
+    with open(GOOGLE_TOKEN_PATH, 'w') as f:
+        f.write(creds.to_json())
+
+
+# ───────────────────────────────────────────────────────────────────────────
+
 def _load_pantry() -> list:
     try:
         return json.load(open(PANTRY_PATH, encoding='utf-8'))
@@ -445,4 +591,4 @@ if __name__ == '__main__':
     print("Health check: http://localhost:5000/ping")
     print("Open index.html in Chrome to start planning.")
     print("=" * 50)
-    app.run(port=5000, debug=True)
+    app.run(port=5000, debug=False)

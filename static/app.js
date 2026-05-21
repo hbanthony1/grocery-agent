@@ -7,6 +7,7 @@ let pantry = [];
 let prefs = {};
 const pendingRatings = {};
 let _pendingGeneratedRecipe = null;
+let calendarEvents = null;
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
@@ -101,14 +102,63 @@ SCHEDULE_DAYS.forEach(d => { schedule[d.key] = { complexity: d.default, note: ''
 function renderSchedule() {
   document.getElementById('scheduleGrid').innerHTML = SCHEDULE_DAYS.map(d => {
     const { complexity, note } = schedule[d.key];
+    const events = calendarEvents ? (calendarEvents[d.key] || []) : [];
+    const eventsHtml = events.length
+      ? `<div class="cal-events">${events.map(e =>
+          `<div class="cal-event"><span class="cal-event-time">${e.time}</span>${e.title}</div>`
+        ).join('')}</div>`
+      : '';
     return `
       <div class="schedule-col">
         <div class="schedule-day">${d.short}</div>
         <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')">${COMPLEXITY_LABEL[complexity]}</button>
         <input class="schedule-note" type="text" placeholder="notes…" value="${note.replace(/"/g, '&quot;')}"
                oninput="schedule['${d.key}'].note = this.value" />
+        ${eventsHtml}
       </div>`;
   }).join('');
+}
+
+// ===== GOOGLE CALENDAR =====
+async function loadCalendarStatus() {
+  try {
+    const resp = await fetch('/calendar/status');
+    const data = await resp.json();
+    if (data.connected) await loadCalendarEvents();
+    renderCalBanner(data);
+  } catch(e) {
+    renderCalBanner({ connected: false, setup: false });
+  }
+}
+
+async function loadCalendarEvents() {
+  try {
+    const resp = await fetch('/calendar/week');
+    if (resp.ok) {
+      calendarEvents = await resp.json();
+      renderSchedule();
+    }
+  } catch(e) {}
+}
+
+function renderCalBanner(status) {
+  const el = document.getElementById('calBanner');
+  if (!el) return;
+  if (!status.setup) { el.innerHTML = ''; return; }
+  if (status.connected) {
+    el.className = 'cal-banner cal-connected';
+    el.innerHTML = `<span class="cal-status-dot active"></span><span class="cal-status-text">Google Calendar connected</span><button class="cal-disconnect-btn" onclick="disconnectCalendar()">disconnect</button>`;
+  } else {
+    el.className = 'cal-banner';
+    el.innerHTML = `<span class="cal-status-dot"></span><span class="cal-status-text">Connect Google Calendar to see your week's events</span><a class="btn" href="/calendar/auth">connect</a>`;
+  }
+}
+
+async function disconnectCalendar() {
+  await fetch('/calendar/disconnect', { method: 'POST' });
+  calendarEvents = null;
+  renderSchedule();
+  renderCalBanner({ connected: false, setup: true });
 }
 
 function cycleComplexity(day) {
@@ -1115,3 +1165,4 @@ loadPrefs();
 loadHouseholdItems();
 loadRecipes();
 loadPantry();
+loadCalendarStatus();
