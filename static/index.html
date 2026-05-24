@@ -106,6 +106,7 @@
         <span class="total-label">estimated total</span>
         <span class="total-val" id="cartTotal">$0</span>
       </div>
+      <div id="budgetBar" class="budget-bar" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <span class="cart-url-text" id="cartUrlText"></span>
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
@@ -223,6 +224,8 @@
       <span class="recipes-title">pantry</span>
       <button class="btn" onclick="addPantryItem()">+ add</button>
       <a class="btn" href="/pantry/export" download="pantry.csv">export CSV</a>
+      <button class="btn" id="pantryImportBtn" onclick="document.getElementById('pantryImportFile').click()">import CSV</button>
+      <input type="file" id="pantryImportFile" accept=".csv" style="display:none" onchange="handlePantryImport(this)">
       <button class="btn" onclick="togglePantryPanel()">close</button>
     </div>
     <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
@@ -235,6 +238,8 @@
       <span class="recipes-title">recipe book</span>
       <button class="btn" onclick="addRecipeManual()">+ add</button>
       <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
+      <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
+      <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
       <button class="btn" onclick="toggleRecipesPanel()">close</button>
     </div>
     <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />

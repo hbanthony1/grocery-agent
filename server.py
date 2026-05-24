@@ -146,6 +146,49 @@ def export_pantry():
                     headers={'Content-Disposition': 'attachment; filename=pantry.csv'})
 
 
+@app.route('/pantry/import', methods=['POST'])
+def import_pantry():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'no file uploaded'}), 400
+    try:
+        reader = csv.DictReader(io.StringIO(f.read().decode('utf-8-sig')))
+    except Exception as e:
+        return jsonify({'error': f'could not read file: {e}'}), 400
+    pantry = _load_pantry()
+    by_name = {p['name'].lower(): p for p in pantry}
+    existing_ids = {p['id'] for p in pantry}
+    id_counter = int(time.time() * 1000)
+    imported = updated = 0
+    for row in reader:
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        if name.lower() in by_name:
+            item = by_name[name.lower()]
+            if row.get('amount'):     item['amount']    = row['amount']
+            if row.get('unit'):       item['unit']      = row['unit']
+            if row.get('expires_on'): item['expiresOn'] = row['expires_on']
+            if row.get('added_on'):   item['addedOn']   = row['added_on']
+            updated += 1
+        else:
+            while str(id_counter) in existing_ids:
+                id_counter += 1
+            new_id = str(id_counter)
+            existing_ids.add(new_id)
+            id_counter += 1
+            item = {
+                'id': new_id, 'name': name,
+                'amount': row.get('amount', ''), 'unit': row.get('unit', ''),
+                'expiresOn': row.get('expires_on', ''), 'addedOn': row.get('added_on', ''),
+            }
+            pantry.append(item)
+            by_name[name.lower()] = item
+            imported += 1
+    _save_pantry(pantry)
+    return jsonify({'imported': imported, 'updated': updated, 'total': len(pantry)})
+
+
 @app.route('/pantry/<item_id>', methods=['DELETE'])
 def delete_pantry_item(item_id):
     _save_pantry([i for i in _load_pantry() if i['id'] != item_id])
@@ -219,6 +262,60 @@ def export_recipes():
         ])
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=recipes.csv'})
+
+
+@app.route('/recipes/import', methods=['POST'])
+def import_recipes():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'no file uploaded'}), 400
+    try:
+        reader = csv.DictReader(io.StringIO(f.read().decode('utf-8-sig')))
+    except Exception as e:
+        return jsonify({'error': f'could not read file: {e}'}), 400
+    recipes = _load_recipes()
+    by_name = {r['name'].lower(): r for r in recipes}
+    existing_ids = {r['id'] for r in recipes}
+    id_counter = int(time.time() * 1000)
+    imported = updated = 0
+    for row in reader:
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        ingredients = [x.strip() for x in row.get('ingredients', '').split('|') if x.strip()]
+        steps       = [x.strip() for x in row.get('steps', '').split('|') if x.strip()]
+        tags        = [x.strip() for x in row.get('tags', '').split(',') if x.strip()]
+        try:    rating = int(row.get('rating') or 0)
+        except: rating = 0
+        try:    times_planned = int(row.get('times_planned') or 0)
+        except: times_planned = 0
+        if name.lower() in by_name:
+            r = by_name[name.lower()]
+            if rating:                   r['rating']       = rating
+            if tags:                     r['tags']         = tags
+            if row.get('notes'):         r['notes']        = row['notes']
+            if times_planned:            r['timesPlanned'] = times_planned
+            if row.get('last_planned'):  r['lastPlanned']  = row['last_planned']
+            if ingredients:              r['ingredients']  = ingredients
+            if steps:                    r['steps']        = steps
+            updated += 1
+        else:
+            while str(id_counter) in existing_ids:
+                id_counter += 1
+            new_id = str(id_counter)
+            existing_ids.add(new_id)
+            id_counter += 1
+            recipe = {
+                'id': new_id, 'name': name, 'rating': rating, 'tags': tags,
+                'notes': row.get('notes', ''), 'timesPlanned': times_planned,
+                'lastPlanned': row.get('last_planned', ''),
+                'ingredients': ingredients, 'steps': steps,
+            }
+            recipes.append(recipe)
+            by_name[name.lower()] = recipe
+            imported += 1
+    _save_recipes(recipes)
+    return jsonify({'imported': imported, 'updated': updated, 'total': len(recipes)})
 
 
 @app.route('/recipes/<recipe_id>', methods=['DELETE'])

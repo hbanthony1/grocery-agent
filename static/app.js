@@ -691,16 +691,30 @@ function setRatingStar(rating, pickerId) {
   if (mealName) pendingRatings[mealName] = rating;
 }
 
+async function _finalizeWeek() {
+  if (!meals.length) return;
+  prefs.doNotRepeat = meals.map(m => m.meal.replace(' [NEW]', '').trim());
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+}
+
 async function saveRatings() {
   const today = new Date().toISOString().split('T')[0];
   for (const [name, rating] of Object.entries(pendingRatings)) {
     await saveRecipe({ name, rating, tags: [], notes: '', timesPlanned: 1, lastPlanned: today });
   }
-  skipRating();
+  await _finalizeWeek();
+  document.getElementById('ratingPanel').style.display = 'none';
 }
 
 function skipRating() {
   document.getElementById('ratingPanel').style.display = 'none';
+  _finalizeWeek(); // fire and forget
 }
 
 // ===== MEAL PLAN =====
@@ -941,6 +955,33 @@ function renderCart(groups, mealOrder, total, url) {
   }).join('');
 
   document.getElementById('cartTotal').textContent = total;
+
+  // Budget indicator
+  const budgetBar = document.getElementById('budgetBar');
+  if (budgetBar) {
+    const totalNum  = parseFloat(total.replace('$', '')) || 0;
+    const target    = prefs.household?.budgetTarget;
+    const budgetMax = prefs.household?.budgetMax;
+    if (target) {
+      let cls, msg;
+      if (totalNum <= target) {
+        cls = 'budget-ok';
+        msg = `✓ within budget — $${(target - totalNum).toFixed(0)} under $${target} target`;
+      } else if (budgetMax && totalNum <= budgetMax) {
+        cls = 'budget-warn';
+        msg = `↑ $${(totalNum - target).toFixed(0)} over $${target} target — $${(budgetMax - totalNum).toFixed(0)} left before $${budgetMax} max`;
+      } else {
+        cls = 'budget-over';
+        const ref = budgetMax || target;
+        msg = `⚠ $${(totalNum - ref).toFixed(0)} over $${ref} ${budgetMax ? 'max' : 'target'} budget`;
+      }
+      budgetBar.className = `budget-bar ${cls}`;
+      budgetBar.textContent = msg;
+      budgetBar.style.display = 'block';
+    } else {
+      budgetBar.style.display = 'none';
+    }
+  }
 
   if (url) {
     document.getElementById('cartUrlBox').style.display = 'flex';
@@ -1219,6 +1260,49 @@ async function saveGeneratedRecipe() {
 
 function closeRecipeModal(e) {
   if (e.target === e.currentTarget) document.getElementById('recipeModal').style.display = 'none';
+}
+
+// ===== CSV IMPORT =====
+async function handlePantryImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const btn = document.getElementById('pantryImportBtn');
+  if (btn) { btn.textContent = 'importing...'; btn.disabled = true; }
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/pantry/import', { method: 'POST', body: fd });
+    const result = await resp.json();
+    if (!resp.ok || result.error) throw new Error(result.error);
+    await loadPantry();
+    renderPantryPanel();
+    if (btn) btn.textContent = `✓ ${result.imported} added, ${result.updated} updated`;
+  } catch(e) {
+    if (btn) btn.textContent = '✗ import failed';
+  }
+  input.value = '';
+  if (btn) setTimeout(() => { btn.textContent = 'import CSV'; btn.disabled = false; }, 3000);
+}
+
+async function handleRecipesImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const btn = document.getElementById('recipesImportBtn');
+  if (btn) { btn.textContent = 'importing...'; btn.disabled = true; }
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/recipes/import', { method: 'POST', body: fd });
+    const result = await resp.json();
+    if (!resp.ok || result.error) throw new Error(result.error);
+    await loadRecipes();
+    renderRecipesPanel();
+    if (btn) btn.textContent = `✓ ${result.imported} added, ${result.updated} updated`;
+  } catch(e) {
+    if (btn) btn.textContent = '✗ import failed';
+  }
+  input.value = '';
+  if (btn) setTimeout(() => { btn.textContent = 'import CSV'; btn.disabled = false; }, 3000);
 }
 
 // ===== ONBOARDING WIZARD =====
