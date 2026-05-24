@@ -5,26 +5,143 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="left-nav">
-  <button class="left-nav-btn" id="navPrefs" onclick="togglePrefsPanel()">preferences</button>
-  <button class="left-nav-btn" id="navRecipes" onclick="toggleRecipesPanel()">recipe book</button>
-  <button class="left-nav-btn" id="navPantry" onclick="togglePantryPanel()">pantry</button>
-</div>
 
-<div class="app">
-  <div class="header">
-    <span class="header-title">Grocery <em>Agent</em></span>
-    <span class="header-sub">Hannah · Livingston, MT 59047</span>
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <span class="top-nav-logo">Grocery <em>Agent</em></span>
+  <div class="top-nav-actions">
+    <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
+    <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
+    <button class="btn-nav" id="navPrefs" onclick="togglePrefsPanel()">⚙</button>
+  </div>
+</nav>
+
+<div class="app" id="mainApp">
+
+  <!-- STEP PROGRESS CARDS -->
+  <div class="hero-steps">
+    <div class="hero-step-card todo" id="heroStep0" onclick="goToStep(0)">
+      <div class="hero-step-num">1</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Your Week</div>
+        <div class="hero-step-desc">Schedule &amp; calendar</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep1">
+      <div class="hero-step-num">2</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Meal Plan</div>
+        <div class="hero-step-desc">7 dinners, AI-matched</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep2">
+      <div class="hero-step-num">3</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Cart</div>
+        <div class="hero-step-desc">Build &amp; check out</div>
+      </div>
+    </div>
   </div>
 
-  <div class="steps">
-    <div class="step-w" id="tab0"><div class="step-c s-active">1</div><div class="step-lbl lbl-active">week at a glance</div></div>
-    <div class="step-line sl-todo" id="line0"></div>
-    <div class="step-w" id="tab1"><div class="step-c s-todo">2</div><div class="step-lbl lbl-todo">meal plan</div></div>
-    <div class="step-line sl-todo" id="line1"></div>
-    <div class="step-w" id="tab2"><div class="step-c s-todo">3</div><div class="step-lbl lbl-todo">household</div></div>
-    <div class="step-line sl-todo" id="line2"></div>
-    <div class="step-w" id="tab3"><div class="step-c s-todo">4</div><div class="step-lbl lbl-todo">cart</div></div>
+  <!-- STEP 0: Your Week -->
+  <div id="step0">
+    <div id="calSection"></div>
+    <div class="card">
+      <div class="card-label">this week's schedule — click to set evening availability</div>
+      <div class="schedule-grid" id="scheduleGrid"></div>
+    </div>
+    <div class="actions">
+      <div class="new-meal-toggle">
+        <input type="checkbox" id="includeNew" checked />
+        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+      </div>
+      <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: Meal Plan -->
+  <div id="step1" style="display:none">
+    <div id="loadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="loadingMsg">Generating your meal plan...</span></div>
+    <div id="mealPlanCard" class="card" style="display:none">
+      <div class="card-label">this week's meals — approve or swap</div>
+      <div class="meal-grid" id="mealGrid"></div>
+      <div class="swap-input-row" id="swapRow">
+        <div id="swapRecipePicker" class="swap-recipe-picker"></div>
+        <div class="swap-input-inner">
+          <input class="swap-input" id="swapInput" placeholder="or type a different meal..." oninput="renderSwapPicker(this.value)" />
+          <button class="btn" onclick="applySwap()">swap</button>
+          <button class="btn" onclick="cancelSwap()">cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(0)">← back</button>
+      <button class="btn mustard" id="approveBtn" onclick="approveMealPlan()" style="display:none">Approve plan →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Cart (household items + cart build) -->
+  <div id="step2" style="display:none">
+    <div class="card">
+      <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
+      <div class="hh-grid" id="hhGrid"><span class="hh-loading">loading...</span></div>
+    </div>
+    <div id="cartLoadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="cartLoadingMsg">Building your Walmart cart...</span></div>
+    <div id="cartError" class="error-box" style="display:none"></div>
+    <div class="notice" id="serverNotice" style="display:none">
+      server not running · open Terminal → cd grocery_agent → python server.py
+    </div>
+    <div id="cartCard" class="card" style="display:none">
+      <div class="card-label">cart summary</div>
+      <div class="cart-list" id="cartList"></div>
+      <div class="total-row">
+        <span class="total-label">estimated total</span>
+        <span class="total-val" id="cartTotal">$0</span>
+      </div>
+      <div class="cart-url-box" id="cartUrlBox" style="display:none">
+        <span class="cart-url-text" id="cartUrlText"></span>
+        <button class="open-btn" id="openCartBtn">open in Walmart →</button>
+      </div>
+    </div>
+    <div id="ratingPanel" class="card" style="display:none">
+      <div class="card-label">how did this week's meals go? — optional</div>
+      <div id="ratingList" class="rating-list"></div>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn" onclick="skipRating()">skip</button>
+        <button class="btn mustard" onclick="saveRatings()">save to recipe book →</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(1)">← back to meals</button>
+      <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()">Build cart →</button>
+      <button class="btn mustard" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
+    </div>
+  </div>
+
+  <!-- RECIPE MODAL -->
+  <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
+    <div class="recipe-modal-card" onclick="event.stopPropagation()">
+      <div class="recipe-modal-header">
+        <span class="recipe-modal-name" id="recipeModalName"></span>
+        <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'">×</button>
+      </div>
+      <div id="recipeModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING WIZARD -->
+  <div id="wizardBackdrop" class="wizard-backdrop" style="display:none" onclick="closeWizardBackdrop(event)">
+    <div class="wizard-card" onclick="event.stopPropagation()">
+      <div class="wizard-header">
+        <span class="wizard-logo">Grocery <em>Agent</em></span>
+        <div class="wizard-progress" id="wizardProgress"></div>
+      </div>
+      <div class="wizard-title" id="wizardTitle">Welcome</div>
+      <div class="wizard-body" id="wizardBody"></div>
+      <div class="wizard-footer" id="wizardFooter"></div>
+    </div>
   </div>
 
   <!-- PREFERENCES PANEL -->
@@ -48,7 +165,7 @@
       </div>
 
       <div class="card">
-        <div class="card-label">diet & preferences</div>
+        <div class="card-label">diet &amp; preferences</div>
         <div id="pf-dietList" class="prefs-list"></div>
         <button class="btn prefs-add-btn" onclick="addPrefItem('diet')">+ add note</button>
         <div style="margin-top:14px">
@@ -86,107 +203,14 @@
       </div>
 
       <div class="card">
-        <div class="card-label">household & non-grocery items</div>
+        <div class="card-label">household &amp; non-grocery items</div>
         <div id="pf-hhList" class="prefs-list"></div>
         <button class="btn prefs-add-btn" onclick="addPrefItem('householdItems')">+ add item</button>
       </div>
     </div>
   </div>
 
-  <!-- STEP 0: Week at a Glance -->
-  <div id="step0">
-    <div id="calBanner" class="cal-banner"></div>
-    <div class="card">
-      <div class="card-label">this week's schedule — click to set evening availability</div>
-      <div class="schedule-grid" id="scheduleGrid"></div>
-    </div>
-    <div class="actions">
-      <div class="new-meal-toggle">
-        <input type="checkbox" id="includeNew" checked />
-        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
-      </div>
-      <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
-    </div>
-  </div>
-
-  <!-- STEP 1: Meal Plan -->
-  <div id="step1" style="display:none">
-    <div id="loadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="loadingMsg">Generating your meal plan...</span></div>
-    <div id="mealPlanCard" class="card" style="display:none">
-      <div class="card-label">this week's meals — approve or swap</div>
-      <div class="meal-grid" id="mealGrid"></div>
-      <div class="swap-input-row" id="swapRow">
-        <div id="swapRecipePicker" class="swap-recipe-picker"></div>
-        <div class="swap-input-inner">
-          <input class="swap-input" id="swapInput" placeholder="or type a different meal..." oninput="renderSwapPicker(this.value)" />
-          <button class="btn" onclick="applySwap()">swap</button>
-          <button class="btn" onclick="cancelSwap()">cancel</button>
-        </div>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn" onclick="goToStep(0)">← back</button>
-      <button class="btn mustard" id="approveBtn" onclick="approveMealPlan()" style="display:none">Approve plan →</button>
-    </div>
-  </div>
-
-  <!-- STEP 2: Household Items -->
-  <div id="step2" style="display:none">
-    <div class="card">
-      <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
-      <div class="hh-grid" id="hhGrid"><span class="hh-loading">loading...</span></div>
-    </div>
-    <div class="actions">
-      <button class="btn" onclick="goToStep(1)">← back to meals</button>
-      <button class="btn primary" onclick="startCartBuild()">Build cart →</button>
-    </div>
-  </div>
-
-  <!-- STEP 3: Cart -->
-  <div id="step3" style="display:none">
-    <div id="cartLoadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="cartLoadingMsg">Building your Walmart cart...</span></div>
-    <div id="cartError" class="error-box" style="display:none"></div>
-    <div class="notice" id="serverNotice" style="display:none">
-      server not running · open Terminal → cd grocery_agent → python server.py
-    </div>
-    <div id="cartCard" class="card" style="display:none">
-      <div class="card-label">cart summary</div>
-      <div class="cart-list" id="cartList"></div>
-      <div class="total-row">
-        <span class="total-label">estimated total</span>
-        <span class="total-val" id="cartTotal">$0</span>
-      </div>
-      <div class="cart-url-box" id="cartUrlBox" style="display:none">
-        <span class="cart-url-text" id="cartUrlText"></span>
-        <button class="open-btn" id="openCartBtn">open in Walmart →</button>
-      </div>
-    </div>
-    <div id="ratingPanel" class="card" style="display:none">
-      <div class="card-label">how did this week's meals go? — optional</div>
-      <div id="ratingList" class="rating-list"></div>
-      <div class="actions" style="margin-top:12px">
-        <button class="btn" onclick="skipRating()">skip</button>
-        <button class="btn mustard" onclick="saveRatings()">save to recipe book →</button>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn" onclick="goToStep(2)">← back to household</button>
-      <button class="btn mustard" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
-    </div>
-  </div>
-
-  <!-- RECIPE MODAL -->
-  <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
-    <div class="recipe-modal-card" onclick="event.stopPropagation()">
-      <div class="recipe-modal-header">
-        <span class="recipe-modal-name" id="recipeModalName"></span>
-        <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'">×</button>
-      </div>
-      <div id="recipeModalBody"></div>
-    </div>
-  </div>
-
-  <!-- PANTRY PANEL (overlay) -->
+  <!-- PANTRY PANEL -->
   <div id="pantryPanel" class="recipes-panel" style="display:none">
     <div class="recipes-header">
       <span class="recipes-title">pantry</span>
@@ -197,7 +221,7 @@
     <div id="pantryList"></div>
   </div>
 
-  <!-- RECIPE BOOK PANEL (overlay) -->
+  <!-- RECIPE BOOK PANEL -->
   <div id="recipesPanel" class="recipes-panel" style="display:none">
     <div class="recipes-header">
       <span class="recipes-title">recipe book</span>
@@ -207,6 +231,7 @@
     <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />
     <div id="recipesList"></div>
   </div>
+
 </div>
 
 <script src="/static/app.js"></script>

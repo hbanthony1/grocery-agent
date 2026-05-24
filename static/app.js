@@ -14,27 +14,18 @@ const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu',
 
 // ===== NAVIGATION =====
 function goToStep(n) {
-  [0,1,2,3].forEach(i => {
-    document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
-    const w = document.getElementById('tab'+i);
-    const c = w.querySelector('.step-c');
-    const l = w.querySelector('.step-lbl');
-    const line = document.getElementById('line'+i);
-    if (i < n) {
-      c.className = 'step-c s-done'; c.textContent = '✓';
-      l.className = 'step-lbl lbl-done';
-      if (line) line.className = 'step-line sl-done';
-    } else if (i === n) {
-      c.className = 'step-c s-active'; c.textContent = String(i+1);
-      l.className = 'step-lbl lbl-active';
-      if (line) line.className = 'step-line sl-todo';
-    } else {
-      c.className = 'step-c s-todo'; c.textContent = String(i+1);
-      l.className = 'step-lbl lbl-todo';
-      if (line) line.className = 'step-line sl-todo';
+  [0,1,2].forEach(i => {
+    const step = document.getElementById('step'+i);
+    if (step) step.style.display = i===n ? 'block' : 'none';
+    const hero = document.getElementById('heroStep'+i);
+    if (hero) {
+      if (i < n)      hero.className = 'hero-step-card done';
+      else if (i===n) hero.className = 'hero-step-card active';
+      else            hero.className = 'hero-step-card todo';
     }
   });
   currentStep = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ===== HOUSEHOLD ITEMS =====
@@ -142,15 +133,24 @@ async function loadCalendarEvents() {
 }
 
 function renderCalBanner(status) {
-  const el = document.getElementById('calBanner');
+  const el = document.getElementById('calSection');
   if (!el) return;
   if (!status.setup) { el.innerHTML = ''; return; }
   if (status.connected) {
-    el.className = 'cal-banner cal-connected';
-    el.innerHTML = `<span class="cal-status-dot active"></span><span class="cal-status-text">Google Calendar connected</span><button class="cal-disconnect-btn" onclick="disconnectCalendar()">disconnect</button>`;
+    el.innerHTML = `<div class="cal-connected-bar">
+      <span class="cal-status-dot active"></span>
+      <span class="cal-status-text">Google Calendar connected</span>
+      <button class="cal-disconnect-btn" onclick="disconnectCalendar()">disconnect</button>
+    </div>`;
   } else {
-    el.className = 'cal-banner';
-    el.innerHTML = `<span class="cal-status-dot"></span><span class="cal-status-text">Connect Google Calendar to see your week's events</span><a class="btn" href="/calendar/auth">connect</a>`;
+    el.innerHTML = `<div class="cal-empty-card">
+      <div class="cal-empty-icon">📅</div>
+      <div class="cal-empty-body">
+        <div class="cal-empty-title">Connect Google Calendar</div>
+        <div class="cal-empty-desc">Sync your week's events so the meal planner can match dinner complexity to your schedule.</div>
+      </div>
+      <a class="btn primary" href="/calendar/auth">Connect →</a>
+    </div>`;
   }
 }
 
@@ -233,7 +233,6 @@ function _syncPanelOpen() {
   const prefsOpen   = document.getElementById('prefsEditor').style.display  !== 'none';
   const recipesOpen = document.getElementById('recipesPanel').style.display !== 'none';
   const pantryOpen  = document.getElementById('pantryPanel').style.display  !== 'none';
-  document.querySelector('.app').classList.toggle('panel-open', prefsOpen || recipesOpen || pantryOpen);
   document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
   document.getElementById('navRecipes').classList.toggle('active', recipesOpen);
   document.getElementById('navPantry').classList.toggle('active', pantryOpen);
@@ -824,11 +823,18 @@ function cancelSwap() {
 
 // ===== CART =====
 async function approveMealPlan() {
+  document.getElementById('buildCartBtn').style.display = 'inline-flex';
+  document.getElementById('cartLoadingBar').style.display = 'none';
+  document.getElementById('cartCard').style.display = 'none';
+  document.getElementById('cartError').style.display = 'none';
+  document.getElementById('serverNotice').style.display = 'none';
+  document.getElementById('doneBtn').style.display = 'none';
+  document.getElementById('ratingPanel').style.display = 'none';
   goToStep(2);
 }
 
 async function startCartBuild() {
-  goToStep(3);
+  document.getElementById('buildCartBtn').style.display = 'none';
   document.getElementById('cartLoadingBar').style.display = 'flex';
   document.getElementById('cartLoadingMsg').textContent = 'Connecting to local server...';
   document.getElementById('cartCard').style.display = 'none';
@@ -846,6 +852,7 @@ async function startCartBuild() {
   } catch(e) {
     document.getElementById('cartLoadingBar').style.display = 'none';
     document.getElementById('serverNotice').style.display = 'block';
+    document.getElementById('buildCartBtn').style.display = 'inline-flex';
     return;
   }
 
@@ -865,6 +872,7 @@ async function startCartBuild() {
 
   } catch(e) {
     document.getElementById('cartLoadingBar').style.display = 'none';
+    document.getElementById('buildCartBtn').style.display = 'inline-flex';
     const errBox = document.getElementById('cartError');
     errBox.style.display = 'block';
     errBox.textContent = `Cart build error:\n${e.message}\n\nCheck your Terminal for the full error log.`;
@@ -1158,10 +1166,134 @@ function closeRecipeModal(e) {
   if (e.target === e.currentTarget) document.getElementById('recipeModal').style.display = 'none';
 }
 
+// ===== ONBOARDING WIZARD =====
+let wizardStep = 0;
+const WIZARD_STEPS = ['household', 'budget', 'dietary', 'staples'];
+
+function checkOnboarding() {
+  const h = prefs.household || {};
+  if (!h.adults && !h.zip) showWizard();
+}
+
+function showWizard() {
+  wizardStep = 0;
+  renderWizardStep();
+  document.getElementById('wizardBackdrop').style.display = 'flex';
+}
+
+function closeWizardBackdrop(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('wizardBackdrop').style.display = 'none';
+  }
+}
+
+function renderWizardStep() {
+  const titles = ['Your household', 'Budget', 'Dietary notes', 'Weekly staples'];
+  document.getElementById('wizardTitle').textContent = titles[wizardStep];
+  document.getElementById('wizardProgress').innerHTML = WIZARD_STEPS.map((_, i) =>
+    `<span class="wizard-dot ${i < wizardStep ? 'done' : i === wizardStep ? 'active' : ''}"></span>`
+  ).join('');
+
+  const h = prefs.household || {};
+  const isLast = wizardStep === WIZARD_STEPS.length - 1;
+  const body = document.getElementById('wizardBody');
+
+  if (wizardStep === 0) {
+    body.innerHTML = `<div class="wizard-field-group">
+      <div class="prefs-household-grid">
+        <div class="prefs-field"><label>adults</label><input type="number" id="wz-adults" min="1" max="10" value="${h.adults || 2}" /></div>
+        <div class="prefs-field"><label>kids</label><input type="number" id="wz-kids" min="0" max="10" value="${h.kids || 0}" /></div>
+        <div class="prefs-field prefs-field-wide"><label>kids ages</label><input type="text" id="wz-kidsAges" placeholder="e.g. ages ~10 and toddler" value="${h.kidsAges || ''}" /></div>
+        <div class="prefs-field"><label>zip code</label><input type="text" id="wz-zip" placeholder="59047" value="${h.zip || ''}" /></div>
+      </div>
+    </div>`;
+  } else if (wizardStep === 1) {
+    body.innerHTML = `<div class="wizard-field-group">
+      <div class="prefs-field" style="max-width:260px"><label>weekly budget target ($)</label><input type="number" id="wz-budgetTarget" value="${h.budgetTarget || 175}" /></div>
+      <div class="prefs-field" style="max-width:260px;margin-top:14px"><label>maximum budget ($)</label><input type="number" id="wz-budgetMax" value="${h.budgetMax || 225}" /></div>
+    </div>`;
+  } else if (wizardStep === 2) {
+    const notes = prefs.dietaryNotes || [];
+    body.innerHTML = `<div class="wizard-field-group">
+      <p class="wizard-hint">Any dietary restrictions, preferences, or things to avoid?</p>
+      <div id="wz-dietList" class="prefs-list">${notes.map(v => prefItemHtml(v)).join('')}</div>
+      <button class="btn prefs-add-btn" onclick="addWizardListItem('wz-dietList')">+ add note</button>
+    </div>`;
+  } else if (wizardStep === 3) {
+    const staples = prefs.weeklyStaples || [];
+    body.innerHTML = `<div class="wizard-field-group">
+      <p class="wizard-hint">Items you order every week — milk, bananas, paper towels, etc.</p>
+      <div id="wz-stapleList" class="prefs-list">${staples.map(v => prefItemHtml(v)).join('')}</div>
+      <button class="btn prefs-add-btn" onclick="addWizardListItem('wz-stapleList')">+ add staple</button>
+    </div>`;
+  }
+
+  document.getElementById('wizardFooter').innerHTML = `
+    ${wizardStep > 0
+      ? '<button class="btn" onclick="wizardBack()">← back</button>'
+      : '<div></div>'}
+    ${isLast
+      ? '<button class="btn primary" onclick="wizardFinish()">Done →</button>'
+      : '<button class="btn primary" onclick="wizardNext()">Next →</button>'}`;
+}
+
+function addWizardListItem(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.insertAdjacentHTML('beforeend', prefItemHtml(''));
+  el.querySelector('.prefs-list-item:last-child .prefs-list-input').focus();
+}
+
+function wizardCollectStep() {
+  if (!prefs.household) prefs.household = {};
+  if (wizardStep === 0) {
+    prefs.household.adults   = parseInt(document.getElementById('wz-adults')?.value) || 2;
+    prefs.household.kids     = parseInt(document.getElementById('wz-kids')?.value) || 0;
+    prefs.household.kidsAges = document.getElementById('wz-kidsAges')?.value.trim() || '';
+    prefs.household.zip      = document.getElementById('wz-zip')?.value.trim() || '59047';
+  } else if (wizardStep === 1) {
+    prefs.household.budgetTarget = parseInt(document.getElementById('wz-budgetTarget')?.value) || 175;
+    prefs.household.budgetMax    = parseInt(document.getElementById('wz-budgetMax')?.value) || 225;
+  } else if (wizardStep === 2) {
+    prefs.dietaryNotes = [...document.querySelectorAll('#wz-dietList .prefs-list-input')]
+      .map(el => el.value.trim()).filter(Boolean);
+  } else if (wizardStep === 3) {
+    prefs.weeklyStaples = [...document.querySelectorAll('#wz-stapleList .prefs-list-input')]
+      .map(el => el.value.trim()).filter(Boolean);
+  }
+}
+
+function wizardNext() {
+  wizardCollectStep();
+  wizardStep++;
+  renderWizardStep();
+}
+
+function wizardBack() {
+  wizardCollectStep();
+  wizardStep--;
+  renderWizardStep();
+}
+
+async function wizardFinish() {
+  wizardCollectStep();
+  const btn = document.querySelector('#wizardFooter .btn.primary');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+  document.getElementById('wizardBackdrop').style.display = 'none';
+  loadHouseholdItems();
+}
+
 // ===== INIT =====
 goToStep(0);
 renderSchedule();
-loadPrefs();
+loadPrefs().then(() => checkOnboarding());
 loadHouseholdItems();
 loadRecipes();
 loadPantry();
