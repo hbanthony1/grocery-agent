@@ -68,7 +68,13 @@
 
   <!-- STEP 1: Meal Plan -->
   <div id="step1" style="display:none">
-    <div id="loadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="loadingMsg">Generating your meal plan...</span></div>
+    <div id="loadingBar" class="cart-loader" style="display:none">
+      <div class="cart-track">
+        <div class="cart-track-bg"></div>
+        <span class="cart-emoji cart-emoji-bounce">🛒</span>
+      </div>
+      <div class="cart-loader-msg" id="loadingMsg">Thinking up something delicious...</div>
+    </div>
     <div id="mealPlanCard" class="card" style="display:none">
       <div class="card-label">this week's meals — approve or swap</div>
       <div class="meal-grid" id="mealGrid"></div>
@@ -101,7 +107,14 @@
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
-    <div id="cartLoadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="cartLoadingMsg">Building your Walmart cart...</span></div>
+    <div id="cartLoadingBar" class="cart-loader" style="display:none">
+      <div class="cart-track">
+        <div class="cart-track-bg"></div>
+        <div class="cart-track-progress" id="cartBuildProgress"></div>
+        <span class="cart-emoji" id="cartBuildCart">🛒</span>
+      </div>
+      <div class="cart-loader-msg" id="cartLoadingMsg">Building your Walmart cart...</div>
+    </div>
     <div id="cartError" class="error-box" style="display:none"></div>
     <div class="notice" id="serverNotice" style="display:none">
       server not running · open Terminal → cd grocery_agent → python server.py

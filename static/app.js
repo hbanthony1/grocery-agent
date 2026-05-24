@@ -9,6 +9,93 @@ const pendingRatings = {};
 let _pendingGeneratedRecipe = null;
 let calendarEvents = null;
 
+// ===== CART LOADER =====
+const MEAL_PLAN_MSGS = [
+  'Thinking up something delicious...',
+  'Checking what you had last week...',
+  'Balancing your week...',
+  'Finding something new to try...',
+  'Matching meals to your schedule...',
+  'Making sure the kids will eat it...',
+  'Almost ready...',
+];
+const CART_BUILD_MSGS = [
+  'Adding eggs to the cart...',
+  'Checking prices at your store...',
+  'Matching products to your meals...',
+  'Finding the best deals...',
+  'Looking up your weekly staples...',
+  'Comparing product options...',
+  'Double-checking quantities...',
+  'Almost done building your cart...',
+];
+
+let _microcopyTimer = null;
+let _cartProgressTimer = null;
+
+function startMicrocopy(msgs, elId, intervalMs = 3400) {
+  stopMicrocopy();
+  let i = 0;
+  const el = document.getElementById(elId);
+  if (el) el.textContent = msgs[0];
+  _microcopyTimer = setInterval(() => {
+    i = (i + 1) % msgs.length;
+    const el2 = document.getElementById(elId);
+    if (!el2) return;
+    el2.style.opacity = '0';
+    setTimeout(() => { const el3 = document.getElementById(elId); if (el3) { el3.textContent = msgs[i]; el3.style.opacity = '1'; } }, 250);
+  }, intervalMs);
+}
+
+function stopMicrocopy() {
+  if (_microcopyTimer) { clearInterval(_microcopyTimer); _microcopyTimer = null; }
+}
+
+function startCartProgress(durationSecs = 54) {
+  stopCartProgress();
+  let progress = 0;
+  const maxProgress = 0.9;
+  const tickMs = 250;
+  const increment = maxProgress / ((durationSecs * 1000) / tickMs);
+  _cartProgressTimer = setInterval(() => {
+    progress = Math.min(progress + increment, maxProgress);
+    _setCartProgress(progress);
+    if (progress >= maxProgress) stopCartProgress();
+  }, tickMs);
+}
+
+function stopCartProgress() {
+  if (_cartProgressTimer) { clearInterval(_cartProgressTimer); _cartProgressTimer = null; }
+}
+
+function finishCartProgress() {
+  stopCartProgress();
+  _setCartProgress(1.0, true);
+}
+
+function resetCartProgress() {
+  stopCartProgress();
+  const fill = document.getElementById('cartBuildProgress');
+  const cart = document.getElementById('cartBuildCart');
+  if (fill) { fill.style.transition = 'none'; fill.style.width = '0'; }
+  if (cart) { cart.style.transition = 'none'; cart.style.left = '0'; }
+}
+
+function _setCartProgress(p, fast = false) {
+  const fill = document.getElementById('cartBuildProgress');
+  const cart = document.getElementById('cartBuildCart');
+  const trackEl = fill?.parentElement;
+  if (!fill || !cart || !trackEl) return;
+  const trackW = trackEl.offsetWidth;
+  const pxLeft = p * trackW;
+  if (fast) {
+    fill.style.transition = 'width 0.4s ease';
+    cart.style.transition = 'left 0.4s ease';
+  }
+  fill.style.width = (p * trackW) + 'px';
+  cart.style.left = pxLeft + 'px';
+}
+
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
 
@@ -760,7 +847,7 @@ function skipRating() {
 async function runMealPlan() {
   goToStep(1);
   document.getElementById('loadingBar').style.display = 'flex';
-  document.getElementById('loadingMsg').textContent = 'Generating your meal plan...';
+  startMicrocopy(MEAL_PLAN_MSGS, 'loadingMsg');
   document.getElementById('mealPlanCard').style.display = 'none';
   document.getElementById('approveBtn').style.display = 'none';
   const regenBtn = document.getElementById('regenerateBtn');
@@ -821,12 +908,14 @@ Set isNew:true only for the brand new recipes.`;
       {day:'Saturday',  meal:'Smash Burgers with Fries [NEW]',  isNew:true},
       {day:'Sunday',    meal:'Slow Cooker Beef Stew',           isNew:false},
     ];
+    stopMicrocopy();
     document.getElementById('loadingMsg').textContent = 'Using demo meals (add Anthropic API key for live generation)';
     setTimeout(() => { document.getElementById('loadingBar').style.display = 'none'; }, 2500);
     renderMeals();
     return;
   }
 
+  stopMicrocopy();
   document.getElementById('loadingBar').style.display = 'none';
   renderMeals();
 }
@@ -937,6 +1026,7 @@ function cancelSwap() {
 async function approveMealPlan() {
   document.getElementById('buildCartBtn').style.display = 'inline-flex';
   document.getElementById('cartLoadingBar').style.display = 'none';
+  resetCartProgress();
   document.getElementById('cartCard').style.display = 'none';
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
@@ -948,28 +1038,30 @@ async function approveMealPlan() {
 async function startCartBuild() {
   document.getElementById('buildCartBtn').style.display = 'none';
   document.getElementById('cartLoadingBar').style.display = 'flex';
-  document.getElementById('cartLoadingMsg').textContent = 'Connecting to local server...';
   document.getElementById('cartCard').style.display = 'none';
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
   document.getElementById('ratingPanel').style.display = 'none';
+  resetCartProgress();
+  startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
   const mealNames = meals.map(m => m.meal.replace(' [NEW]','').trim());
 
   try {
-    document.getElementById('cartLoadingMsg').textContent = 'Checking server connection...';
     const ping = await fetch('/ping');
     if (!ping.ok) throw new Error('Server not responding');
   } catch(e) {
+    stopMicrocopy();
     document.getElementById('cartLoadingBar').style.display = 'none';
     document.getElementById('serverNotice').style.display = 'block';
     document.getElementById('buildCartBtn').style.display = 'inline-flex';
     return;
   }
 
+  startCartProgress(54);
+
   try {
-    document.getElementById('cartLoadingMsg').textContent = 'Building Walmart cart (this takes ~20 seconds)...';
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -979,10 +1071,16 @@ async function startCartBuild() {
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Unknown server error');
 
-    document.getElementById('cartLoadingBar').style.display = 'none';
-    renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl);
+    stopMicrocopy();
+    finishCartProgress();
+    setTimeout(() => {
+      document.getElementById('cartLoadingBar').style.display = 'none';
+      renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl);
+    }, 500);
 
   } catch(e) {
+    stopMicrocopy();
+    stopCartProgress();
     document.getElementById('cartLoadingBar').style.display = 'none';
     document.getElementById('buildCartBtn').style.display = 'inline-flex';
     const errBox = document.getElementById('cartError');
