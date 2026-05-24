@@ -747,18 +747,14 @@ Return ONLY a JSON array of exactly 7 objects, no other text, no markdown:
 Set isNew:true only for the brand new recipes.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/generate-meal-plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 600,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ prompt })
     });
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message);
-    const text = data.content[0].text.trim().replace(/```json|```/g,'').trim();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Server error');
+    const text = data.content.trim().replace(/```json|```/g,'').trim();
     meals = JSON.parse(text);
   } catch(e) {
     meals = [

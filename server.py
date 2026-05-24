@@ -191,6 +191,24 @@ def delete_recipe(recipe_id):
     return jsonify({'ok': True})
 
 
+@app.route('/generate-meal-plan', methods=['POST'])
+def generate_meal_plan():
+    prompt = (request.json or {}).get('prompt', '').strip()
+    if not prompt:
+        return jsonify({'error': 'prompt required'}), 400
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=600,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        return jsonify({'content': msg.content[0].text})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/generate-recipe', methods=['POST'])
 def generate_recipe():
     meal_name = (request.json or {}).get('meal', '').strip()
