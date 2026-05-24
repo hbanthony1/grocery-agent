@@ -177,6 +177,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 /* Household items */
 .hh-label { display: flex; align-items: baseline; gap: 6px; }
 .hh-label span { color: var(--primary); }
+.hh-add-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .hh-loading { font-size: 11px; font-family: var(--mono); color: var(--text3); }
 .hh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-top: 4px; }
 .hh-item { display: flex; align-items: flex-start; gap: 7px; padding: 5px 0; cursor: pointer; }

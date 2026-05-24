@@ -87,6 +87,12 @@
     <div class="card">
       <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
       <div class="hh-grid" id="hhGrid"><span class="hh-loading">loading...</span></div>
+      <div id="hhAddRow" class="hh-add-row" style="display:none">
+        <input class="schedule-note" id="hhNewName" placeholder="item name..." onkeydown="handleHhAddKey(event)" />
+        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="submitNewHouseholdItem()">add</button>
+        <button class="btn" style="height:30px;padding:0 10px;font-size:12px" onclick="cancelHhAdd()">cancel</button>
+      </div>
+      <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
     <div id="cartLoadingBar" class="status-bar" style="display:none"><div class="dot"></div><span id="cartLoadingMsg">Building your Walmart cart...</span></div>
     <div id="cartError" class="error-box" style="display:none"></div>

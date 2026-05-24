@@ -69,6 +69,43 @@ async function loadHouseholdItems() {
   }
 }
 
+function showHhAddRow() {
+  document.getElementById('hhAddRow').style.display = 'flex';
+  document.getElementById('hhAddBtn').style.display = 'none';
+  document.getElementById('hhNewName').value = '';
+  document.getElementById('hhNewName').focus();
+}
+
+function cancelHhAdd() {
+  document.getElementById('hhAddRow').style.display = 'none';
+  document.getElementById('hhAddBtn').style.display = 'inline-flex';
+}
+
+function handleHhAddKey(e) {
+  if (e.key === 'Enter') submitNewHouseholdItem();
+  if (e.key === 'Escape') cancelHhAdd();
+}
+
+async function submitNewHouseholdItem() {
+  const name = document.getElementById('hhNewName').value.trim();
+  if (!name) return;
+  if (!prefs.householdItems) prefs.householdItems = [];
+  if (!prefs.householdItems.includes(name)) {
+    prefs.householdItems.push(name);
+    try {
+      await fetch('/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prefs),
+      });
+    } catch(e) {}
+  }
+  householdChecked.add(name);
+  localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
+  await loadHouseholdItems();
+  cancelHhAdd();
+}
+
 // ===== SCHEDULE =====
 const SCHEDULE_DAYS = [
   { key: 'Monday',    short: 'Mon', default: 'normal' },
