@@ -248,16 +248,17 @@ def build_cart():
                 label = claude_jobs[fut]
                 try:
                     queries = fut.result()
-                    tag = label if label != '__staples__' else 'staples'
-                    print(f"  [{tag}]: {len(queries)} queries")
-                    all_search_tasks.extend(queries)
+                    source = label if label != '__staples__' else 'staples'
+                    print(f"  [{source}]: {len(queries)} queries")
+                    for q in queries:
+                        all_search_tasks.append({**q, 'source': source})
                 except Exception as e:
                     print(f"  ERROR getting queries for {label}: {e}")
                     traceback.print_exc()
 
         # Household items search directly — no Claude step needed
         for name in household:
-            all_search_tasks.append({"search_query": name, "qty": 1})
+            all_search_tasks.append({"search_query": name, "qty": 1, "source": "household"})
 
         print(f"\nTotal search tasks: {len(all_search_tasks)}")
 
@@ -274,31 +275,44 @@ def build_cart():
                     print(f"  - Search error for '{task['search_query']}': {e}")
 
         # ── Deduplicate and assemble cart ─────────────────────────────────
-        cart_items   = []
-        all_products = []
-        seen_ids     = set()
+        cart_items     = []
+        groups         = {}   # source -> [{name, price}]
+        seen_ids       = set()
+        total          = 0.0
 
         for task, product in search_results:
             if product:
                 item_id = str(product['itemId'])
                 if item_id not in seen_ids:
                     seen_ids.add(item_id)
+                    price = float(product.get('salePrice', product.get('msrp', 0)))
                     cart_items.append({"itemId": item_id, "quantity": task.get('qty', 1)})
-                    all_products.append(product)
-                    print(f"  + {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
+                    source = task.get('source', 'other')
+                    groups.setdefault(source, []).append({
+                        "name":  product.get("name", "Unknown"),
+                        "price": f"${price:.2f}",
+                    })
+                    total += price
+                    print(f"  + [{source}] {product['name']} ${price}")
             else:
                 print(f"  - No result: {task['search_query']}")
 
+        # Preserve meal order for the frontend (meals list + fixed categories)
+        meal_order = list(meals) + ['staples', 'household']
+
         cart_url = build_cart_url(cart_items, staple_items=[])
-        total    = sum(float(p.get('salePrice', p.get('msrp', 0))) for p in all_products)
 
         print(f"\nCart URL: {cart_url}")
-        print(f"Total: ${total:.2f} across {len(all_products)} items")
+        print(f"Total: ${total:.2f} across {sum(len(v) for v in groups.values())} items")
+
+        flat_items = [item for src in meal_order for item in groups.get(src, [])]
 
         return jsonify({
-            "items":   [{"name": p.get("name", "Unknown"), "price": f"${float(p.get('salePrice', p.get('msrp', 0))):.2f}"} for p in all_products],
-            "total":   f"${total:.2f}",
-            "cartUrl": cart_url
+            "groups":    groups,
+            "mealOrder": meal_order,
+            "items":     flat_items,
+            "total":     f"${total:.2f}",
+            "cartUrl":   cart_url
         })
 
     except Exception as e:

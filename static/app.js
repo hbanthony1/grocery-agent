@@ -905,7 +905,7 @@ async function startCartBuild() {
     if (!resp.ok || data.error) throw new Error(data.error || 'Unknown server error');
 
     document.getElementById('cartLoadingBar').style.display = 'none';
-    renderCart(data.items, data.total, data.cartUrl);
+    renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl);
 
   } catch(e) {
     document.getElementById('cartLoadingBar').style.display = 'none';
@@ -916,16 +916,33 @@ async function startCartBuild() {
   }
 }
 
-function renderCart(items, total, url) {
+function renderCart(groups, mealOrder, total, url) {
   document.getElementById('cartCard').style.display = 'block';
   document.getElementById('doneBtn').style.display = 'inline-flex';
+  document.getElementById('buildCartBtn').style.display = 'none';
 
   const list = document.getElementById('cartList');
-  list.innerHTML = items.map(item => `
-    <div class="cart-item">
-      <span class="cart-item-name">${item.name}</span>
-      <span class="cart-item-price">${item.price}</span>
-    </div>`).join('');
+  const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
+
+  list.innerHTML = sourcesPresent.map(source => {
+    const items = groups[source];
+    const isSpecial = source === 'staples' || source === 'household';
+    const label = source === 'staples' ? 'Weekly Staples'
+                : source === 'household' ? 'Household'
+                : source;
+    const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
+    return `<div class="cart-group">
+      <div class="cart-group-header">
+        <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
+        <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
+      </div>
+      ${items.map(item => `
+        <div class="cart-item">
+          <span class="cart-item-name">${item.name}</span>
+          <span class="cart-item-price">${item.price}</span>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
 
   document.getElementById('cartTotal').textContent = total;
 
