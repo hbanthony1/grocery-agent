@@ -342,6 +342,36 @@ def generate_meal_plan():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/generate-single-meal', methods=['POST'])
+def generate_single_meal():
+    data        = request.json or {}
+    day         = data.get('day', 'a weekday')
+    complexity  = data.get('complexity', 'normal')
+    exclude     = data.get('exclude', [])
+    complexity_desc = {
+        'quick':  '30 minutes or less (frozen, heat-and-eat, simple assembly)',
+        'normal': 'up to 1 hour (standard weeknight cooking)',
+        'open':   'no time limit (slow cooker, elaborate recipes welcome)',
+    }.get(complexity, 'up to 1 hour')
+    exclude_str = ', '.join(exclude) if exclude else 'none'
+    prompt = f"""Suggest ONE completely new dinner recipe for a family of 4 for {day}.
+Time available: {complexity_desc}
+Do NOT suggest any of these: {exclude_str}
+Family: kid-friendly comfort food, chicken, pasta, tacos, American/Italian/Mexican cuisine, practical weeknight meals.
+Return ONLY the recipe name — no explanation, no punctuation, just the name."""
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model='claude-sonnet-4-6', max_tokens=30,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        name = msg.content[0].text.strip().strip('"\'.')
+        return jsonify({'meal': name})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/generate-recipe', methods=['POST'])
 def generate_recipe():
     meal_name = (request.json or {}).get('meal', '').strip()

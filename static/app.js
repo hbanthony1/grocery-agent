@@ -125,11 +125,11 @@ const COMPLEXITY_DESC  = {
 };
 
 let schedule = {};
-SCHEDULE_DAYS.forEach(d => { schedule[d.key] = { complexity: d.default, note: '' }; });
+SCHEDULE_DAYS.forEach(d => { schedule[d.key] = { complexity: d.default }; });
 
 function renderSchedule() {
   document.getElementById('scheduleGrid').innerHTML = SCHEDULE_DAYS.map(d => {
-    const { complexity, note } = schedule[d.key];
+    const { complexity } = schedule[d.key];
     const events = calendarEvents ? (calendarEvents[d.key] || []) : [];
     const eventsHtml = events.length
       ? `<div class="cal-events">${events.map(e =>
@@ -140,8 +140,6 @@ function renderSchedule() {
       <div class="schedule-col">
         <div class="schedule-day">${d.short}</div>
         <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')">${COMPLEXITY_LABEL[complexity]}</button>
-        <input class="schedule-note" type="text" placeholder="notes…" value="${note.replace(/"/g, '&quot;')}"
-               oninput="schedule['${d.key}'].note = this.value" />
         ${eventsHtml}
       </div>`;
   }).join('');
@@ -164,9 +162,21 @@ async function loadCalendarEvents() {
     const resp = await fetch('/calendar/week');
     if (resp.ok) {
       calendarEvents = await resp.json();
-      renderSchedule();
+      applyCalendarComplexity();
     }
   } catch(e) {}
+}
+
+function applyCalendarComplexity() {
+  if (!calendarEvents) return;
+  const weekends = new Set(['Saturday', 'Sunday']);
+  SCHEDULE_DAYS.forEach(d => {
+    const events = calendarEvents[d.key] || [];
+    schedule[d.key].complexity = events.length   ? 'quick'
+      : weekends.has(d.key)                      ? 'open'
+      : 'normal';
+  });
+  renderSchedule();
 }
 
 function renderCalBanner(status) {
@@ -194,6 +204,7 @@ function renderCalBanner(status) {
 async function disconnectCalendar() {
   await fetch('/calendar/disconnect', { method: 'POST' });
   calendarEvents = null;
+  SCHEDULE_DAYS.forEach(d => { schedule[d.key].complexity = d.default; });
   renderSchedule();
   renderCalBanner({ connected: false, setup: true });
 }
@@ -206,9 +217,23 @@ function cycleComplexity(day) {
 
 function buildSchedulePrompt() {
   return SCHEDULE_DAYS.map(d => {
-    const { complexity, note } = schedule[d.key];
-    return `- ${d.key}: ${COMPLEXITY_DESC[complexity]}${note ? ' — ' + note : ''}`;
+    return `- ${d.key}: ${COMPLEXITY_DESC[schedule[d.key].complexity]}`;
   }).join('\n');
+}
+
+function resetApp() {
+  meals = [];
+  swappingIndex = -1;
+  ['loadingBar','mealPlanCard','approveBtn','regenerateBtn',
+   'cartCard','budgetBar','cartUrlBox','cartLoadingBar',
+   'cartError','serverNotice','doneBtn','ratingPanel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const buildBtn = document.getElementById('buildCartBtn');
+  if (buildBtn) buildBtn.style.display = 'inline-flex';
+  document.getElementById('swapRow').className = 'swap-input-row';
+  goToStep(0);
 }
 
 // ===== RECIPE REPOSITORY =====
@@ -724,6 +749,8 @@ async function runMealPlan() {
   document.getElementById('loadingMsg').textContent = 'Generating your meal plan...';
   document.getElementById('mealPlanCard').style.display = 'none';
   document.getElementById('approveBtn').style.display = 'none';
+  const regenBtn = document.getElementById('regenerateBtn');
+  if (regenBtn) regenBtn.style.display = 'none';
 
   const prefsText = buildPreferencesPrompt();
   const includeNew = document.getElementById('includeNew').checked;
@@ -812,6 +839,8 @@ function lookupTags(mealName) {
 function renderMeals() {
   document.getElementById('mealPlanCard').style.display = 'block';
   document.getElementById('approveBtn').style.display = 'inline-flex';
+  const regenBtn = document.getElementById('regenerateBtn');
+  if (regenBtn) regenBtn.style.display = 'inline-flex';
   const dates = getUpcomingWeekDates();
   const grid = document.getElementById('mealGrid');
   grid.innerHTML = meals.map((m,i) => {
@@ -847,9 +876,31 @@ function startSwap(i) {
   renderMeals();
   document.getElementById('swapRow').className = 'swap-input-row visible';
   document.getElementById('swapInput').value = '';
-  document.getElementById('swapInput').placeholder = `or type a different meal...`;
+  document.getElementById('swapInput').placeholder = 'or type a different meal...';
   renderSwapPicker('');
+  const genBtn = document.getElementById('swapGenBtn');
+  if (genBtn) genBtn.style.display = meals[i]?.isNew ? 'inline-flex' : 'none';
   document.getElementById('swapInput').focus();
+}
+
+async function generateNewMealIdea() {
+  if (swappingIndex < 0) return;
+  const btn = document.getElementById('swapGenBtn');
+  if (btn) { btn.textContent = 'thinking...'; btn.disabled = true; }
+  const m = meals[swappingIndex];
+  const exclude = meals.map(x => x.meal.replace(' [NEW]', '').trim());
+  try {
+    const resp = await fetch('/generate-single-meal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ day: m.day, complexity: schedule[m.day]?.complexity || 'normal', exclude }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    document.getElementById('swapInput').value = data.meal;
+    renderSwapPicker(data.meal);
+  } catch(e) {}
+  if (btn) { btn.textContent = '✦ new idea'; btn.disabled = false; }
 }
 
 function applySwap() {
