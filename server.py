@@ -3,7 +3,8 @@ from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
 import anthropic, os, json, re, time, traceback, csv, io
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
@@ -432,16 +433,29 @@ def calendar_week():
 
     service = gcal_build('calendar', 'v3', credentials=creds)
 
-    today  = datetime.now()
+    # Load user timezone from prefs, default to America/Denver (Montana)
+    try:
+        with open(PREFS_PATH) as f:
+            _prefs = json.load(f)
+        tz_name = _prefs.get('timezone') or 'America/Denver'
+    except Exception:
+        tz_name = 'America/Denver'
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo('America/Denver')
+
+    today  = datetime.now(tz)
     monday = today - timedelta(days=today.weekday())
     sunday = monday + timedelta(days=6)
-    time_min = monday.replace(hour=0,  minute=0,  second=0,  microsecond=0).isoformat() + 'Z'
-    time_max = sunday.replace(hour=23, minute=59, second=59, microsecond=0).isoformat() + 'Z'
+    time_min = monday.replace(hour=0,  minute=0,  second=0,  microsecond=0).isoformat()
+    time_max = sunday.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
 
     try:
         result = service.events().list(
             calendarId='primary',
             timeMin=time_min, timeMax=time_max,
+            timeZone=tz_name,
             singleEvents=True, orderBy='startTime', maxResults=50
         ).execute()
     except Exception as e:
@@ -456,8 +470,7 @@ def calendar_week():
             continue
         try:
             if start.get('dateTime'):
-                clean = re.sub(r'[+-]\d{2}:\d{2}$', '', dt_str).split('.')[0]
-                dt = datetime.fromisoformat(clean)
+                dt = datetime.fromisoformat(dt_str).astimezone(tz)
                 h, m = dt.hour, dt.minute
                 am_pm = 'am' if h < 12 else 'pm'
                 h12   = h % 12 or 12

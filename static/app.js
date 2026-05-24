@@ -963,6 +963,9 @@ async function loadPrefs() {
     const resp = await fetch('/prefs');
     prefs = await resp.json();
   } catch(e) { prefs = {}; }
+  if (!prefs.timezone) {
+    prefs.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Denver';
+  }
 }
 
 function buildPreferencesPrompt() {
@@ -1040,6 +1043,7 @@ async function saveAndClosePrefsEditor() {
   prefs.brandRules      = readBrandRules();
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
   prefs.notes           = document.getElementById('pf-notes').value.trim();
+  prefs.timezone        = document.getElementById('pf-timezone').value.trim() || 'America/Denver';
 
   try {
     await fetch('/prefs', {
@@ -1076,6 +1080,7 @@ function renderPrefsEditor() {
   document.getElementById('pf-zip').value          = h.zip || '59047';
   document.getElementById('pf-budgetTarget').value = h.budgetTarget ?? 175;
   document.getElementById('pf-budgetMax').value    = h.budgetMax ?? 225;
+  document.getElementById('pf-timezone').value     = prefs.timezone || '';
   document.getElementById('pf-notes').value        = prefs.notes || '';
   document.getElementById('pf-storeOk').value      = prefs.storeOk || '';
 
