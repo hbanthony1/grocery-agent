@@ -203,11 +203,19 @@ def export_recipes():
     recipes = sorted(_load_recipes(), key=lambda x: x.get('name', '').lower())
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(['name', 'rating', 'tags', 'times_planned', 'last_planned', 'notes'])
+    w.writerow(['name', 'rating', 'tags', 'times_planned', 'last_planned', 'notes',
+                'ingredients', 'steps'])
     for r in recipes:
-        w.writerow([r.get('name',''), r.get('rating',''),
-                    ', '.join(r.get('tags', [])),
-                    r.get('timesPlanned',''), r.get('lastPlanned',''), r.get('notes','')])
+        w.writerow([
+            r.get('name', ''),
+            r.get('rating', ''),
+            ', '.join(r.get('tags', [])),
+            r.get('timesPlanned', ''),
+            r.get('lastPlanned', ''),
+            r.get('notes', ''),
+            ' | '.join(r.get('ingredients', [])),
+            ' | '.join(r.get('steps', [])),
+        ])
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=recipes.csv'})
 
