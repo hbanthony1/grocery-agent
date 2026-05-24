@@ -308,6 +308,20 @@ function toggleRecipesPanel() {
   if (!visible) { document.getElementById('recipesSearch').value = ''; renderRecipesPanel(); }
 }
 
+async function backfillRecipes() {
+  const btn = document.getElementById('recipesBackfillBtn');
+  if (btn) { btn.textContent = 'filling...'; btn.disabled = true; }
+  try {
+    const res = await fetch('/recipes/backfill', { method: 'POST' });
+    const data = await res.json();
+    await loadRecipes();
+    renderRecipesPanel();
+    if (btn) { btn.textContent = `filled ${data.filled}`; setTimeout(() => { btn.textContent = 'fill missing'; btn.disabled = false; }, 3000); }
+  } catch (e) {
+    if (btn) { btn.textContent = 'error'; setTimeout(() => { btn.textContent = 'fill missing'; btn.disabled = false; }, 3000); }
+  }
+}
+
 function renderRecipesPanel() {
   const query = (document.getElementById('recipesSearch')?.value || '').toLowerCase();
   let filtered = query
@@ -389,7 +403,7 @@ function editRecipeInline(id) {
     <div class="star-picker" id="${pickerId}" data-rating="${r.rating||0}">${starPickerHtml(pickerId, r.rating||0, 'setStar')}</div>
     <input class="schedule-note" id="eno-${id}" placeholder="notes..." value="${(r.notes||'').replace(/"/g,'&quot;')}" />
     <div class="recipe-tag-picker">
-      ${['quick','weekend','kid-friendly','comfort-food'].map(t =>
+      ${['quick','weekend','kid-friendly','comfort-food','dessert'].map(t =>
         `<label class="tag-option"><input type="checkbox" ${(r.tags||[]).includes(t)?'checked':''} value="${t}" data-edit="${id}"> ${t}</label>`
       ).join('')}
     </div>
@@ -430,7 +444,7 @@ function addRecipeManual() {
     <div class="star-picker" id="${pickerId}" data-rating="0">${starPickerHtml(pickerId, 0, 'setStar')}</div>
     <input class="schedule-note" id="new-notes" placeholder="notes..." />
     <div class="recipe-tag-picker">
-      ${['quick','weekend','kid-friendly','comfort-food'].map(t =>
+      ${['quick','weekend','kid-friendly','comfort-food','dessert'].map(t =>
         `<label class="tag-option"><input type="checkbox" value="${t}" class="new-tag"> ${t}</label>`
       ).join('')}
     </div>

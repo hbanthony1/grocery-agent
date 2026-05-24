@@ -34,20 +34,53 @@ PREFS_PATH   = os.path.join(os.path.dirname(__file__), 'data', 'prefs.json')
 
 # Seeded from confirmed meal patterns in preferences.md — runs once on first launch
 _SEED_RECIPES = [
-    {"name": "Chicken Pot Pie",                "rating": 5, "tags": ["kid-friendly", "comfort-food"], "notes": "household favorite — 3× ordered, most repeated meal"},
-    {"name": "Lasagna",                        "rating": 5, "tags": ["weekend", "comfort-food"],      "notes": "big batch Sunday cook, feeds family 2 nights"},
-    {"name": "Pasta with Meat Sauce",          "rating": 4, "tags": ["comfort-food"],                 "notes": "Rao's Marinara + 80/20 ground beef"},
-    {"name": "Fettuccine Alfredo with Chicken","rating": 4, "tags": ["comfort-food"],                 "notes": "heavy cream + parmesan + chicken thighs"},
-    {"name": "Tacos",                          "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "taco seasoning + ROTEL + beans + avocado"},
-    {"name": "Chili",                          "rating": 4, "tags": ["comfort-food"],                 "notes": "ROTEL + beans + crushed tomatoes — pairs with a taco week"},
-    {"name": "Stuffed Crust Pizza",            "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Great Value frozen 3-meat — reliable Friday night"},
-    {"name": "Butter Chicken with Naan",       "rating": 4, "tags": ["quick"],                        "notes": "frozen butter chicken meal + Stonefire mini naan"},
-    {"name": "Meatball Subs",                  "rating": 4, "tags": ["kid-friendly"],                 "notes": "frozen meatballs + crescent rolls"},
-    {"name": "Lit'l Smokies Pigs in Blankets", "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Hillshire Farm + Sweet Baby Ray's + crescent rolls"},
-    {"name": "Hot Dogs",                       "rating": 4, "tags": ["quick", "kid-friendly"],        "notes": "Nathan's beef hot dogs + Martin's Long Rolls"},
-    {"name": "Beef Birria Tacos",              "rating": 4, "tags": ["quick"],                        "notes": "Del Real Foods slow-cooked — just heat and serve"},
-    {"name": "Rigatoni with Chicken Sausage",  "rating": 4, "tags": [],                               "notes": "Aidells Chicken Sausage with Mozzarella"},
-    {"name": "Panera Soup Night",              "rating": 3, "tags": ["quick"],                        "notes": "Panera ready-to-heat soups — good for winter"},
+    # ── Household favorites (original) ──────────────────────────────────────
+    {"name": "Chicken Pot Pie",                "rating": 5, "tags": ["kid-friendly","comfort-food"],       "notes": "household favorite — 3× ordered, most repeated meal"},
+    {"name": "Lasagna",                        "rating": 5, "tags": ["weekend","comfort-food"],            "notes": "big batch Sunday cook, feeds family 2 nights"},
+    {"name": "Pot Roast",                      "rating": 5, "tags": ["weekend","comfort-food"],            "notes": "chuck roast + carrots + potatoes + onion in slow cooker — Sunday staple"},
+    {"name": "Pasta with Meat Sauce",          "rating": 4, "tags": ["comfort-food"],                     "notes": "Rao's Marinara + 80/20 ground beef"},
+    {"name": "Fettuccine Alfredo with Chicken","rating": 4, "tags": ["comfort-food"],                     "notes": "heavy cream + parmesan + chicken thighs"},
+    {"name": "Tacos",                          "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "taco seasoning + ROTEL + beans + avocado"},
+    {"name": "Chili",                          "rating": 4, "tags": ["comfort-food"],                     "notes": "ROTEL + beans + crushed tomatoes — pairs with a taco week"},
+    {"name": "Stuffed Crust Pizza",            "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Great Value frozen 3-meat — reliable Friday night"},
+    {"name": "Butter Chicken with Naan",       "rating": 4, "tags": ["quick"],                            "notes": "frozen butter chicken meal + Stonefire mini naan"},
+    {"name": "Meatball Subs",                  "rating": 4, "tags": ["kid-friendly"],                     "notes": "frozen meatballs + crescent rolls"},
+    {"name": "Lit'l Smokies Pigs in Blankets", "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Hillshire Farm + Sweet Baby Ray's + crescent rolls"},
+    {"name": "Hot Dogs",                       "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Nathan's beef hot dogs + Martin's Long Rolls"},
+    {"name": "Beef Birria Tacos",              "rating": 4, "tags": ["quick"],                            "notes": "Del Real Foods slow-cooked — just heat and serve"},
+    {"name": "Rigatoni with Chicken Sausage",  "rating": 4, "tags": [],                                   "notes": "Aidells Chicken Sausage with Mozzarella"},
+    {"name": "Panera Soup Night",              "rating": 3, "tags": ["quick"],                            "notes": "Panera ready-to-heat soups — good for winter"},
+    # ── Mexican & Tex-Mex ───────────────────────────────────────────────────
+    {"name": "Chicken Enchiladas",             "rating": 4, "tags": ["comfort-food"],                     "notes": "rotisserie chicken + Old El Paso enchilada sauce + shredded cheese"},
+    {"name": "Burrito Bowls",                  "rating": 4, "tags": ["quick"],                            "notes": "seasoned ground beef or chicken + rice + black beans + toppings"},
+    {"name": "Chicken Fajitas",                "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Perdue thighs + bell peppers + onion + flour tortillas"},
+    {"name": "Quesadillas",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "flour tortillas + shredded cheese + chicken — kids love building their own"},
+    {"name": "Taco Soup",                      "rating": 4, "tags": ["quick","comfort-food"],             "notes": "ground beef + ROTEL + beans + corn + taco seasoning — one pot, 20 min"},
+    {"name": "Beef Nachos",                    "rating": 3, "tags": ["quick","kid-friendly"],             "notes": "tortilla chips + seasoned ground beef + shredded cheese + ROTEL"},
+    # ── Italian & Pasta ─────────────────────────────────────────────────────
+    {"name": "Baked Ziti",                     "rating": 4, "tags": ["weekend","comfort-food"],           "notes": "like lasagna but easier — rigatoni + Rao's + ricotta + mozzarella"},
+    {"name": "Pesto Pasta with Chicken",       "rating": 4, "tags": ["quick"],                            "notes": "jarred pesto + rotini + grilled chicken thighs + cherry tomatoes"},
+    {"name": "Spaghetti Carbonara",            "rating": 4, "tags": ["quick"],                            "notes": "eggs + parmesan + pancetta or bacon — 20 min, no cream needed"},
+    # ── American comfort ────────────────────────────────────────────────────
+    {"name": "Sloppy Joes",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "80/20 ground beef + Manwich sauce + Martin's potato rolls"},
+    {"name": "Shepherd's Pie",                 "rating": 4, "tags": ["weekend","comfort-food"],           "notes": "ground beef + frozen mixed veg + mashed potato topping"},
+    {"name": "Chicken and Dumplings",          "rating": 4, "tags": ["comfort-food"],                     "notes": "rotisserie chicken + Grands biscuits as dumplings — hearty and quick"},
+    {"name": "White Chicken Chili",            "rating": 4, "tags": ["comfort-food"],                     "notes": "rotisserie chicken + white beans + green chiles + cream cheese"},
+    {"name": "Philly Cheesesteaks",            "rating": 4, "tags": ["kid-friendly"],                     "notes": "shaved beef + provolone + peppers + onions + hoagie rolls"},
+    {"name": "French Dip Sandwiches",          "rating": 4, "tags": ["kid-friendly"],                     "notes": "chuck roast in slow cooker + au jus + provolone + hoagie rolls"},
+    {"name": "BBQ Chicken",                    "rating": 4, "tags": ["weekend","kid-friendly"],           "notes": "Sweet Baby Ray's + Perdue thighs — oven-baked or grilled"},
+    {"name": "Sheet Pan Chicken Thighs",       "rating": 4, "tags": ["kid-friendly"],                     "notes": "Perdue thighs + roasted potatoes and broccoli — one pan, minimal cleanup"},
+    {"name": "Grilled Cheese and Tomato Soup", "rating": 4, "tags": ["quick","kid-friendly","comfort-food"],"notes": "Campbell's or Great Value tomato soup + thick-sliced buttered bread"},
+    {"name": "Sloppy Joes",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Manwich + 80/20 ground beef + Martin's potato rolls — 15 min dinner"},
+    {"name": "Homemade Pizza Night",           "rating": 4, "tags": ["weekend","kid-friendly"],           "notes": "Pillsbury dough or Stonefire naan + sauce + toppings — kids build their own"},
+    {"name": "Mac and Cheese with Hot Dogs",   "rating": 3, "tags": ["quick","kid-friendly"],             "notes": "Nathan's sliced into Kraft mac — reliable low-effort kid meal"},
+    # ── Asian-inspired ──────────────────────────────────────────────────────
+    {"name": "Teriyaki Chicken with Rice",     "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Kikkoman teriyaki + Perdue thighs + jasmine rice + broccoli"},
+    {"name": "Chicken Fried Rice",             "rating": 4, "tags": ["quick"],                            "notes": "day-old rice + eggs + frozen peas + soy sauce + sesame oil"},
+    {"name": "Beef and Broccoli",              "rating": 4, "tags": ["quick"],                            "notes": "flank steak or beef strips + frozen broccoli + soy-ginger sauce over rice"},
+    {"name": "Lo Mein",                        "rating": 3, "tags": ["quick"],                            "notes": "lo mein noodles + frozen stir-fry veg + soy sauce + sesame oil"},
+    # ── Breakfast for dinner ────────────────────────────────────────────────
+    {"name": "Breakfast for Dinner",           "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "scrambled eggs + bacon + Kodiak pancakes — big family hit, zero complaints"},
 ]
 
 
@@ -322,6 +355,76 @@ def import_recipes():
 def delete_recipe(recipe_id):
     _save_recipes([r for r in _load_recipes() if r['id'] != recipe_id])
     return jsonify({'ok': True})
+
+
+def _ingredient_to_str(ing) -> str:
+    """Normalize an ingredient to a plain string (handles both str and object formats)."""
+    if isinstance(ing, str):
+        return ing
+    qty  = ing.get('quantity', '')
+    unit = ing.get('unit', '')
+    name = ing.get('name', '')
+    parts = [str(qty) if qty else '', unit, name]
+    return ' '.join(p for p in parts if p).strip()
+
+
+@app.route('/recipes/backfill', methods=['POST'])
+def backfill_recipes():
+    recipes = _load_recipes()
+
+    # Normalize any existing object-format ingredients to strings in-place
+    converted = 0
+    for r in recipes:
+        ings = r.get('ingredients')
+        if ings and any(isinstance(i, dict) for i in ings):
+            r['ingredients'] = [_ingredient_to_str(i) for i in ings]
+            converted += 1
+
+    missing = [r for r in recipes if not r.get('ingredients')]
+    if not missing and converted == 0:
+        return jsonify({'filled': 0, 'total': len(recipes)})
+
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'ANTHROPIC_API_KEY not set'}), 500
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    def _fill_one(recipe):
+        prompt = f"""For the recipe "{recipe['name']}", return a JSON object with two keys:
+- "ingredients": array of plain strings like "1.5 lb ground beef", "8 flour tortillas", "1 cup shredded cheddar" — for a family of 4
+- "steps": array of short step strings (4–8 steps)
+
+Return ONLY the JSON object, no markdown, no extra text.
+Notes: {recipe.get('notes', '')}"""
+        try:
+            msg = client.messages.create(
+                model='claude-sonnet-4-6',
+                max_tokens=1000,
+                messages=[{'role': 'user', 'content': prompt}]
+            )
+            text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
+            data = json.loads(text)
+            ings  = [_ingredient_to_str(i) for i in data.get('ingredients', [])]
+            steps = [str(s) for s in data.get('steps', [])]
+            return recipe['id'], ings, steps
+        except Exception:
+            return recipe['id'], [], []
+
+    filled = 0
+    recipe_map = {r['id']: r for r in recipes}
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_fill_one, r): r['id'] for r in missing}
+        for future in as_completed(futures):
+            rid, ingredients, steps = future.result()
+            if ingredients:
+                recipe_map[rid]['ingredients'] = ingredients
+                recipe_map[rid]['steps'] = steps
+                filled += 1
+
+    _save_recipes(list(recipe_map.values()))
+    return jsonify({'filled': filled, 'converted': converted, 'total': len(recipes)})
 
 
 @app.route('/generate-meal-plan', methods=['POST'])
@@ -679,14 +782,16 @@ def _save_recipes(recipes: list) -> None:
     json.dump(recipes, open(RECIPES_PATH, 'w', encoding='utf-8'), indent=2)
 
 
-def _seed_recipes_if_empty() -> None:
-    if _load_recipes():
-        return
-    seeded = [
-        {**r, 'id': str(int(time.time() * 1000) + i), 'timesPlanned': 0, 'lastPlanned': ''}
-        for i, r in enumerate(_SEED_RECIPES)
-    ]
-    _save_recipes(seeded)
+def _merge_seed_recipes() -> None:
+    existing = _load_recipes()
+    existing_names = {r['name'].lower() for r in existing}
+    to_add = []
+    base_id = int(time.time() * 1000)
+    for i, r in enumerate(_SEED_RECIPES):
+        if r['name'].lower() not in existing_names:
+            to_add.append({**r, 'id': str(base_id + i), 'timesPlanned': 0, 'lastPlanned': ''})
+    if to_add:
+        _save_recipes(existing + to_add)
 
 
 def _parse_household_items() -> list[str]:
@@ -791,7 +896,7 @@ Use descriptive terms that work on Walmart search (e.g. "organic bananas bunch" 
 
 
 if __name__ == '__main__':
-    _seed_recipes_if_empty()
+    _merge_seed_recipes()
     print("=" * 50)
     print("Grocery agent server running at http://localhost:5000")
     print("Health check: http://localhost:5000/ping")

@@ -247,6 +247,7 @@
       <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
       <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
       <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
+      <button class="btn" id="recipesBackfillBtn" onclick="backfillRecipes()">fill missing</button>
       <button class="btn" onclick="toggleRecipesPanel()">close</button>
     </div>
     <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />
