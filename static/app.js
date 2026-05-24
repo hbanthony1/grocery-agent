@@ -850,11 +850,11 @@ async function startCartBuild() {
   }
 
   try {
-    document.getElementById('cartLoadingMsg').textContent = 'Building Walmart cart (this takes ~30 seconds)...';
+    document.getElementById('cartLoadingMsg').textContent = 'Building Walmart cart (this takes ~20 seconds)...';
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, household: [...householdChecked], zip: '59047' })
+      body: JSON.stringify({ meals: mealNames, household: [...householdChecked], zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();

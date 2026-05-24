@@ -36,11 +36,15 @@ def search_product(query: str) -> dict | None:
     """Search Walmart for a product, return best match or None."""
     resp = requests.get(
         SEARCH_URL,
-        params={"query": query, "numItems": 3},
+        params={"query": query, "numItems": 5},
         headers=_auth_headers(),
     )
     resp.raise_for_status()
     items = resp.json().get("items", [])
+    # Prefer items that have a sale price (i.e. are actually available)
+    for item in items:
+        if item.get("salePrice") or item.get("msrp"):
+            return item
     return items[0] if items else None
 
 

@@ -1,11 +1,12 @@
-from flask import Flask, request, jsonify, send_from_directory, redirect
+from flask import Flask, request, jsonify, send_from_directory, redirect, session
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
 import anthropic, os, json, re, time, traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
 
 # Allow OAuth over plain HTTP for localhost
 os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
@@ -20,6 +21,7 @@ except ImportError:
     _GCAL_AVAILABLE = False
 
 app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'grocery-agent-local-dev-secret')
 CORS(app, origins="*")
 
 GOOGLE_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'data', 'google_token.json')
@@ -231,75 +233,61 @@ def build_cart():
         print(f"\n=== BUILD CART REQUEST ===")
         print(f"Meals: {meals}")
 
-        cart_items   = []  # [{"itemId": str, "quantity": int}]
+        # ── Phase 1: all Claude calls in parallel ─────────────────────────
+        # One call per meal to generate search queries + one for staples.
+        all_search_tasks = []
+
+        claude_jobs = {}
+        with ThreadPoolExecutor(max_workers=min(len(meals) + 1, 10)) as ex:
+            for name in meals:
+                claude_jobs[ex.submit(get_search_queries_for_meal, name)] = name
+            staple_fut = ex.submit(get_staple_queries)
+            claude_jobs[staple_fut] = '__staples__'
+
+            for fut in as_completed(claude_jobs):
+                label = claude_jobs[fut]
+                try:
+                    queries = fut.result()
+                    tag = label if label != '__staples__' else 'staples'
+                    print(f"  [{tag}]: {len(queries)} queries")
+                    all_search_tasks.extend(queries)
+                except Exception as e:
+                    print(f"  ERROR getting queries for {label}: {e}")
+                    traceback.print_exc()
+
+        # Household items search directly — no Claude step needed
+        for name in household:
+            all_search_tasks.append({"search_query": name, "qty": 1})
+
+        print(f"\nTotal search tasks: {len(all_search_tasks)}")
+
+        # ── Phase 2: all Walmart searches in parallel ─────────────────────
+        search_results = []
+        with ThreadPoolExecutor(max_workers=20) as ex:
+            fut_to_task = {ex.submit(search_product, t['search_query']): t for t in all_search_tasks}
+            for fut in as_completed(fut_to_task):
+                task = fut_to_task[fut]
+                try:
+                    product = fut.result()
+                    search_results.append((task, product))
+                except Exception as e:
+                    print(f"  - Search error for '{task['search_query']}': {e}")
+
+        # ── Deduplicate and assemble cart ─────────────────────────────────
+        cart_items   = []
         all_products = []
         seen_ids     = set()
 
-        for meal_name in meals:
-            print(f"\nProcessing: {meal_name}")
-            try:
-                queries = get_search_queries_for_meal(meal_name)
-                print(f"  Queries: {len(queries)}")
-
-                for q in queries:
-                    try:
-                        product = search_product(q['search_query'])
-                        if product:
-                            item_id = str(product['itemId'])
-                            if item_id not in seen_ids:
-                                seen_ids.add(item_id)
-                                cart_items.append({"itemId": item_id, "quantity": q.get('qty', 1)})
-                                all_products.append(product)
-                                print(f"    ✓ {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
-                        else:
-                            print(f"    - No result: {q['search_query']}")
-                    except Exception as e:
-                        print(f"    - Search error for '{q['search_query']}': {e}")
-                        continue
-
-            except Exception as meal_err:
-                print(f"  ERROR for {meal_name}: {meal_err}")
-                traceback.print_exc()
-                continue
-
-        # Add weekly staples from preferences.md
-        print("\nProcessing staples...")
-        try:
-            for q in get_staple_queries():
-                try:
-                    product = search_product(q['search_query'])
-                    if product:
-                        item_id = str(product['itemId'])
-                        if item_id not in seen_ids:
-                            seen_ids.add(item_id)
-                            cart_items.append({"itemId": item_id, "quantity": q.get('qty', 1)})
-                            all_products.append(product)
-                            print(f"  ✓ {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
-                    else:
-                        print(f"  - No result: {q['search_query']}")
-                except Exception as e:
-                    print(f"  - Search error for '{q['search_query']}': {e}")
-        except Exception as e:
-            print(f"  ERROR loading staples: {e}")
-            traceback.print_exc()
-
-        # Add household / non-grocery items selected by user
-        if household:
-            print("\nProcessing household items...")
-            for item_name in household:
-                try:
-                    product = search_product(item_name)
-                    if product:
-                        item_id = str(product['itemId'])
-                        if item_id not in seen_ids:
-                            seen_ids.add(item_id)
-                            cart_items.append({"itemId": item_id, "quantity": 1})
-                            all_products.append(product)
-                            print(f"  ✓ {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
-                    else:
-                        print(f"  - No result: {item_name}")
-                except Exception as e:
-                    print(f"  - Search error for '{item_name}': {e}")
+        for task, product in search_results:
+            if product:
+                item_id = str(product['itemId'])
+                if item_id not in seen_ids:
+                    seen_ids.add(item_id)
+                    cart_items.append({"itemId": item_id, "quantity": task.get('qty', 1)})
+                    all_products.append(product)
+                    print(f"  + {product['name']} ${product.get('salePrice', product.get('msrp', 0))}")
+            else:
+                print(f"  - No result: {task['search_query']}")
 
         cart_url = build_cart_url(cart_items, staple_items=[])
         total    = sum(float(p.get('salePrice', p.get('msrp', 0))) for p in all_products)
@@ -336,17 +324,27 @@ def calendar_auth():
     if not _GCAL_AVAILABLE or not os.getenv('GOOGLE_CLIENT_ID'):
         return 'Google Calendar not configured', 400
     flow = _make_google_flow()
-    auth_url, _ = flow.authorization_url(access_type='offline', prompt='consent')
+    auth_url, state = flow.authorization_url(access_type='offline', prompt='consent')
+    session['oauth_state'] = state
+    if flow.code_verifier:
+        session['code_verifier'] = flow.code_verifier
     return redirect(auth_url)
 
 
 @app.route('/calendar/callback')
 def calendar_callback():
-    code = request.args.get('code')
-    if not code:
+    if not request.args.get('code'):
         return 'Authorization failed — no code returned', 400
-    flow = _make_google_flow()
-    flow.fetch_token(code=code)
+    state   = session.pop('oauth_state', None)
+    flow    = _make_google_flow(state=state)
+    verifier = session.pop('code_verifier', None)
+    kwargs  = {'authorization_response': request.url}
+    if verifier:
+        kwargs['code_verifier'] = verifier
+    try:
+        flow.fetch_token(**kwargs)
+    except Exception as e:
+        return f'Authorization failed: {e}. Try connecting again.', 400
     _save_google_creds(flow.credentials)
     return redirect('/')
 
@@ -416,7 +414,7 @@ def calendar_disconnect():
     return jsonify({'ok': True})
 
 
-def _make_google_flow():
+def _make_google_flow(state=None):
     return Flow.from_client_config(
         {'web': {
             'client_id':     os.getenv('GOOGLE_CLIENT_ID'),
@@ -426,7 +424,8 @@ def _make_google_flow():
             'redirect_uris': ['http://localhost:5000/calendar/callback'],
         }},
         scopes=GOOGLE_SCOPES,
-        redirect_uri='http://localhost:5000/calendar/callback'
+        redirect_uri='http://localhost:5000/calendar/callback',
+        state=state
     )
 
 
