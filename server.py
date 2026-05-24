@@ -1,7 +1,7 @@
-from flask import Flask, request, jsonify, send_from_directory, redirect, session
+from flask import Flask, request, jsonify, send_from_directory, redirect, session, Response
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
-import anthropic, os, json, re, time, traceback
+import anthropic, os, json, re, time, traceback, csv, io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -130,6 +130,19 @@ def update_pantry_item(item_id):
             _save_pantry(pantry)
             return jsonify(item)
     return jsonify({'error': 'not found'}), 404
+
+
+@app.route('/pantry/export', methods=['GET'])
+def export_pantry():
+    pantry = sorted(_load_pantry(), key=lambda x: x.get('name', '').lower())
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['name', 'amount', 'unit', 'expires_on', 'added_on'])
+    for item in pantry:
+        w.writerow([item.get('name',''), item.get('amount',''), item.get('unit',''),
+                    item.get('expiresOn',''), item.get('addedOn','')])
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=pantry.csv'})
 
 
 @app.route('/pantry/<item_id>', methods=['DELETE'])
