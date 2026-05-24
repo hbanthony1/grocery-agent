@@ -198,6 +198,20 @@ def update_recipe(recipe_id):
     return jsonify({'error': 'not found'}), 404
 
 
+@app.route('/recipes/export', methods=['GET'])
+def export_recipes():
+    recipes = sorted(_load_recipes(), key=lambda x: x.get('name', '').lower())
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['name', 'rating', 'tags', 'times_planned', 'last_planned', 'notes'])
+    for r in recipes:
+        w.writerow([r.get('name',''), r.get('rating',''),
+                    ', '.join(r.get('tags', [])),
+                    r.get('timesPlanned',''), r.get('lastPlanned',''), r.get('notes','')])
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=recipes.csv'})
+
+
 @app.route('/recipes/<recipe_id>', methods=['DELETE'])
 def delete_recipe(recipe_id):
     _save_recipes([r for r in _load_recipes() if r['id'] != recipe_id])
