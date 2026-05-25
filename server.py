@@ -89,6 +89,16 @@ _SEED_RECIPES = [
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/service-worker.js')
+def service_worker():
+    resp = send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    return resp
+
 
 @app.route('/ping')
 def ping():

@@ -28,6 +28,23 @@ function _dismissToast(toast) {
   setTimeout(() => toast.remove(), 200);
 }
 
+// ===== FOCUS TRAP =====
+function _trapFocus(el) {
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  function handler(e) {
+    if (e.key !== 'Tab') return;
+    const nodes = [...el.querySelectorAll(sel)].filter(n => n.offsetParent !== null);
+    if (!nodes.length) return;
+    const first = nodes[0], last = nodes[nodes.length - 1];
+    if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus(); } }
+    else            { if (document.activeElement === last)  { e.preventDefault(); first.focus(); } }
+  }
+  el.addEventListener('keydown', handler);
+  const first = [...el.querySelectorAll(sel)].find(n => n.offsetParent !== null);
+  first?.focus();
+  return () => el.removeEventListener('keydown', handler);
+}
+
 // ===== STATE =====
 let currentStep = 0;
 let meals = [];
@@ -42,6 +59,11 @@ let weekBreakfasts = [];
 let weekLunches    = [];
 const _pickerOpen  = { breakfast: false, lunch: false };
 let servingSize = 4;
+let _cartView = 'meal';          // 'meal' | 'category'
+let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
+let _prefsTrap = null;           // focus trap cleanup fns
+let _recipesTrap = null;
+let _pantryTrap = null;
 
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
@@ -598,12 +620,14 @@ function openRecipesPage(fromHistory = false) {
   _syncPanelOpen();
   document.getElementById('recipesSearch').value = '';
   renderRecipesPanel();
+  _recipesTrap = _trapFocus(document.getElementById('recipesPage'));
 }
 
 function closeRecipesPage(fromHistory = false) {
   if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('recipesPage').style.display = 'none';
   _syncPanelOpen();
+  _recipesTrap?.(); _recipesTrap = null;
 }
 
 function toggleRecipesPanel() {
@@ -875,12 +899,14 @@ function openPantryPage(fromHistory = false) {
   _syncPanelOpen();
   document.getElementById('pantrySearch').value = '';
   renderPantryPanel();
+  _pantryTrap = _trapFocus(document.getElementById('pantryPanel'));
 }
 
 function closePantryPage(fromHistory = false) {
   if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('pantryPanel').style.display = 'none';
   _syncPanelOpen();
+  _pantryTrap?.(); _pantryTrap = null;
 }
 
 function togglePantryPanel() {
@@ -1728,33 +1754,72 @@ async function startCartBuild() {
   }
 }
 
+function setCartView(view) {
+  _cartView = view;
+  document.getElementById('cartViewMeal').classList.toggle('active', view === 'meal');
+  document.getElementById('cartViewCategory').classList.toggle('active', view === 'category');
+  if (_cartData) _renderCartList(_cartData.groups, _cartData.mealOrder);
+}
+
+function _renderCartList(groups, mealOrder) {
+  const list = document.getElementById('cartList');
+  if (_cartView === 'category') {
+    // Flatten all items, group by grocery category
+    const allItems = [];
+    mealOrder.forEach(src => (groups[src] || []).forEach(i => allItems.push(i)));
+    const catGroups = {};
+    allItems.forEach(item => {
+      const cat = _hhCategory(item.name);
+      if (!catGroups[cat]) catGroups[cat] = [];
+      catGroups[cat].push(item);
+    });
+    list.innerHTML = HH_CATEGORY_ORDER.filter(cat => catGroups[cat]).map(cat => {
+      const items = catGroups[cat];
+      const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
+      return `<div class="cart-group">
+        <div class="cart-group-header">
+          <span class="cart-group-label">${HH_CATEGORY_LABELS[cat] || cat}</span>
+          <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
+        </div>
+        ${items.map(item => `
+          <div class="cart-item">
+            <span class="cart-item-name">${item.name}</span>
+            <span class="cart-item-price">${item.price}</span>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+  } else {
+    const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
+    list.innerHTML = sourcesPresent.map(source => {
+      const items = groups[source];
+      const isSpecial = ['staples', 'household', 'Breakfasts', 'Lunches'].includes(source);
+      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source;
+      const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
+      return `<div class="cart-group">
+        <div class="cart-group-header">
+          <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
+          <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
+        </div>
+        ${items.map(item => `
+          <div class="cart-item">
+            <span class="cart-item-name">${item.name}</span>
+            <span class="cart-item-price">${item.price}</span>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+}
+
 function renderCart(groups, mealOrder, total, url) {
+  _cartData = { groups, mealOrder, total, url };
+  _cartView = 'meal';
+  document.getElementById('cartViewMeal').classList.add('active');
+  document.getElementById('cartViewCategory').classList.remove('active');
   document.getElementById('cartCard').style.display = 'block';
   document.getElementById('doneBtn').style.display = 'inline-flex';
   document.getElementById('buildCartBtn').style.display = 'none';
 
-  const list = document.getElementById('cartList');
-  const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
-
-  list.innerHTML = sourcesPresent.map(source => {
-    const items = groups[source];
-    const isSpecial = ['staples', 'household', 'Breakfasts', 'Lunches'].includes(source);
-    const label = source === 'staples'    ? 'Weekly Staples'
-                : source === 'household'  ? 'Household'
-                : source;
-    const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
-    return `<div class="cart-group">
-      <div class="cart-group-header">
-        <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
-        <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
-      </div>
-      ${items.map(item => `
-        <div class="cart-item">
-          <span class="cart-item-name">${item.name}</span>
-          <span class="cart-item-price">${item.price}</span>
-        </div>`).join('')}
-    </div>`;
-  }).join('');
+  _renderCartList(groups, mealOrder);
 
   document.getElementById('cartTotal').textContent = total;
 
@@ -1856,12 +1921,14 @@ function openPrefsPage(fromHistory = false) {
   document.getElementById('prefsPage').style.display = 'flex';
   _syncPanelOpen();
   renderPrefsPage();
+  _prefsTrap = _trapFocus(document.getElementById('prefsPage'));
 }
 
 function closePrefsPage(fromHistory = false) {
   if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('prefsPage').style.display = 'none';
   _syncPanelOpen();
+  _prefsTrap?.(); _prefsTrap = null;
 }
 
 function switchPrefsTab(tab) {

@@ -3,10 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#FF6B35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Grocery">
 <title>Grocery Agent</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<a href="#mainApp" class="skip-link">Skip to content</a>
 
 <!-- TOP NAV -->
 <nav class="top-nav">
@@ -235,7 +242,13 @@
       server not running · open Terminal → cd grocery_agent → python server.py
     </div>
     <div id="cartCard" class="card" style="display:none">
-      <div class="card-label">cart summary</div>
+      <div class="cart-card-header">
+        <span class="card-label" style="margin-bottom:0">cart summary</span>
+        <div class="cart-view-pills" role="group" aria-label="Cart view">
+          <button class="cart-view-pill active" id="cartViewMeal"     onclick="setCartView('meal')">by meal</button>
+          <button class="cart-view-pill"         id="cartViewCategory" onclick="setCartView('category')">by category</button>
+        </div>
+      </div>
       <div class="cart-list" id="cartList"></div>
       <div class="total-row">
         <span class="total-label">estimated total</span>
@@ -397,5 +410,10 @@
 <input type="file" id="photoUploadInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">
 <div class="toast-stack" id="toastStack"></div>
 <script src="/static/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+</script>
 </body>
 </html>
