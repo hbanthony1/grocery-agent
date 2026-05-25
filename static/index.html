@@ -87,10 +87,12 @@
             <span class="recap-chev" id="recapChev-order">▾</span>
           </button>
           <div id="recapBody-order" class="recap-sec-body">
-            <p class="recap-hint">Upload your Walmart order CSV to add items to your pantry and flag brand preferences.</p>
+            <p class="recap-hint">Upload your Walmart order CSV or PDF receipt to add items to your pantry and flag brand preferences.</p>
             <div class="recap-upload-row">
               <input type="file" id="orderCsvInput" accept=".csv,.txt" style="display:none" onchange="handleOrderCsv(this)">
-              <button class="btn" onclick="document.getElementById('orderCsvInput').click()">upload order CSV</button>
+              <button class="btn" onclick="document.getElementById('orderCsvInput').click()">upload CSV</button>
+              <input type="file" id="orderPdfInput" accept=".pdf" style="display:none" onchange="handleOrderPdf(this)">
+              <button class="btn" onclick="document.getElementById('orderPdfInput').click()">upload PDF</button>
               <span class="hh-loading" id="orderCsvStatus"></span>
             </div>
             <div id="orderCsvPreview" style="display:none;margin-top:10px"></div>
@@ -278,6 +280,8 @@
         <span class="total-val" id="cartTotal">$0</span>
       </div>
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
+      <div id="notFoundBox" class="cart-info-box warn" style="display:none"></div>
+      <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>

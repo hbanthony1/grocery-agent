@@ -1176,6 +1176,36 @@ async function handleOrderCsv(input) {
   input.value = '';
 }
 
+async function handleOrderPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status  = document.getElementById('orderCsvStatus');
+  const preview = document.getElementById('orderCsvPreview');
+  status.textContent = 'reading PDF...';
+  preview.style.display = 'none';
+  try {
+    const buf   = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary  = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const b64   = btoa(binary);
+    status.textContent = 'parsing...';
+    const resp = await fetch('/feedback/order-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf: b64 }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    _orderCsvData = data;
+    status.textContent = `found ${data.pantryItems?.length || 0} items`;
+    renderOrderCsvPreview(data);
+  } catch(e) {
+    status.textContent = 'error — try again';
+  }
+  input.value = '';
+}
+
 function renderOrderCsvPreview(data) {
   const preview = document.getElementById('orderCsvPreview');
   preview.style.display = 'block';
@@ -1918,6 +1948,8 @@ async function startCartBuild() {
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
   const ssb = document.getElementById('swapSuggestBox'); if (ssb) ssb.style.display = 'none';
+  const nfb = document.getElementById('notFoundBox');    if (nfb) nfb.style.display = 'none';
+  const spb = document.getElementById('spikeBox');       if (spb) spb.style.display = 'none';
   resetCartProgress();
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
@@ -1939,7 +1971,7 @@ async function startCartBuild() {
     finishCartProgress();
     setTimeout(() => {
       document.getElementById('cartLoadingBar').style.display = 'none';
-      renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl);
+      renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl, data.notFound || []);
     }, 500);
 
   } catch(e) {
@@ -2017,7 +2049,28 @@ function _renderCartList(groups, mealOrder) {
   }
 }
 
-function renderCart(groups, mealOrder, total, url) {
+function checkPriceSpikes(groups) {
+  const lastPrices    = prefs.lastStaplePrices || {};
+  const currentPrices = {};
+  const spikes        = [];
+  const stapleGroups  = ['staples', 'frequentStaples', 'household', 'Snacks', 'dessert'];
+  stapleGroups.forEach(src => {
+    (groups[src] || []).forEach(item => {
+      const price = parseFloat(item.price.replace('$', ''));
+      currentPrices[item.name] = price;
+      const last = lastPrices[item.name];
+      if (last && price > last * 1.10) {
+        const pct = Math.round((price / last - 1) * 100);
+        spikes.push(`${item.name}: $${last.toFixed(2)} → ${item.price} (+${pct}%)`);
+      }
+    });
+  });
+  prefs.lastStaplePrices = { ...lastPrices, ...currentPrices };
+  fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {});
+  return spikes;
+}
+
+function renderCart(groups, mealOrder, total, url, notFound) {
   _cartData = { groups, mealOrder, total, url };
   _cartView = 'meal';
   document.getElementById('cartViewMeal').classList.add('active');
@@ -2054,6 +2107,29 @@ function renderCart(groups, mealOrder, total, url) {
       budgetBar.style.display = 'block';
     } else {
       budgetBar.style.display = 'none';
+    }
+  }
+
+  // Not-found items
+  const notFoundBox = document.getElementById('notFoundBox');
+  if (notFoundBox) {
+    if (notFound?.length) {
+      notFoundBox.style.display = 'block';
+      notFoundBox.textContent = `⚠ Couldn't find at your Walmart: ${notFound.join(', ')}`;
+    } else {
+      notFoundBox.style.display = 'none';
+    }
+  }
+
+  // Price spike detection
+  const spikes = checkPriceSpikes(groups);
+  const spikeBox = document.getElementById('spikeBox');
+  if (spikeBox) {
+    if (spikes.length) {
+      spikeBox.style.display = 'block';
+      spikeBox.innerHTML = `<strong>Price spikes vs. last week:</strong><br>${spikes.map(s => `• ${s}`).join('<br>')}`;
+    } else {
+      spikeBox.style.display = 'none';
     }
   }
 

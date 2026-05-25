@@ -614,6 +614,44 @@ CSV content:
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/feedback/order-pdf', methods=['POST'])
+def parse_order_pdf():
+    pdf_b64 = (request.json or {}).get('pdf', '').strip()
+    if not pdf_b64:
+        return jsonify({'error': 'no pdf provided'}), 400
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        prompt = '''Parse this Walmart order receipt PDF and extract grocery/food items.
+Return ONLY a JSON object, no markdown, no explanation:
+{"pantryItems": [{"name": "normalized item name", "amount": "numeric quantity", "unit": "lb/oz/count/gallon/etc", "shelfDays": 14}], "brandSuggestions": ["short brand note worth remembering"]}
+
+Rules for pantryItems:
+- Normalize names: "Great Value 2% Milk 1 gallon" → name:"milk", amount:"1", unit:"gallon"
+- Include all food/grocery items ordered; skip household supplies, electronics, clothing, etc.
+- amount: just the number (or empty string if unknown). unit: the measurement word.
+- shelfDays: realistic shelf life in days (milk=10, eggs=21, bread=7, chicken=2, canned goods=365, crackers=90, frozen=180)
+
+Rules for brandSuggestions:
+- Only flag non-generic brands worth remembering for future orders
+- Keep to 0-3 suggestions max. Empty array if nothing notable.'''
+        msg = client.messages.create(
+            model=MODEL,
+            max_tokens=1200,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'document', 'source': {'type': 'base64', 'media_type': 'application/pdf', 'data': pdf_b64}},
+                    {'type': 'text', 'text': prompt},
+                ],
+            }]
+        )
+        text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
+        return jsonify(json.loads(text))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/swap-item', methods=['POST'])
 def swap_item():
     query = (request.json or {}).get('query', '').strip()
@@ -763,6 +801,7 @@ def build_cart():
         cart_items     = []
         groups         = {}   # source -> [{name, price}]
         seen_ids       = set()
+        not_found      = []
         total          = 0.0
 
         for task, product in search_results:
@@ -780,6 +819,7 @@ def build_cart():
                     total += price
                     print(f"  + [{source}] {product['name']} ${price}")
             else:
+                not_found.append(task['search_query'])
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
@@ -794,7 +834,8 @@ def build_cart():
             "groups":    groups,
             "mealOrder": meal_order,
             "total":     f"${total:.2f}",
-            "cartUrl":   cart_url
+            "cartUrl":   cart_url,
+            "notFound":  not_found,
         })
 
     except Exception as e:
