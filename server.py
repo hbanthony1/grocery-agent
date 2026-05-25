@@ -722,6 +722,7 @@ def build_cart():
         frequent_staples = data.get('frequentStaples', [])
         dessert          = data.get('dessert', '')
         snacks           = data.get('snacks', [])
+        holiday          = data.get('holiday') or {}
         zip_code         = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
         servings         = int(data.get('servings', 4))
 
@@ -738,9 +739,12 @@ def build_cart():
             [(name, 'Breakfasts')  for name in breakfasts] +
             [(name, 'Lunches')     for name in lunches]
         )
+        if holiday.get('type'):
+            holiday_label = f"{holiday['type']} for {holiday.get('guests', 8)} people"
+            job_sources = job_sources + [(holiday_label, 'holiday')]
 
         claude_jobs = {}
-        with ThreadPoolExecutor(max_workers=min(len(job_sources) + 1, 12)) as ex:
+        with ThreadPoolExecutor(max_workers=min(len(job_sources) + 1, 14)) as ex:
             for name, source_label in job_sources:
                 claude_jobs[ex.submit(get_search_queries_for_meal, name, servings)] = source_label
             staple_fut = ex.submit(get_staple_queries)
@@ -823,7 +827,7 @@ def build_cart():
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'dessert', 'Snacks', 'staples', 'frequentStaples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'staples', 'frequentStaples', 'household']
 
         cart_url = build_cart_url(cart_items, staple_items=[])
 

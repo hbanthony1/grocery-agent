@@ -59,7 +59,9 @@ let weekBreakfasts = [];
 let weekLunches    = [];
 let weekDessert    = '';
 let weekSnacks     = [];
+let weekHoliday    = null; // null or {type: 'Thanksgiving dinner', guests: 12}
 const _pickerOpen  = { breakfast: false, lunch: false, dessert: false, snacks: false };
+let _prefsDirty    = false;
 let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
 let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
@@ -71,6 +73,7 @@ const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes'
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
 const SNACK_OPTIONS     = ['Trail mix', 'Chips & salsa', 'Crackers & cheese', 'Popcorn', 'Granola bars', 'Veggies & hummus', 'Fruit'];
+const HOLIDAY_OPTIONS   = ['Thanksgiving dinner', 'Christmas dinner', 'Easter brunch', 'Fourth of July cookout', 'Halloween party', 'Birthday party', 'Game day spread'];
 
 function toTitleCase(s) {
   return (s || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -1384,6 +1387,7 @@ function renderStep0Extras() {
   weekLunches    = prefs.defaultLunches?.length    ? [...prefs.defaultLunches]    : [];
   weekDessert    = prefs.defaultDessert            || '';
   weekSnacks     = prefs.defaultSnacks?.length ? [...prefs.defaultSnacks] : [];
+  weekHoliday    = null;
   _pickerOpen.breakfast = !weekBreakfasts.length;
   _pickerOpen.lunch     = !weekLunches.length;
   _pickerOpen.dessert   = false;
@@ -1392,6 +1396,7 @@ function renderStep0Extras() {
   renderMealPicks('lunch');
   renderDessertPick();
   renderSnackPick();
+  renderHolidaySection();
 }
 
 function renderMealPicks(type) {
@@ -1561,6 +1566,55 @@ function addCustomSnack() {
   if (!weekSnacks.includes(val) && weekSnacks.length < 3) weekSnacks.push(val);
   if (input) input.value = '';
   renderSnackPick();
+}
+
+function renderHolidaySection() {
+  const el = document.getElementById('holidaySection');
+  if (!el) return;
+  if (!weekHoliday) {
+    el.innerHTML = `<div class="meal-pick-banner">
+      <span style="opacity:0.6">no holiday meal this week</span>
+      <button class="btn-link" onclick="openHolidayPicker()">plan one →</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = `<div class="meal-pick-banner">
+    <span>🎄 ${weekHoliday.type} · ${weekHoliday.guests} guests</span>
+    <button class="btn-link" onclick="openHolidayPicker()">change →</button>
+    <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="weekHoliday=null;renderHolidaySection()">remove</button>
+  </div>`;
+}
+
+function openHolidayPicker() {
+  const el = document.getElementById('holidaySection');
+  if (!el) return;
+  const curType   = weekHoliday?.type || '';
+  const curGuests = weekHoliday?.guests || (parseInt(prefs.household?.adults || 2) + parseInt(prefs.household?.kids || 0) + 4);
+  const chips = HOLIDAY_OPTIONS.map(opt => {
+    const sel = curType === opt;
+    const esc = opt.replace(/'/g, '&#39;');
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" data-opt="${esc}" onclick="selectHolidayType('${esc}')">${opt}</button>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="meal-pick-grid" id="holidayChips">${chips}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <span class="prefs-sublabel">guests:</span>
+      <input class="schedule-note" id="holidayGuests" type="number" min="2" max="60" value="${curGuests}" style="width:64px" />
+      <button class="btn primary" style="height:28px;padding:0 12px;font-size:12px" onclick="confirmHoliday()">set →</button>
+      ${weekHoliday ? `<button class="btn-link" style="opacity:0.6" onclick="weekHoliday=null;renderHolidaySection()">remove</button>` : `<button class="btn-link" style="opacity:0.6" onclick="renderHolidaySection()">cancel</button>`}
+    </div>`;
+}
+
+function selectHolidayType(type) {
+  document.querySelectorAll('#holidayChips .meal-pick-chip').forEach(c => c.classList.toggle('selected', c.dataset.opt === type));
+}
+
+function confirmHoliday() {
+  const selected = document.querySelector('#holidayChips .meal-pick-chip.selected');
+  if (!selected) { showToast('Pick a holiday type first'); return; }
+  const guests = parseInt(document.getElementById('holidayGuests')?.value) || 8;
+  weekHoliday = { type: selected.dataset.opt, guests };
+  renderHolidaySection();
 }
 
 function renderPantryToggle() {
@@ -1796,8 +1850,8 @@ function renderMeals() {
     const mealName = m.meal.replace(' [NEW]','');
     const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
-    const easyLabel = m.easyLoading ? '...' : (m.easyMode ? 'easy mode' : 'easy');
-    const easyTitle = m.easyMode ? 'Using a store-bought version — toggle off for homemade' : 'Switch to a store-bought or frozen version';
+    const easyLabel = m.easyLoading ? '...' : (m.easyMode ? '✓ easy' : 'use easy');
+    const easyTitle = m.easyMode ? 'Using a store-bought version — click to switch back to homemade' : 'Switch to a store-bought or frozen version';
     return `
       <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''} ${m.easyMode ? 'easy-meal' : ''}" id="meal${i}">
         <div class="day-badge">
@@ -1958,11 +2012,14 @@ async function startCartBuild() {
   startCartProgress(72);
 
   try {
+    const controller = new AbortController();
+    const _timeout = setTimeout(() => controller.abort(), 90000);
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
-    });
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(_timeout));
 
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Unknown server error');
@@ -2027,8 +2084,8 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
     list.innerHTML = sourcesPresent.map(source => {
       const items = groups[source];
-      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks'].includes(source);
-      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source;
+      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday'].includes(source);
+      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source;
       const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
@@ -2200,6 +2257,7 @@ async function swapCartItem(source, itemIdx, origName) {
   itemEl.after(row);
   input.focus();
   input.select();
+  input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   const doSwap = async () => {
     const query = input.value.trim();
@@ -2270,16 +2328,27 @@ function buildPreferencesPrompt() {
 
 // ===== PREFERENCES PAGE =====
 function openPrefsPage(fromHistory = false) {
+  _prefsDirty = false;
   if (!fromHistory) history.pushState({ step: currentStep, overlay: 'prefs' }, '');
-  document.getElementById('prefsPage').style.display = 'flex';
+  const page = document.getElementById('prefsPage');
+  page.style.display = 'flex';
+  page.addEventListener('input', _markPrefsDirty);
   _syncPanelOpen();
   renderPrefsPage();
-  _prefsTrap = _trapFocus(document.getElementById('prefsPage'));
+  _prefsTrap = _trapFocus(page);
 }
 
+function _markPrefsDirty() { _prefsDirty = true; }
+
 function closePrefsPage(fromHistory = false) {
+  if (_prefsDirty && !fromHistory) {
+    if (!confirm('You have unsaved changes. Close without saving?')) return;
+  }
   if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
-  document.getElementById('prefsPage').style.display = 'none';
+  const page = document.getElementById('prefsPage');
+  page.removeEventListener('input', _markPrefsDirty);
+  page.style.display = 'none';
+  _prefsDirty = false;
   _syncPanelOpen();
   _prefsTrap?.(); _prefsTrap = null;
 }
@@ -2324,6 +2393,7 @@ async function savePrefsPage() {
   householdItems = (prefs.householdItems || []).map(_normalizeHhItem);
   renderHousehold();
   renderFrequentStaples();
+  _prefsDirty = false;
   closePrefsPage();
   showToast('Preferences saved');
 }
