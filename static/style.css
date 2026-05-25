@@ -289,6 +289,39 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .schedule-note { border: 1.5px solid var(--border); border-radius: var(--r); padding: 4px 6px; font-family: var(--sans); font-size: 11px; color: var(--text2); background: var(--bg); outline: none; width: 100%; box-sizing: border-box; transition: border-color 0.15s, box-shadow 0.15s; }
 .schedule-note:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255,107,53,.12); }
 
+/* Weekly recap card */
+.recap-card { margin-bottom: 20px; }
+.recap-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.recap-section { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.recap-sec-hdr { background: none; border: none; width: 100%; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text); padding: 4px 0; text-align: left; }
+.recap-sec-hdr:hover { color: var(--primary); }
+.recap-chev { font-size: 13px; color: var(--text3); margin-left: 8px; }
+.recap-sec-body { padding: 8px 0 4px; }
+.recap-hint { font-size: 12px; color: var(--text2); margin: 0 0 10px; line-height: 1.5; }
+.recap-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.recap-preview-label { font-size: 10px; font-family: var(--mono); color: var(--text3); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; margin: 10px 0 6px; }
+.recap-pantry-preview { display: flex; flex-direction: column; gap: 5px; max-height: 180px; overflow-y: auto; }
+.recap-preview-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); cursor: pointer; }
+.recap-preview-item input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; }
+.recap-meal-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.recap-meal-row:last-child { border-bottom: none; }
+.recap-meal-check { display: flex; align-items: center; gap: 8px; flex: 1; font-size: 13px; color: var(--text); cursor: pointer; }
+.recap-meal-check input[type="checkbox"] { accent-color: var(--primary); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+.recap-sub-input { max-width: 180px; font-size: 12px; }
+.recap-pantry-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.recap-pantry-item:last-child { border-bottom: none; }
+.recap-pantry-item.pantry-exp-expired { background: var(--urgent-red-bg, #fff5f5); border-radius: var(--r); padding: 5px 8px; }
+.recap-pantry-name { flex: 1; font-size: 12px; color: var(--text); }
+.recap-pantry-amt { width: 80px; border: 1.5px solid var(--border); border-radius: var(--r); padding: 3px 6px; font-size: 12px; color: var(--text2); background: var(--bg); font-family: var(--sans); outline: none; transition: border-color 0.15s; }
+.recap-pantry-amt:focus { border-color: var(--primary); }
+#recapPantryList { max-height: 320px; overflow-y: auto; }
+
+/* Side panel overlay (right side) — used by pantry panel */
+.recipes-panel { position: fixed; top: 56px; right: 0; bottom: 0; width: 420px; background: var(--bg); border-left: 1.5px solid var(--border); display: flex; flex-direction: column; overflow: hidden; z-index: 100; box-shadow: var(--shadow-lg); }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 32px; }
+.recipes-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 16px 20px; border-bottom: 1.5px solid var(--border); background: var(--surface); }
+.recipes-title { font-family: var(--sans); font-size: 18px; font-weight: 700; color: var(--text); flex: 1; }
+
 /* Recipes full-screen page */
 .recipes-page-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 40px; display: flex; flex-direction: column; }
 .recipes-search { flex-shrink: 0; margin: 16px 0 0; border: 1.5px solid var(--border); border-radius: var(--r); padding: 8px 12px; font-family: var(--sans); font-size: 13px; outline: none; background: var(--bg); color: var(--text); transition: border-color 0.15s, box-shadow 0.15s; width: 100%; box-sizing: border-box; }
@@ -344,7 +377,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .swap-recipe-name { font-size: 12px; color: var(--text); }
 
 /* Pantry panel */
-#pantryList { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 6px; }
+#pantryList { padding: 12px 0 20px; display: flex; flex-direction: column; gap: 6px; }
 .pantry-item { border: 1.5px solid var(--border); border-left-width: 3px; border-left-color: var(--border); border-radius: 0 var(--r-lg) var(--r-lg) 0; padding: 10px 14px; background: var(--bg); box-shadow: var(--shadow-sm); }
 .pantry-item.expired { border-left-color: var(--primary); }
 .pantry-item.soon    { border-left-color: var(--accent); }
@@ -464,6 +497,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
   .hero-step-card { padding: 10px 10px; gap: 8px; }
   .hero-step-desc { display: none; }
   .hh-category-items { grid-template-columns: 1fr; }
+  .recipes-panel { width: 360px; }
 }
 
 /* ===== PHONE (≤ 600px) ===== */
@@ -493,6 +527,9 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 
   /* Swap row */
   .swap-input-inner { flex-wrap: wrap; }
+
+  /* Side panels — full-width overlay on phone */
+  .recipes-panel { width: 100%; left: 0; }
 
   /* Recipe modal — bottom sheet */
   .recipe-modal-backdrop { padding: 0; align-items: flex-end; }

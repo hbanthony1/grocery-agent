@@ -56,6 +56,54 @@
 
   <!-- STEP 0: Your Week -->
   <div id="step0">
+
+    <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
+    <div id="recapCard" class="card recap-card" style="display:none">
+      <div class="recap-title-row">
+        <span class="card-label" style="margin-bottom:0">last week's recap</span>
+        <button class="btn-link" onclick="dismissRecap()">skip →</button>
+      </div>
+
+      <div class="recap-section">
+        <button class="recap-sec-hdr" onclick="toggleRecapSection('order')">
+          <span>📦 last week's Walmart order</span>
+          <span class="recap-chev" id="recapChev-order">▾</span>
+        </button>
+        <div id="recapBody-order" class="recap-sec-body">
+          <p class="recap-hint">Upload your Walmart order CSV to add items to your pantry and flag brand preferences.</p>
+          <div class="recap-upload-row">
+            <input type="file" id="orderCsvInput" accept=".csv,.txt" style="display:none" onchange="handleOrderCsv(this)">
+            <button class="btn" onclick="document.getElementById('orderCsvInput').click()">upload order CSV</button>
+            <span class="hh-loading" id="orderCsvStatus"></span>
+          </div>
+          <div id="orderCsvPreview" style="display:none;margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div class="recap-section">
+        <button class="recap-sec-hdr" onclick="toggleRecapSection('meals')">
+          <span>🍽️ what we actually ate</span>
+          <span class="recap-chev" id="recapChev-meals">▾</span>
+        </button>
+        <div id="recapBody-meals" class="recap-sec-body">
+          <p class="recap-hint">Check off what you made. Uncheck anything skipped and note what you had instead.</p>
+          <div id="recapMealList"></div>
+          <button class="btn primary" id="recapSaveMealsBtn" onclick="saveRecapMeals()" style="margin-top:10px">save →</button>
+        </div>
+      </div>
+
+      <div class="recap-section">
+        <button class="recap-sec-hdr" onclick="toggleRecapSection('pantry')">
+          <span>🥫 pantry check</span>
+          <span class="recap-chev" id="recapChev-pantry">›</span>
+        </button>
+        <div id="recapBody-pantry" class="recap-sec-body" style="display:none">
+          <p class="recap-hint">Update amounts or remove anything that's expired or used up.</p>
+          <div id="recapPantryList"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="step0-grid">
       <!-- Left: Calendar + Schedule -->
       <div class="step0-col">
@@ -292,18 +340,22 @@
     </div>
   </div>
 
-  <!-- PANTRY PANEL -->
-  <div id="pantryPanel" class="recipes-panel" style="display:none">
-    <div class="recipes-header">
-      <span class="recipes-title">pantry</span>
-      <button class="btn" onclick="addPantryItem()">+ add</button>
-      <a class="btn" href="/pantry/export" download="pantry.csv">export CSV</a>
-      <button class="btn" id="pantryImportBtn" onclick="document.getElementById('pantryImportFile').click()">import CSV</button>
-      <input type="file" id="pantryImportFile" accept=".csv" style="display:none" onchange="handlePantryImport(this)">
-      <button class="btn" onclick="togglePantryPanel()">close</button>
+  <!-- PANTRY PAGE (full-screen) -->
+  <div id="pantryPanel" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closePantryPage()">← back</button>
+      <span class="prefs-page-title">pantry</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" onclick="addPantryItem()">+ add</button>
+        <a class="btn" href="/pantry/export" download="pantry.csv">export CSV</a>
+        <button class="btn" id="pantryImportBtn" onclick="document.getElementById('pantryImportFile').click()">import CSV</button>
+        <input type="file" id="pantryImportFile" accept=".csv" style="display:none" onchange="handlePantryImport(this)">
+      </div>
     </div>
-    <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
-    <div id="pantryList"></div>
+    <div class="recipes-page-body">
+      <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
+      <div id="pantryList"></div>
+    </div>
   </div>
 
   <!-- RECIPE BOOK PAGE (full-screen) -->

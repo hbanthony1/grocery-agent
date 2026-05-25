@@ -766,12 +766,21 @@ function pantryExpiryLabel(expiresOn) {
   return `expires in ${days}d`;
 }
 
-function togglePantryPanel() {
-  const panel = document.getElementById('pantryPanel');
-  const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'flex';
+function openPantryPage() {
+  document.getElementById('pantryPanel').style.display = 'flex';
   _syncPanelOpen();
-  if (!visible) { document.getElementById('pantrySearch').value = ''; renderPantryPanel(); }
+  document.getElementById('pantrySearch').value = '';
+  renderPantryPanel();
+}
+
+function closePantryPage() {
+  document.getElementById('pantryPanel').style.display = 'none';
+  _syncPanelOpen();
+}
+
+function togglePantryPanel() {
+  const page = document.getElementById('pantryPanel');
+  if (page.style.display !== 'none') { closePantryPage(); } else { openPantryPage(); }
 }
 
 function renderPantryPanel() {
@@ -899,6 +908,178 @@ function buildPantryPrompt() {
     });
   }
   return lines.length ? '\n' + lines.join('\n') + '\n' : '';
+}
+
+// ===== WEEKLY RECAP =====
+let _orderCsvData = null;
+
+function renderRecapCard() {
+  const card = document.getElementById('recapCard');
+  if (!card) return;
+  if (!prefs.lastWeekMeals?.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  renderRecapMeals();
+}
+
+function toggleRecapSection(name) {
+  const body = document.getElementById(`recapBody-${name}`);
+  const chev = document.getElementById(`recapChev-${name}`);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '›' : '▾';
+  if (!open && name === 'pantry') renderRecapPantry();
+}
+
+async function handleOrderCsv(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status  = document.getElementById('orderCsvStatus');
+  const preview = document.getElementById('orderCsvPreview');
+  status.textContent = 'parsing...';
+  preview.style.display = 'none';
+  try {
+    const text = await file.text();
+    const resp = await fetch('/feedback/order-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv: text }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    _orderCsvData = data;
+    status.textContent = `found ${data.pantryItems?.length || 0} items`;
+    renderOrderCsvPreview(data);
+  } catch(e) {
+    status.textContent = 'error — try again';
+  }
+  input.value = '';
+}
+
+function renderOrderCsvPreview(data) {
+  const preview = document.getElementById('orderCsvPreview');
+  preview.style.display = 'block';
+  const items  = data.pantryItems || [];
+  const brands = data.brandSuggestions || [];
+  let html = '';
+  if (items.length) {
+    html += `<div class="recap-preview-label">add to pantry</div>
+    <div class="recap-pantry-preview">
+      ${items.map((item, i) => `<label class="recap-preview-item">
+        <input type="checkbox" id="rpi-${i}" checked>
+        <span>${item.name}${item.amount ? ' — ' + item.amount + (item.unit ? ' ' + item.unit : '') : ''}</span>
+      </label>`).join('')}
+    </div>
+    <button class="btn primary" onclick="applyOrderCsvItems()" style="margin-top:8px">add checked items →</button>`;
+  }
+  if (brands.length) {
+    html += `<div class="recap-preview-label" style="margin-top:12px">brand notes</div>
+    ${brands.map(b => `<div class="recap-hint" style="margin-bottom:4px">• ${b}</div>`).join('')}`;
+  }
+  if (!items.length && !brands.length) {
+    html = '<div class="hh-loading">no grocery items found in CSV</div>';
+  }
+  preview.innerHTML = html;
+}
+
+async function applyOrderCsvItems() {
+  if (!_orderCsvData?.pantryItems?.length) return;
+  const toAdd = _orderCsvData.pantryItems.filter((_, i) => document.getElementById(`rpi-${i}`)?.checked);
+  for (const item of toAdd) {
+    try { await savePantryItem({ name: item.name, amount: item.amount || '', unit: item.unit || '' }); } catch(e) {}
+  }
+  document.getElementById('orderCsvPreview').innerHTML =
+    `<div class="hh-loading" style="padding:4px 0">✓ ${toAdd.length} item${toAdd.length !== 1 ? 's' : ''} added to pantry</div>`;
+  document.getElementById('orderCsvStatus').textContent = '';
+  _orderCsvData = null;
+  if (document.getElementById('recapBody-pantry')?.style.display !== 'none') renderRecapPantry();
+}
+
+function renderRecapMeals() {
+  const list = document.getElementById('recapMealList');
+  if (!list) return;
+  const lastMeals = prefs.lastWeekMeals || [];
+  if (!lastMeals.length) { list.innerHTML = '<div class="hh-loading">no meals from last week</div>'; return; }
+  list.innerHTML = lastMeals.map((m, i) => `
+    <div class="recap-meal-row">
+      <label class="recap-meal-check">
+        <input type="checkbox" id="rcm-${i}" checked onchange="toggleRecapMealSub(${i})">
+        <span>${m.meal}${m.easyMode ? ' <span class="easy-badge">⚡ easy</span>' : ''}</span>
+      </label>
+      <input class="schedule-note recap-sub-input" id="rcs-${i}" placeholder="had instead..." style="display:none" />
+    </div>`).join('');
+}
+
+function toggleRecapMealSub(i) {
+  const cb  = document.getElementById(`rcm-${i}`);
+  const inp = document.getElementById(`rcs-${i}`);
+  if (inp) inp.style.display = cb?.checked ? 'none' : 'inline-block';
+}
+
+async function saveRecapMeals() {
+  const lastMeals = prefs.lastWeekMeals || [];
+  prefs.lastWeekFeedback = lastMeals.map((m, i) => ({
+    meal: m.meal,
+    ate:  document.getElementById(`rcm-${i}`)?.checked ?? true,
+    sub:  document.getElementById(`rcs-${i}`)?.value.trim() || '',
+  }));
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+  document.getElementById('recapMealList').innerHTML =
+    '<div class="hh-loading" style="padding:4px 0">✓ saved — Claude will use this for next week\'s plan</div>';
+  document.getElementById('recapSaveMealsBtn')?.remove();
+}
+
+function renderRecapPantry() {
+  const list = document.getElementById('recapPantryList');
+  if (!list) return;
+  const expOrder = { expired: 0, soon: 1, week: 2, ok: 3, none: 4 };
+  const sorted = [...pantry].sort((a, b) => {
+    const d = expOrder[pantryExpiryStatus(a.expiresOn)] - expOrder[pantryExpiryStatus(b.expiresOn)];
+    return d !== 0 ? d : a.name.localeCompare(b.name);
+  });
+  list.innerHTML = sorted.length
+    ? sorted.map(item => recapPantryItemHtml(item)).join('')
+    : '<div class="hh-loading">pantry is empty</div>';
+}
+
+function recapPantryItemHtml(item) {
+  const status = pantryExpiryStatus(item.expiresOn);
+  const label  = pantryExpiryLabel(item.expiresOn);
+  const amt    = [item.amount, item.unit].filter(Boolean).join(' ');
+  const escId  = item.id.replace(/'/g, '&#39;');
+  return `<div class="recap-pantry-item pantry-exp-${status}" id="rcp-${item.id}">
+    <span class="recap-pantry-name">${item.name}</span>
+    <input class="recap-pantry-amt" value="${amt}" placeholder="amount"
+      onblur="recapSavePantryAmt('${escId}', this.value)"
+      onkeydown="if(event.key==='Enter')this.blur()" />
+    ${label ? `<span class="pantry-expiry ${status}">${label}</span>` : ''}
+    <button class="hh-item-delete" style="opacity:1" title="remove" onclick="recapRemovePantry('${escId}')">×</button>
+  </div>`;
+}
+
+async function recapSavePantryAmt(id, val) {
+  const parts  = val.trim().split(/\s+/);
+  const amount = parts[0] || '';
+  const unit   = parts.slice(1).join(' ') || '';
+  await patchPantryItem(id, { amount, unit });
+  renderRecapPantry();
+}
+
+async function recapRemovePantry(id) {
+  await fetch(`/pantry/${id}`, { method: 'DELETE' });
+  await loadPantry();
+  renderRecapPantry();
+}
+
+async function dismissRecap() {
+  prefs.lastWeekMeals    = [];
+  prefs.lastWeekFeedback = [];
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+  document.getElementById('recapCard').style.display = 'none';
 }
 
 // ===== BREAKFAST / LUNCH PICKS =====
@@ -1095,6 +1276,16 @@ async function runMealPlan() {
   const usePantry  = document.getElementById('usePantry')?.checked ?? true;
   const pantrySection = usePantry ? buildPantryPrompt() : '';
 
+  const lastWeekSection = prefs.lastWeekFeedback?.length
+    ? `\nLAST WEEK FEEDBACK (use to inform this week's plan):\n${prefs.lastWeekFeedback.map(f =>
+        f.ate
+          ? `- Made and ate: ${f.meal}`
+          : f.sub
+            ? `- Skipped ${f.meal}, had "${f.sub}" instead`
+            : `- Skipped: ${f.meal}`
+      ).join('\n')}\n`
+    : '';
+
   const newMealInstruction = includeNew
     ? `IMPORTANT: Exactly 2 of the 7 meals must be completely new recipes this family has NOT cooked before.
        Choose these based on their taste profile (kid-friendly, protein-forward, comfort food) but pick
@@ -1106,7 +1297,7 @@ async function runMealPlan() {
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
 This week they are cooking for ${servingSize} people.
-${buildRecipeRepoPrompt()}${pantrySection}
+${buildRecipeRepoPrompt()}${pantrySection}${lastWeekSection}
 PREFERENCES:
 ${prefsText}
 
@@ -1309,6 +1500,16 @@ async function approveMealPlan() {
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
   document.getElementById('ratingPanel').style.display = 'none';
+  // Save this week's meals so next Sunday's recap can show them
+  prefs.lastWeekMeals = meals.map(m => ({
+    day: m.day,
+    meal: m.meal.replace(' [NEW]', '').trim(),
+    easyMode: !!m.easyMode,
+  }));
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+
   hhExtras = [];
   renderHhExtras();
   goToStep(2); // → Household step
@@ -1912,7 +2113,7 @@ async function wizardFinish() {
 // ===== INIT =====
 goToStep(0);
 renderSchedule();
-loadPrefs().then(() => { renderStep0Extras(); initServingSize(); checkOnboarding(); });
+loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); checkOnboarding(); });
 loadHouseholdItems();
 loadRecipes();
 loadPantry().then(() => renderPantryToggle());

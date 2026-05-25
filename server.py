@@ -498,6 +498,44 @@ Return ONLY the recipe name — no explanation, no punctuation, just the name.""
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/feedback/order-csv', methods=['POST'])
+def parse_order_csv():
+    csv_text = (request.json or {}).get('csv', '').strip()
+    if not csv_text:
+        return jsonify({'error': 'no csv provided'}), 400
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=1200,
+            messages=[{
+                'role': 'user',
+                'content': f'''Parse this Walmart order history CSV and extract grocery/food items.
+Return ONLY a JSON object, no markdown, no explanation:
+{{"pantryItems": [{{"name": "normalized item name", "amount": "numeric quantity", "unit": "lb/oz/count/gallon/etc"}}], "brandSuggestions": ["short brand note worth remembering"]}}
+
+Rules for pantryItems:
+- Normalize names: "Great Value 2% Milk 1 gallon" → name:"milk", amount:"1", unit:"gallon"
+- Include all food/grocery items ordered
+- Skip household supplies, electronics, clothing, etc.
+- amount: just the number (or empty string if unknown). unit: the measurement word.
+
+Rules for brandSuggestions:
+- Only flag non-generic brands worth remembering for future orders
+- Example: if they ordered "Rao's Homemade Marinara" → "Rao's Marinara for pasta sauce"
+- Keep to 0-3 suggestions max. Empty array if nothing notable.
+
+CSV content:
+{csv_text[:4000]}'''
+            }]
+        )
+        text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
+        return jsonify(json.loads(text))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/generate-recipe', methods=['POST'])
 def generate_recipe():
     body      = request.json or {}
