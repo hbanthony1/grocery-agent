@@ -169,7 +169,7 @@ const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sun
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
 
 // ===== NAVIGATION =====
-function goToStep(n) {
+function goToStep(n, fromHistory = false) {
   [0,1,2,3].forEach(i => {
     const step = document.getElementById('step'+i);
     if (step) step.style.display = i===n ? 'block' : 'none';
@@ -183,7 +183,31 @@ function goToStep(n) {
   document.getElementById('mainApp')?.classList.toggle('step0-active', n === 0);
   currentStep = n;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (!fromHistory) history.pushState({ step: n, overlay: null }, '');
 }
+
+// ===== HISTORY API (browser back button) =====
+window.addEventListener('popstate', e => {
+  const state = e.state || { step: 0, overlay: null };
+
+  // Close any open overlay without touching history (we're already mid-popstate)
+  const prefsOpen   = document.getElementById('prefsPage')?.style.display   !== 'none';
+  const recipesOpen = document.getElementById('recipesPage')?.style.display  !== 'none';
+  const pantryOpen  = document.getElementById('pantryPanel')?.style.display  !== 'none';
+  if (prefsOpen)   closePrefsPage(true);
+  if (recipesOpen) closeRecipesPage(true);
+  if (pantryOpen)  closePantryPage(true);
+
+  // Re-open overlay from state (e.g. user pressed forward)
+  if      (state.overlay === 'prefs')   openPrefsPage(true);
+  else if (state.overlay === 'recipes') openRecipesPage(true);
+  else if (state.overlay === 'pantry')  openPantryPage(true);
+
+  // Navigate to the correct step
+  if (typeof state.step === 'number' && state.step !== currentStep) {
+    goToStep(state.step, true);
+  }
+});
 
 // ===== HOUSEHOLD ITEMS =====
 const LS_HOUSEHOLD_KEY = 'grocery_household_checked';
@@ -568,14 +592,16 @@ function _syncPanelOpen() {
   document.getElementById('navPantry').classList.toggle('active', pantryOpen);
 }
 
-function openRecipesPage() {
+function openRecipesPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'recipes' }, '');
   document.getElementById('recipesPage').style.display = 'flex';
   _syncPanelOpen();
   document.getElementById('recipesSearch').value = '';
   renderRecipesPanel();
 }
 
-function closeRecipesPage() {
+function closeRecipesPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('recipesPage').style.display = 'none';
   _syncPanelOpen();
 }
@@ -843,14 +869,16 @@ function pantryExpiryLabel(expiresOn) {
   return `expires in ${days}d`;
 }
 
-function openPantryPage() {
+function openPantryPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'pantry' }, '');
   document.getElementById('pantryPanel').style.display = 'flex';
   _syncPanelOpen();
   document.getElementById('pantrySearch').value = '';
   renderPantryPanel();
 }
 
-function closePantryPage() {
+function closePantryPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('pantryPanel').style.display = 'none';
   _syncPanelOpen();
 }
@@ -1823,13 +1851,15 @@ function renderPrefsSummary() {
 }
 
 // ===== PREFERENCES PAGE =====
-function openPrefsPage() {
+function openPrefsPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'prefs' }, '');
   document.getElementById('prefsPage').style.display = 'flex';
   _syncPanelOpen();
   renderPrefsPage();
 }
 
-function closePrefsPage() {
+function closePrefsPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
   document.getElementById('prefsPage').style.display = 'none';
   _syncPanelOpen();
 }
@@ -2229,7 +2259,8 @@ async function wizardFinish() {
 }
 
 // ===== INIT =====
-goToStep(0);
+history.replaceState({ step: 0, overlay: null }, '');
+goToStep(0, true); // true = don't push another history entry on top of the replaceState above
 renderSchedule();
 loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); checkOnboarding(); });
 loadHouseholdItems();
