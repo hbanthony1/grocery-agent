@@ -15,6 +15,38 @@ const _pickerOpen  = { breakfast: false, lunch: false };
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 
+// ===== HOUSEHOLD CATEGORIES =====
+let hhExtras = []; // {name, save} — one-off items added on step 2
+
+const HH_CATEGORIES = {
+  produce:   ['apple','banana','orange','grape','strawberr','blueberr','mango','pineapple','avocado','tomato','lettuce','spinach','kale','broccoli','carrot','celery','cucumber','onion','garlic','pepper','potato','zucchini','corn','pear','peach','plum','lemon','lime','melon','berry','berries','salad','mushroom','herb','cilantro','parsley','basil'],
+  dairy:     ['milk','butter','cheese','yogurt','cream','egg','eggs','creamer','sour cream','half and half','cottage','kefir','whipped'],
+  meat:      ['chicken','beef','pork','salmon','fish','shrimp','turkey','steak','sausage','bacon','ham','tuna','ground','tilapia','lamb','crab','lobster'],
+  bakery:    ['bread','bagel','muffin','tortilla','roll','bun','pita','naan','croissant','pretzel','biscuit','sourdough','english muffin'],
+  pantry:    ['rice','pasta','flour','sugar','salt','oil','vinegar','sauce','salsa','broth','stock','can','bean','lentil','oat','cereal','granola','crackers','chips','peanut butter','jelly','honey','syrup','ketchup','mustard','mayo','spice','seasoning','ramen','noodle','soup mix'],
+  frozen:    ['frozen','ice cream','pizza','fries','nuggets','waffle','edamame'],
+  drinks:    ['water','juice','soda','coffee','tea','lemonade','gatorade','wine','beer','sparkling','diet coke','coke','pepsi','sprite','dr pepper','kombucha','drink','creamer'],
+  snacks:    ['snack','nut','almond','cashew','walnut','popcorn','cookie','brownie','bar','candy','chocolate','gummy','trail mix'],
+  household: ['paper towel','toilet paper','tissue','napkin','trash bag','ziploc','foil','wrap','detergent','soap','shampoo','conditioner','toothpaste','toothbrush','deodorant','razor','cleaner','sponge','dish','laundry','dryer','bleach','wipe','sanitizer','lotion','floss'],
+  baby:      ['diaper','formula','baby','pacifier'],
+  pet:       ['dog food','cat food','pet','kibble','litter'],
+};
+const HH_CATEGORY_ORDER  = ['produce','dairy','meat','bakery','pantry','frozen','drinks','snacks','household','baby','pet','other'];
+const HH_CATEGORY_LABELS = {
+  produce:'Produce', dairy:'Dairy & Eggs', meat:'Meat & Seafood',
+  bakery:'Bakery & Bread', pantry:'Pantry', frozen:'Frozen',
+  drinks:'Drinks', snacks:'Snacks', household:'Household',
+  baby:'Baby', pet:'Pet', other:'Other',
+};
+
+function _hhCategory(name) {
+  const lower = name.toLowerCase();
+  for (const [cat, keywords] of Object.entries(HH_CATEGORIES)) {
+    if (keywords.some(kw => lower.includes(kw))) return cat;
+  }
+  return 'other';
+}
+
 // ===== CART LOADER =====
 const MEAL_PLAN_MSGS = [
   'Thinking up something delicious...',
@@ -134,18 +166,37 @@ function _hhDisplayName(name) {
 function renderHousehold() {
   const grid = document.getElementById('hhGrid');
   if (!householdItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
-  grid.innerHTML = householdItems.map(name => {
-    const checked = householdChecked.has(name);
-    const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const display = _hhDisplayName(name);
-    return `<div class="hh-item-row">
-      <label class="hh-item">
-        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
-        <span class="hh-item-name">${display}</span>
-      </label>
-      <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" title="remove">×</button>
+
+  // Group by category
+  const groups = {};
+  householdItems.forEach(name => {
+    const cat = _hhCategory(name);
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(name);
+  });
+
+  let html = '';
+  for (const cat of HH_CATEGORY_ORDER) {
+    if (!groups[cat]) continue;
+    const itemsHtml = groups[cat].map(name => {
+      const checked = householdChecked.has(name);
+      const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const display = _hhDisplayName(name);
+      return `<div class="hh-item-row">
+        <label class="hh-item">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
+          <span class="hh-item-name">${display}</span>
+        </label>
+        <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" title="remove">×</button>
+      </div>`;
+    }).join('');
+    html += `<div class="hh-category">
+      <div class="hh-category-label">${HH_CATEGORY_LABELS[cat]}</div>
+      <div class="hh-category-items">${itemsHtml}</div>
     </div>`;
-  }).join('');
+  }
+
+  grid.innerHTML = html;
   updateHhCount();
 }
 
@@ -220,6 +271,45 @@ async function submitNewHouseholdItem() {
   localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
   await loadHouseholdItems();
   cancelHhAdd();
+}
+
+// ===== ANYTHING ELSE? =====
+function renderHhExtras() {
+  const list = document.getElementById('hhExtrasList');
+  if (!list) return;
+  list.innerHTML = hhExtras.length
+    ? hhExtras.map((extra, i) => `
+      <div class="hh-extra-row">
+        <span class="hh-extra-name">${extra.name}</span>
+        <label class="hh-extra-save">
+          <input type="checkbox" ${extra.save ? 'checked' : ''} onchange="toggleHhExtraSave(${i}, this.checked)">
+          <span>save to my list</span>
+        </label>
+        <button class="hh-item-delete" onclick="removeHhExtra(${i})" title="remove" style="opacity:1">×</button>
+      </div>`).join('')
+    : '';
+}
+
+function addHhExtra() {
+  const input = document.getElementById('hhExtraInput');
+  const name = (input.value || '').trim();
+  if (!name) return;
+  hhExtras.push({ name, save: false });
+  input.value = '';
+  renderHhExtras();
+}
+
+function handleHhExtraKey(e) {
+  if (e.key === 'Enter') addHhExtra();
+}
+
+function toggleHhExtraSave(i, checked) {
+  if (hhExtras[i]) hhExtras[i].save = checked;
+}
+
+function removeHhExtra(i) {
+  hhExtras.splice(i, 1);
+  renderHhExtras();
 }
 
 // ===== SCHEDULE =====
@@ -406,22 +496,31 @@ function setStar(rating, pickerId) {
   el.innerHTML = starPickerHtml(pickerId, rating, 'setStar');
 }
 
-// Recipe panel
+// Recipe page (full-screen)
 function _syncPanelOpen() {
-  const prefsOpen   = document.getElementById('prefsPage').style.display  !== 'none';
-  const recipesOpen = document.getElementById('recipesPanel').style.display !== 'none';
+  const prefsOpen   = document.getElementById('prefsPage').style.display   !== 'none';
+  const recipesOpen = document.getElementById('recipesPage').style.display  !== 'none';
   const pantryOpen  = document.getElementById('pantryPanel').style.display  !== 'none';
   document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
   document.getElementById('navRecipes').classList.toggle('active', recipesOpen);
   document.getElementById('navPantry').classList.toggle('active', pantryOpen);
 }
 
-function toggleRecipesPanel() {
-  const panel = document.getElementById('recipesPanel');
-  const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'flex';
+function openRecipesPage() {
+  document.getElementById('recipesPage').style.display = 'flex';
   _syncPanelOpen();
-  if (!visible) { document.getElementById('recipesSearch').value = ''; renderRecipesPanel(); }
+  document.getElementById('recipesSearch').value = '';
+  renderRecipesPanel();
+}
+
+function closeRecipesPage() {
+  document.getElementById('recipesPage').style.display = 'none';
+  _syncPanelOpen();
+}
+
+function toggleRecipesPanel() {
+  const page = document.getElementById('recipesPage');
+  if (page.style.display !== 'none') { closeRecipesPage(); } else { openRecipesPage(); }
 }
 
 async function backfillRecipes() {
@@ -1157,10 +1256,21 @@ async function approveMealPlan() {
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
   document.getElementById('ratingPanel').style.display = 'none';
+  hhExtras = [];
+  renderHhExtras();
   goToStep(2); // → Household step
 }
 
-function navigateAndBuildCart() {
+async function navigateAndBuildCart() {
+  // Save any extras the user flagged "save to my list"
+  const toSave = hhExtras.filter(e => e.save).map(e => e.name);
+  if (toSave.length) {
+    if (!prefs.householdItems) prefs.householdItems = [];
+    toSave.forEach(n => { if (!prefs.householdItems.includes(n)) prefs.householdItems.push(n); });
+    try {
+      await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+    } catch(e) {}
+  }
   goToStep(3);
   startCartBuild();
 }
@@ -1195,7 +1305,7 @@ async function startCartBuild() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked], zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();

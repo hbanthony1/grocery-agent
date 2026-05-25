@@ -138,6 +138,14 @@
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
+    <div class="card hh-extras-card">
+      <div class="card-label">anything else needed this week?</div>
+      <div id="hhExtrasList"></div>
+      <div class="hh-extra-input-row">
+        <input class="schedule-note" id="hhExtraInput" placeholder="add a one-off item..." onkeydown="handleHhExtraKey(event)" />
+        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addHhExtra()">add</button>
+      </div>
+    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(1)">← back</button>
       <button class="btn mustard" onclick="navigateAndBuildCart()">Build cart →</button>
@@ -293,19 +301,23 @@
     <div id="pantryList"></div>
   </div>
 
-  <!-- RECIPE BOOK PANEL -->
-  <div id="recipesPanel" class="recipes-panel" style="display:none">
-    <div class="recipes-header">
-      <span class="recipes-title">recipe book</span>
-      <button class="btn" onclick="addRecipeManual()">+ add</button>
-      <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
-      <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
-      <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
-      <button class="btn" id="recipesBackfillBtn" onclick="backfillRecipes()">fill missing</button>
-      <button class="btn" onclick="toggleRecipesPanel()">close</button>
+  <!-- RECIPE BOOK PAGE (full-screen) -->
+  <div id="recipesPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeRecipesPage()">← back</button>
+      <span class="prefs-page-title">recipe book</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" onclick="addRecipeManual()">+ add</button>
+        <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
+        <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
+        <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
+        <button class="btn" id="recipesBackfillBtn" onclick="backfillRecipes()">fill missing</button>
+      </div>
     </div>
-    <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />
-    <div id="recipesList"></div>
+    <div class="recipes-page-body">
+      <input class="recipes-search" id="recipesSearch" type="text" placeholder="search recipes..." oninput="renderRecipesPanel()" />
+      <div id="recipesList"></div>
+    </div>
   </div>
 
 </div>
