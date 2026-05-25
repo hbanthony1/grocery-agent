@@ -248,7 +248,7 @@ function _hhDisplayName(name) {
 function renderHousehold() {
   const grid = document.getElementById('hhGrid');
   const normalItems = (householdItems || []).map(_normalizeHhItem);
-  if (!normalItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
+  if (!normalItems.length) { grid.innerHTML = '<span class="hh-loading">no household items — add some in preferences</span>'; return; }
 
   const groups = {};
   normalItems.forEach(item => {
@@ -328,6 +328,11 @@ async function loadHouseholdItems() {
     const resp = await fetch('/household-items');
     const data = await resp.json();
     householdItems = (data.items || []).map(_normalizeHhItem);
+    const validNames = new Set(householdItems.map(i => i.name));
+    for (const name of householdChecked) {
+      if (!validNames.has(name)) householdChecked.delete(name);
+    }
+    localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
     renderHousehold();
   } catch(e) {
     document.getElementById('hhGrid').innerHTML = '<span class="hh-loading">server not running</span>';

@@ -18,3 +18,18 @@ data/google_token.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+server_out.log
+server_err.log
+
+# Local working files
+claude.md
+design-review.md
+new-features.txt
+style-guide*.html
+index.html
+
+# User-uploaded content
+static/photos/
