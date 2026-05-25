@@ -174,11 +174,8 @@
 
   <!-- STEP 1: Meal Plan -->
   <div id="step1" style="display:none">
-    <div id="loadingBar" class="cart-loader" style="display:none">
-      <div class="cart-track">
-        <div class="cart-track-bg"></div>
-        <span class="cart-emoji cart-emoji-bounce">🛒</span>
-      </div>
+    <div id="loadingBar" class="loading-spinner" style="display:none">
+      <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="loadingMsg" aria-live="polite">Thinking up something delicious...</div>
     </div>
     <div id="mealPlanCard" class="card" style="display:none">
@@ -256,7 +253,6 @@
       </div>
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
-        <span class="cart-url-text" id="cartUrlText"></span>
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
     </div>
@@ -326,6 +322,12 @@
             <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
             <div class="prefs-field prefs-field-wide"><label>time zone</label><input type="text" id="pf-timezone" placeholder="e.g. America/Denver" /></div>
           </div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="card-label">household items</div>
+          <p class="prefs-sublabel" style="margin-bottom:10px">Items you buy most weeks — set category to fix cart grouping, brand to remember preferences.</p>
+          <div id="pf-hhItemsList" class="prefs-hh-items"></div>
+          <button class="btn prefs-add-btn" onclick="addHhItemPref()">+ add item</button>
         </div>
       </div>
       <!-- TAB: Meal Plan -->

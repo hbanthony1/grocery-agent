@@ -632,7 +632,17 @@ def build_cart():
         for name in household:
             all_search_tasks.append({"search_query": name, "qty": 1, "source": "household"})
 
-        print(f"\nTotal search tasks: {len(all_search_tasks)}")
+        # Deduplicate search tasks: same query = same product, no need to search twice
+        _seen_q = {}
+        deduped = []
+        for task in all_search_tasks:
+            key = task['search_query'].lower().strip()
+            if key not in _seen_q:
+                _seen_q[key] = True
+                deduped.append(task)
+        all_search_tasks = deduped
+
+        print(f"\nTotal search tasks: {len(all_search_tasks)} (after dedup)")
 
         # ── Phase 2: all Walmart searches in parallel ─────────────────────
         search_results = []

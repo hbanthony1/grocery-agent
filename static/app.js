@@ -93,11 +93,16 @@ const HH_CATEGORY_LABELS = {
 };
 
 function _hhCategory(name) {
-  const lower = name.toLowerCase();
+  const lower = (name || '').toLowerCase();
   for (const [cat, keywords] of Object.entries(HH_CATEGORIES)) {
     if (keywords.some(kw => lower.includes(kw))) return cat;
   }
   return 'other';
+}
+
+function _normalizeHhItem(item) {
+  if (typeof item === 'string') return { name: item, category: _hhCategory(item), brand: '' };
+  return { name: item.name || '', category: item.category || _hhCategory(item.name || ''), brand: item.brand || '' };
 }
 
 // ===== CART LOADER =====
@@ -242,14 +247,14 @@ function _hhDisplayName(name) {
 
 function renderHousehold() {
   const grid = document.getElementById('hhGrid');
-  if (!householdItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
+  const normalItems = (householdItems || []).map(_normalizeHhItem);
+  if (!normalItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
 
-  // Group by category
   const groups = {};
-  householdItems.forEach(name => {
-    const cat = _hhCategory(name);
+  normalItems.forEach(item => {
+    const cat = item.category || _hhCategory(item.name);
     if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(name);
+    groups[cat].push(item.name);
   });
 
   let html = '';
@@ -279,16 +284,16 @@ function renderHousehold() {
 
 async function removeHouseholdItem(name) {
   const displayName = _hhDisplayName(name);
-  const removedIdx  = (prefs.householdItems || []).indexOf(name);
+  const _hhName = i => (typeof i === 'string' ? i : i.name);
+  const removedIdx  = (prefs.householdItems || []).findIndex(i => _hhName(i) === name);
+  const removedItem = removedIdx >= 0 ? prefs.householdItems[removedIdx] : null;
 
-  // Optimistic remove from local state only
-  prefs.householdItems = (prefs.householdItems || []).filter(i => i !== name);
-  householdItems       = householdItems.filter(i => i !== name);
+  prefs.householdItems = (prefs.householdItems || []).filter(i => _hhName(i) !== name);
+  householdItems       = householdItems.filter(i => _hhName(i) !== name);
   householdChecked.delete(name);
   localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
   renderHousehold();
 
-  // Stage server call — fires after undo window
   const timer = setTimeout(async () => {
     try {
       await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
@@ -298,8 +303,8 @@ async function removeHouseholdItem(name) {
   showToast(`${displayName} removed`, {
     undoFn: () => {
       clearTimeout(timer);
-      if (removedIdx >= 0) prefs.householdItems.splice(removedIdx, 0, name);
-      else prefs.householdItems.push(name);
+      if (removedIdx >= 0 && removedItem != null) prefs.householdItems.splice(removedIdx, 0, removedItem);
+      else prefs.householdItems.push({ name, category: _hhCategory(name), brand: '' });
       householdItems = [...(prefs.householdItems || [])];
       renderHousehold();
     },
@@ -322,7 +327,7 @@ async function loadHouseholdItems() {
   try {
     const resp = await fetch('/household-items');
     const data = await resp.json();
-    householdItems = data.items || [];
+    householdItems = (data.items || []).map(_normalizeHhItem);
     renderHousehold();
   } catch(e) {
     document.getElementById('hhGrid').innerHTML = '<span class="hh-loading">server not running</span>';
@@ -350,8 +355,9 @@ async function submitNewHouseholdItem() {
   const name = document.getElementById('hhNewName').value.trim();
   if (!name) return;
   if (!prefs.householdItems) prefs.householdItems = [];
-  if (!prefs.householdItems.includes(name)) {
-    prefs.householdItems.push(name);
+  const exists = prefs.householdItems.some(i => (typeof i === 'string' ? i : i.name) === name);
+  if (!exists) {
+    prefs.householdItems.push({ name, category: _hhCategory(name), brand: '' });
     try {
       await fetch('/prefs', {
         method: 'POST',
@@ -1691,7 +1697,10 @@ async function navigateAndBuildCart() {
   const toSave = hhExtras.filter(e => e.save).map(e => e.name);
   if (toSave.length) {
     if (!prefs.householdItems) prefs.householdItems = [];
-    toSave.forEach(n => { if (!prefs.householdItems.includes(n)) prefs.householdItems.push(n); });
+    toSave.forEach(n => {
+      const exists = prefs.householdItems.some(i => (typeof i === 'string' ? i : i.name) === n);
+      if (!exists) prefs.householdItems.push({ name: n, category: _hhCategory(n), brand: '' });
+    });
     try {
       await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
     } catch(e) {}
@@ -1852,7 +1861,6 @@ function renderCart(groups, mealOrder, total, url) {
 
   if (url) {
     document.getElementById('cartUrlBox').style.display = 'flex';
-    document.getElementById('cartUrlText').textContent = url;
     document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
   }
 }
@@ -1954,6 +1962,7 @@ async function savePrefsPage() {
   prefs.weeklyStaples   = readPrefsList('pf-weeklyList');
   prefs.frequentStaples = readPrefsList('pf-frequentList');
   prefs.brandRules      = readBrandRules();
+  prefs.householdItems  = readHhItemsPrefs();
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
   prefs.notes           = document.getElementById('pf-notes').value.trim();
   prefs.timezone        = document.getElementById('pf-timezone').value.trim() || 'America/Denver';
@@ -2001,6 +2010,7 @@ function renderPrefsPage() {
   renderPrefsList('pf-weeklyList',   prefs.weeklyStaples   || []);
   renderPrefsList('pf-frequentList', prefs.frequentStaples || []);
   renderBrandList(prefs.brandRules   || []);
+  renderHhItemsPrefs((prefs.householdItems || []).map(_normalizeHhItem));
 
   const btn = document.getElementById('prefsSaveBtn');
   if (btn) { btn.textContent = 'save →'; btn.disabled = false; }
@@ -2049,6 +2059,44 @@ function brandRuleHtml(item = '', brand = '') {
 function addBrandRule() {
   document.getElementById('pf-brandList').insertAdjacentHTML('beforeend', brandRuleHtml('', ''));
   document.querySelector('#pf-brandList .prefs-brand-row:last-child .prefs-brand-item').focus();
+}
+
+function hhItemPrefHtml(name = '', category = '', brand = '') {
+  const nameEsc  = (name  || '').replace(/"/g, '&quot;');
+  const brandEsc = (brand || '').replace(/"/g, '&quot;');
+  const cat = category || _hhCategory(name);
+  const opts = HH_CATEGORY_ORDER.map(c =>
+    `<option value="${c}"${c === cat ? ' selected' : ''}>${HH_CATEGORY_LABELS[c]}</option>`
+  ).join('');
+  return `<div class="prefs-hh-row">
+    <input class="prefs-hh-name" type="text" value="${nameEsc}" placeholder="item name" />
+    <select class="prefs-hh-cat">${opts}</select>
+    <input class="prefs-hh-brand" type="text" value="${brandEsc}" placeholder="brand (opt.)" />
+    <button class="prefs-remove-btn" onclick="this.parentElement.remove()" title="remove">×</button>
+  </div>`;
+}
+
+function renderHhItemsPrefs(items) {
+  const el = document.getElementById('pf-hhItemsList');
+  if (!el) return;
+  el.innerHTML = items.map(i => hhItemPrefHtml(i.name, i.category, i.brand)).join('');
+}
+
+function addHhItemPref() {
+  const el = document.getElementById('pf-hhItemsList');
+  if (!el) return;
+  el.insertAdjacentHTML('beforeend', hhItemPrefHtml('', 'other', ''));
+  el.querySelector('.prefs-hh-row:last-child .prefs-hh-name').focus();
+}
+
+function readHhItemsPrefs() {
+  return [...document.querySelectorAll('#pf-hhItemsList .prefs-hh-row')]
+    .map(row => ({
+      name:     row.querySelector('.prefs-hh-name').value.trim(),
+      category: row.querySelector('.prefs-hh-cat').value,
+      brand:    row.querySelector('.prefs-hh-brand').value.trim(),
+    }))
+    .filter(i => i.name);
 }
 
 // ===== RECIPE PHOTOS =====
