@@ -520,6 +520,7 @@ def generate_recipe():
                 'content': f'''Generate a complete recipe for "{meal_name}" for {servings} people.
 Return ONLY a JSON object, no markdown, no explanation:
 {{"ingredients": ["amount + ingredient name", ...], "steps": ["Step description", ...]}}
+Use real kitchen measurements for amounts: cups, tbsp, tsp, oz, lbs, cans, cloves, etc. (e.g. "2 cups flour", "1 tbsp olive oil", "1/2 tsp salt", "1.5 lbs chicken breast").
 Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step should be one clear sentence.'''
             }]
         )

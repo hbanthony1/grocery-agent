@@ -128,7 +128,7 @@ let householdItems = [];
 let householdChecked = new Set(JSON.parse(localStorage.getItem(LS_HOUSEHOLD_KEY) || '[]'));
 
 function _hhDisplayName(name) {
-  return name.replace(/\s+[\d(].*$/, '').trim() || name;
+  return name.replace(/,\s*$/, '').replace(/\s+[\d(].*$/, '').trim() || name;
 }
 
 function renderHousehold() {
@@ -887,11 +887,13 @@ function renderSwapPicker(query) {
     .slice(0, 5);
   if (!filtered.length) { picker.innerHTML = ''; return; }
   picker.innerHTML = `<div class="swap-picker-label">from your recipe book:</div>` +
-    filtered.map(r => `
-      <div class="swap-recipe-item" onclick="pickSwapRecipe(${JSON.stringify(r.name)})">
+    filtered.map(r => {
+      const esc = r.name.replace(/'/g, '&#39;');
+      return `<div class="swap-recipe-item" onclick="pickSwapRecipe('${esc}')">
         <span class="swap-recipe-stars">${starsHtml(r.rating)}</span>
         <span class="swap-recipe-name">${r.name}</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 }
 
 function pickSwapRecipe(name) {
