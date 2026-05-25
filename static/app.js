@@ -188,7 +188,7 @@ function renderHousehold() {
           <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
           <span class="hh-item-name">${display}</span>
         </label>
-        <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" title="remove">×</button>
+        <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" aria-label="Remove ${display}">×</button>
       </div>`;
     }).join('');
     html += `<div class="hh-category">
@@ -222,8 +222,9 @@ function toggleHousehold(name, checked) {
 }
 
 function updateHhCount() {
-  const n = householdChecked.size;
-  document.getElementById('hhCount').textContent = n === 0 ? '0 selected' : `${n} selected`;
+  const selected = householdChecked.size;
+  const total = householdItems.length;
+  document.getElementById('hhCount').textContent = `${selected} of ${total} selected`;
 }
 
 async function loadHouseholdItems() {
@@ -573,7 +574,7 @@ function recipeCardHtml(r) {
         <button class="btn-icon" onclick="triggerPhotoUpload('${r.id}')">${r.photo ? '📷' : '+ photo'}</button>
         <button class="btn-icon" id="rd-btn-${r.id}" onclick="toggleRecipeDetail('${r.id}')">view ▾</button>
         <button class="btn-icon" onclick="editRecipeInline('${r.id}')">edit</button>
-        <button class="btn-icon danger" onclick="removeRecipe('${r.id}')">×</button>
+        <button class="btn-icon danger" onclick="removeRecipe('${r.id}')" aria-label="Remove ${r.name} from recipe book">×</button>
       </div>
     </div>
     <div class="recipe-detail" id="rd-${r.id}" style="display:none">
@@ -815,7 +816,7 @@ function pantryItemHtml(item) {
         ${label ? `<span class="pantry-expiry ${status}">${label}</span>` : ''}
         <div class="recipe-actions">
           <button class="btn-icon" onclick="editPantryItem('${item.id}')">edit</button>
-          <button class="btn-icon danger" onclick="removePantryItem('${item.id}')">×</button>
+          <button class="btn-icon danger" onclick="removePantryItem('${item.id}')" aria-label="Remove ${item.name}">×</button>
         </div>
       </div>
     </div>
@@ -1244,14 +1245,16 @@ function initServingSize() {
   servingSize  = Math.min(8, Math.max(2, adults + kids)) || 4;
   const slider = document.getElementById('servingSizeSlider');
   const val    = document.getElementById('servingSizeVal');
-  if (slider) slider.value = servingSize;
+  if (slider) { slider.value = servingSize; slider.setAttribute('aria-valuetext', `${servingSize} servings`); }
   if (val)    val.textContent = servingSize;
 }
 
 function updateServingSize(v) {
   servingSize = parseInt(v);
-  const val = document.getElementById('servingSizeVal');
-  if (val) val.textContent = servingSize;
+  const val    = document.getElementById('servingSizeVal');
+  const slider = document.getElementById('servingSizeSlider');
+  if (val)    val.textContent = servingSize;
+  if (slider) slider.setAttribute('aria-valuetext', `${servingSize} servings`);
 }
 
 // ===== MEAL PLAN =====
@@ -1388,7 +1391,8 @@ function renderMeals() {
     const mealName = m.meal.replace(' [NEW]','');
     const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
-    const easyLabel = m.easyLoading ? '...' : 'easy';
+    const easyLabel = m.easyLoading ? '...' : (m.easyMode ? 'easy mode' : 'easy');
+    const easyTitle = m.easyMode ? 'Using a store-bought version — toggle off for homemade' : 'Switch to a store-bought or frozen version';
     return `
       <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''} ${m.easyMode ? 'easy-meal' : ''}" id="meal${i}">
         <div class="day-badge">
@@ -1405,11 +1409,11 @@ function renderMeals() {
         </div>
         ${mealPhoto}
         <span class="cx cx-${cx}">${cxLabel}</span>
-        <label class="easy-toggle${m.easyMode ? ' active' : ''}" title="Swap for a ready-made version">
+        <label class="easy-toggle${m.easyMode ? ' active' : ''}" title="${easyTitle}">
           <input type="checkbox" ${m.easyMode ? 'checked' : ''} ${m.easyLoading ? 'disabled' : ''} onchange="toggleEasyMode(${i}, this.checked)">
           <span>${easyLabel}</span>
         </label>
-        <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})">↺</button>
+        <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})" aria-label="Swap ${mealName}">↺ swap</button>
       </div>`;
   }).join('');
 }
