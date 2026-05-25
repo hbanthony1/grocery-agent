@@ -92,6 +92,11 @@
           <input type="checkbox" id="usePantry" checked />
           <label for="usePantry">Use pantry items where possible</label>
         </div>
+        <div class="serving-size-row">
+          <span class="serving-size-label">cooking for <strong><span id="servingSizeVal">4</span></strong></span>
+          <input type="range" id="servingSizeSlider" min="2" max="8" value="4" oninput="updateServingSize(this.value)" />
+          <span class="serving-size-hint">dinner servings</span>
+        </div>
       </div>
       <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
     </div>

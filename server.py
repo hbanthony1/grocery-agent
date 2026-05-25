@@ -500,7 +500,9 @@ Return ONLY the recipe name — no explanation, no punctuation, just the name.""
 
 @app.route('/generate-recipe', methods=['POST'])
 def generate_recipe():
-    meal_name = (request.json or {}).get('meal', '').strip()
+    body      = request.json or {}
+    meal_name = body.get('meal', '').strip()
+    easy_mode = bool(body.get('easyMode', False))
     if not meal_name:
         return jsonify({'error': 'meal name required'}), 400
     try:
@@ -512,17 +514,22 @@ def generate_recipe():
             pass
         servings = int(h.get('adults', 2)) + int(h.get('kids', 0))
         client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        msg = client.messages.create(
-            model='claude-sonnet-4-6',
-            max_tokens=800,
-            messages=[{
-                'role': 'user',
-                'content': f'''Generate a complete recipe for "{meal_name}" for {servings} people.
+        if easy_mode:
+            content = f'''Give simple prep instructions for the store-bought or frozen version of "{meal_name}" for {servings} people.
+This is a ready-made product, not a from-scratch recipe.
+Return ONLY a JSON object, no markdown, no explanation:
+{{"ingredients": ["quantity + product name (e.g. '1 frozen stuffed crust pizza')", ...], "steps": ["One clear prep step.", ...]}}
+Keep ingredients to the actual packaged products plus any simple add-ons (side salad, drinks, etc.). 2-5 ingredients, 3-6 steps.'''
+        else:
+            content = f'''Generate a complete recipe for "{meal_name}" for {servings} people.
 Return ONLY a JSON object, no markdown, no explanation:
 {{"ingredients": ["amount + ingredient name", ...], "steps": ["Step description", ...]}}
 Use real kitchen measurements for amounts: cups, tbsp, tsp, oz, lbs, cans, cloves, etc. (e.g. "2 cups flour", "1 tbsp olive oil", "1/2 tsp salt", "1.5 lbs chicken breast").
 Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step should be one clear sentence.'''
-            }]
+        msg = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=800,
+            messages=[{'role': 'user', 'content': content}]
         )
         text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
         return jsonify(json.loads(text))
@@ -539,6 +546,7 @@ def build_cart():
         lunches    = data.get('lunches', [])
         household  = data.get('household', [])
         zip_code   = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
+        servings   = int(data.get('servings', 4))
 
         print(f"\n=== BUILD CART REQUEST ===")
         print(f"Meals: {meals}, Breakfasts: {breakfasts}, Lunches: {lunches}")
@@ -557,7 +565,7 @@ def build_cart():
         claude_jobs = {}
         with ThreadPoolExecutor(max_workers=min(len(job_sources) + 1, 12)) as ex:
             for name, source_label in job_sources:
-                claude_jobs[ex.submit(get_search_queries_for_meal, name)] = source_label
+                claude_jobs[ex.submit(get_search_queries_for_meal, name, servings)] = source_label
             staple_fut = ex.submit(get_staple_queries)
             claude_jobs[staple_fut] = 'staples'
 
@@ -850,7 +858,7 @@ def _parse_household_items() -> list[str]:
     return items
 
 
-def get_search_queries_for_meal(meal_name: str) -> list[dict]:
+def get_search_queries_for_meal(meal_name: str, servings: int = 4) -> list[dict]:
     """Ask Claude to generate brand-aware Walmart search queries for a meal."""
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
@@ -862,7 +870,7 @@ def get_search_queries_for_meal(meal_name: str) -> list[dict]:
         max_tokens=600,
         messages=[{
             "role": "user",
-            "content": f"""Generate Walmart grocery search queries for cooking {meal_name} for a family of 4.
+            "content": f"""Generate Walmart grocery search queries for cooking {meal_name} for {servings} people.
 
 Return ONLY a JSON array, no markdown, no explanation:
 [{{"search_query": "descriptive product search string", "qty": 1}}, ...]

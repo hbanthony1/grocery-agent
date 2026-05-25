@@ -152,6 +152,21 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .btn-swap:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 .btn-swap.active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 
+/* Easy mode toggle */
+.easy-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-family: var(--mono); color: var(--text3); cursor: pointer; flex-shrink: 0; border: 1.5px solid var(--border); border-radius: var(--r-pill); padding: 3px 8px; transition: all 120ms; user-select: none; }
+.easy-toggle:hover { border-color: var(--approval); color: var(--approval-dark); background: var(--approval-light); }
+.easy-toggle.active { color: var(--approval-dark); border-color: var(--approval); background: var(--approval-light); font-weight: 600; }
+.easy-toggle input[type="checkbox"] { display: none; }
+.easy-badge { font-size: 10px; font-family: var(--mono); color: var(--approval-dark); background: var(--approval-light); border-radius: var(--r-pill); padding: 1px 6px; }
+.meal-card.easy-meal { background: var(--approval-light); border-left-color: var(--approval); }
+
+/* Serving size slider */
+.serving-size-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.serving-size-label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.serving-size-label strong { color: var(--primary); font-size: 13px; }
+.serving-size-hint { font-size: 11px; color: var(--text3); font-family: var(--mono); white-space: nowrap; }
+#servingSizeSlider { width: 100px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+
 /* Swap row */
 .swap-input-row { margin-top: 10px; display: none; }
 .swap-input-row.visible { display: flex; flex-direction: column; gap: 8px; }

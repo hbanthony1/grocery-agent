@@ -11,6 +11,7 @@ let calendarEvents = null;
 let weekBreakfasts = [];
 let weekLunches    = [];
 const _pickerOpen  = { breakfast: false, lunch: false };
+let servingSize = 4;
 
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
@@ -1055,6 +1056,23 @@ function skipRating() {
   _finalizeWeek(); // fire and forget
 }
 
+// ===== SERVING SIZE =====
+function initServingSize() {
+  const adults = parseInt(prefs.household?.adults) || 2;
+  const kids   = parseInt(prefs.household?.kids)   || 0;
+  servingSize  = Math.min(8, Math.max(2, adults + kids)) || 4;
+  const slider = document.getElementById('servingSizeSlider');
+  const val    = document.getElementById('servingSizeVal');
+  if (slider) slider.value = servingSize;
+  if (val)    val.textContent = servingSize;
+}
+
+function updateServingSize(v) {
+  servingSize = parseInt(v);
+  const val = document.getElementById('servingSizeVal');
+  if (val) val.textContent = servingSize;
+}
+
 // ===== MEAL PLAN =====
 async function runMealPlan() {
   goToStep(1);
@@ -1087,6 +1105,7 @@ async function runMealPlan() {
 
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
+This week they are cooking for ${servingSize} people.
 ${buildRecipeRepoPrompt()}${pantrySection}
 PREFERENCES:
 ${prefsText}
@@ -1178,8 +1197,9 @@ function renderMeals() {
     const mealName = m.meal.replace(' [NEW]','');
     const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
+    const easyLabel = m.easyLoading ? '...' : 'easy';
     return `
-      <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''}" id="meal${i}">
+      <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''} ${m.easyMode ? 'easy-meal' : ''}" id="meal${i}">
         <div class="day-badge">
           <span class="dow">${dow}</span>
           <span class="dom">${dom}</span>
@@ -1188,14 +1208,47 @@ function renderMeals() {
           <div class="meal-name meal-name-link" onclick="openMealRecipe(${i})">${mealName}</div>
           <div class="meal-tags">
             ${m.isNew ? '<span class="new-badge">✦ new</span>' : ''}
+            ${m.easyMode ? '<span class="easy-badge">⚡ easy</span>' : ''}
             ${tagsHtml}
           </div>
         </div>
         ${mealPhoto}
         <span class="cx cx-${cx}">${cxLabel}</span>
+        <label class="easy-toggle${m.easyMode ? ' active' : ''}" title="Swap for a ready-made version">
+          <input type="checkbox" ${m.easyMode ? 'checked' : ''} ${m.easyLoading ? 'disabled' : ''} onchange="toggleEasyMode(${i}, this.checked)">
+          <span>${easyLabel}</span>
+        </label>
         <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})">↺</button>
       </div>`;
   }).join('');
+}
+
+async function toggleEasyMode(i, checked) {
+  if (checked) {
+    if (!meals[i].originalMeal) meals[i].originalMeal = meals[i].meal;
+    meals[i].easyLoading = true;
+    renderMeals();
+    try {
+      const resp = await fetch('/generate-meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: `Give a store-bought or frozen version of exactly this dish: "${meals[i].originalMeal}". Keep the same meal — just make it the easy ready-made version (e.g. "Stuffed Crust Pizza" → "Frozen Stuffed Crust Pizza", "Chicken Tacos" → "Rotisserie Chicken Tacos", "Lasagna" → "Frozen Lasagna"). Return ONLY the new meal name (2–6 words), no quotes, no explanation.` })
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error);
+      meals[i].meal = data.content.trim().replace(/^["'.]|["'.]$/g, '');
+      meals[i].easyMode = true;
+    } catch(e) {
+      meals[i].meal = meals[i].originalMeal;
+      meals[i].easyMode = false;
+    }
+    meals[i].easyLoading = false;
+  } else {
+    if (meals[i].originalMeal) meals[i].meal = meals[i].originalMeal;
+    meals[i].easyMode = false;
+    meals[i].easyLoading = false;
+  }
+  renderMeals();
 }
 
 function startSwap(i) {
@@ -1305,7 +1358,7 @@ async function startCartBuild() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], servings: servingSize, zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();
@@ -1644,7 +1697,7 @@ async function openMealRecipe(i) {
     const resp = await fetch('/generate-recipe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meal: name }),
+      body: JSON.stringify({ meal: name, easyMode: !!mealObj.easyMode }),
     });
     if (!resp.ok) throw new Error('Server error');
     const generated = await resp.json();
@@ -1859,7 +1912,7 @@ async function wizardFinish() {
 // ===== INIT =====
 goToStep(0);
 renderSchedule();
-loadPrefs().then(() => { renderStep0Extras(); checkOnboarding(); });
+loadPrefs().then(() => { renderStep0Extras(); initServingSize(); checkOnboarding(); });
 loadHouseholdItems();
 loadRecipes();
 loadPantry().then(() => renderPantryToggle());
