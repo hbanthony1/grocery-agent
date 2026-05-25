@@ -1,4 +1,4 @@
-const CACHE = 'grocery-agent-v1';
+const CACHE = 'grocery-agent-v2';
 const SHELL = [
   '/',
   '/static/app.js',
