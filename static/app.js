@@ -1396,7 +1396,6 @@ function renderStep0Extras() {
   renderMealPicks('lunch');
   renderDessertPick();
   renderSnackPick();
-  renderHolidaySection();
 }
 
 function renderMealPicks(type) {
@@ -1568,12 +1567,25 @@ function addCustomSnack() {
   renderSnackPick();
 }
 
+function toggleHolidaySection() {
+  const card = document.getElementById('holidayCard');
+  if (!card) return;
+  const visible = card.style.display !== 'none';
+  if (visible) weekHoliday = null; // clear when dismissing
+  card.style.display = visible ? 'none' : 'block';
+  document.getElementById('navHoliday')?.classList.toggle('active', !visible);
+  if (!visible) {
+    renderHolidaySection();
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 function renderHolidaySection() {
   const el = document.getElementById('holidaySection');
   if (!el) return;
   if (!weekHoliday) {
     el.innerHTML = `<div class="meal-pick-banner">
-      <span style="opacity:0.6">no holiday meal this week</span>
+      <span style="opacity:0.6">no holiday meal planned</span>
       <button class="btn-link" onclick="openHolidayPicker()">plan one →</button>
     </div>`;
     return;

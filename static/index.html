@@ -21,6 +21,7 @@
   <div class="top-nav-actions">
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
+    <button class="btn-nav" id="navHoliday" onclick="toggleHolidaySection()">holiday</button>
     <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">preferences</button>
   </div>
 </nav>
@@ -64,6 +65,12 @@
 
   <!-- STEP 0: Your Week -->
   <div id="step0">
+
+    <!-- HOLIDAY PLANNING CARD (shown when nav button toggled) -->
+    <div id="holidayCard" class="card" style="display:none">
+      <div class="card-label">🎄 holiday meal planning</div>
+      <div id="holidaySection"><span class="hh-loading">loading...</span></div>
+    </div>
 
     <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
     <div id="recapCard" class="card recap-card" style="display:none">
@@ -169,10 +176,6 @@
         <div class="card">
           <div class="card-label">snacks this week</div>
           <div id="snacksSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">holiday meal this week</div>
-          <div id="holidaySection"><span class="hh-loading">loading...</span></div>
         </div>
       </div>
     </div>
