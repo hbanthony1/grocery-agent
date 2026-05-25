@@ -101,7 +101,7 @@ const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu',
 
 // ===== NAVIGATION =====
 function goToStep(n) {
-  [0,1,2].forEach(i => {
+  [0,1,2,3].forEach(i => {
     const step = document.getElementById('step'+i);
     if (step) step.style.display = i===n ? 'block' : 'none';
     const hero = document.getElementById('heroStep'+i);
@@ -120,15 +120,20 @@ const LS_HOUSEHOLD_KEY = 'grocery_household_checked';
 let householdItems = [];
 let householdChecked = new Set(JSON.parse(localStorage.getItem(LS_HOUSEHOLD_KEY) || '[]'));
 
+function _hhDisplayName(name) {
+  return name.replace(/\s+[\d(].*$/, '').trim() || name;
+}
+
 function renderHousehold() {
   const grid = document.getElementById('hhGrid');
   if (!householdItems.length) { grid.innerHTML = '<span class="hh-loading">no household items found in preferences.md</span>'; return; }
   grid.innerHTML = householdItems.map(name => {
     const checked = householdChecked.has(name);
     const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const display = _hhDisplayName(name);
     return `<label class="hh-item">
       <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
-      <span class="hh-item-name">${name}</span>
+      <span class="hh-item-name">${display}</span>
     </label>`;
   }).join('');
   updateHhCount();
@@ -318,7 +323,7 @@ function resetApp() {
     if (el) el.style.display = 'none';
   });
   const buildBtn = document.getElementById('buildCartBtn');
-  if (buildBtn) buildBtn.style.display = 'inline-flex';
+  if (buildBtn) buildBtn.style.display = 'none';
   document.getElementById('swapRow').className = 'swap-input-row';
   goToStep(0);
 }
@@ -1024,7 +1029,7 @@ function cancelSwap() {
 
 // ===== CART =====
 async function approveMealPlan() {
-  document.getElementById('buildCartBtn').style.display = 'inline-flex';
+  document.getElementById('buildCartBtn').style.display = 'none';
   document.getElementById('cartLoadingBar').style.display = 'none';
   resetCartProgress();
   document.getElementById('cartCard').style.display = 'none';
@@ -1032,7 +1037,12 @@ async function approveMealPlan() {
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
   document.getElementById('ratingPanel').style.display = 'none';
-  goToStep(2);
+  goToStep(2); // → Household step
+}
+
+function navigateAndBuildCart() {
+  goToStep(3);
+  startCartBuild();
 }
 
 async function startCartBuild() {

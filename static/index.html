@@ -39,6 +39,14 @@
     <div class="hero-step-card todo" id="heroStep2">
       <div class="hero-step-num">3</div>
       <div class="hero-step-info">
+        <div class="hero-step-label">Household</div>
+        <div class="hero-step-desc">Items to add</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep3">
+      <div class="hero-step-num">4</div>
+      <div class="hero-step-info">
         <div class="hero-step-label">Cart</div>
         <div class="hero-step-desc">Build &amp; check out</div>
       </div>
@@ -95,7 +103,7 @@
     </div>
   </div>
 
-  <!-- STEP 2: Cart (household items + cart build) -->
+  <!-- STEP 2: Household Items -->
   <div id="step2" style="display:none">
     <div class="card">
       <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
@@ -107,6 +115,14 @@
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(1)">← back</button>
+      <button class="btn mustard" onclick="navigateAndBuildCart()">Build cart →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Cart -->
+  <div id="step3" style="display:none">
     <div id="cartLoadingBar" class="cart-loader" style="display:none">
       <div class="cart-track">
         <div class="cart-track-bg"></div>
@@ -141,8 +157,8 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" onclick="goToStep(1)">← back to meals</button>
-      <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()">Build cart →</button>
+      <button class="btn" onclick="goToStep(2)">← back</button>
+      <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()" style="display:none">retry →</button>
       <button class="btn mustard" id="doneBtn" onclick="confirmOrder()" style="display:none">confirm order ✓</button>
     </div>
   </div>
