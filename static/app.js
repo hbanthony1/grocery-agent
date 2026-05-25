@@ -8,6 +8,12 @@ let prefs = {};
 const pendingRatings = {};
 let _pendingGeneratedRecipe = null;
 let calendarEvents = null;
+let weekBreakfasts = [];
+let weekLunches    = [];
+const _pickerOpen  = { breakfast: false, lunch: false };
+
+const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
+const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 
 // ===== CART LOADER =====
 const MEAL_PLAN_MSGS = [
@@ -794,6 +800,77 @@ function buildPantryPrompt() {
   return lines.length ? '\n' + lines.join('\n') + '\n' : '';
 }
 
+// ===== BREAKFAST / LUNCH PICKS =====
+function renderStep0Extras() {
+  weekBreakfasts = prefs.defaultBreakfasts?.length ? [...prefs.defaultBreakfasts] : [];
+  weekLunches    = prefs.defaultLunches?.length    ? [...prefs.defaultLunches]    : [];
+  _pickerOpen.breakfast = !weekBreakfasts.length;
+  _pickerOpen.lunch     = !weekLunches.length;
+  renderMealPicks('breakfast');
+  renderMealPicks('lunch');
+}
+
+function renderMealPicks(type) {
+  const el = document.getElementById(type === 'breakfast' ? 'breakfastSection' : 'lunchSection');
+  if (!el) return;
+  const selections = type === 'breakfast' ? weekBreakfasts : weekLunches;
+  const options    = type === 'breakfast' ? BREAKFAST_OPTIONS : LUNCH_OPTIONS;
+  const emoji      = type === 'breakfast' ? '🍳' : '🥪';
+  const noun       = type === 'breakfast' ? 'breakfast' : 'lunch';
+
+  if (!_pickerOpen[type] && selections.length) {
+    const names = selections.join(', ');
+    el.innerHTML = `<div class="meal-pick-banner">
+      <span>${emoji} Keeping last week's ${noun}s — <strong>${names}</strong></span>
+      <button class="btn-link" onclick="_pickerOpen['${type}']=true;renderMealPicks('${type}')">change →</button>
+    </div>`;
+    return;
+  }
+
+  const chips = options.map(opt => {
+    const sel = selections.includes(opt);
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleMealPick('${type}',${JSON.stringify(opt)})">${opt}</button>`;
+  }).join('');
+
+  const customChips = selections
+    .filter(s => !options.includes(s))
+    .map(s => `<button class="meal-pick-chip selected" onclick="toggleMealPick('${type}',${JSON.stringify(s)})">${s} ×</button>`)
+    .join('');
+
+  const hint = selections.length >= 3 ? '<span class="meal-pick-hint">max 3 selected</span>' : '';
+
+  el.innerHTML = `
+    <div class="meal-pick-grid">${chips}${customChips}</div>
+    ${hint}
+    <div class="meal-pick-custom">
+      <input type="text" id="${type}Custom" placeholder="+ add your own..." onkeydown="if(event.key==='Enter')addCustomMealPick('${type}')" />
+      <button class="btn" style="padding:5px 12px;font-size:12px;height:30px" onclick="addCustomMealPick('${type}')">add</button>
+    </div>`;
+}
+
+function toggleMealPick(type, option) {
+  const arr = type === 'breakfast' ? weekBreakfasts : weekLunches;
+  const idx = arr.indexOf(option);
+  if (idx >= 0) arr.splice(idx, 1);
+  else if (arr.length < 3) arr.push(option);
+  renderMealPicks(type);
+}
+
+function addCustomMealPick(type) {
+  const input = document.getElementById(`${type}Custom`);
+  const val   = (input?.value || '').trim();
+  if (!val) return;
+  const arr = type === 'breakfast' ? weekBreakfasts : weekLunches;
+  if (!arr.includes(val) && arr.length < 3) arr.push(val);
+  if (input) input.value = '';
+  renderMealPicks(type);
+}
+
+function renderPantryToggle() {
+  const row = document.getElementById('pantryToggleRow');
+  if (row) row.style.display = pantry.length ? 'flex' : 'none';
+}
+
 // Swap picker with recipe integration
 function renderSwapPicker(query) {
   const picker = document.getElementById('swapRecipePicker');
@@ -882,8 +959,17 @@ async function runMealPlan() {
   const regenBtn = document.getElementById('regenerateBtn');
   if (regenBtn) regenBtn.style.display = 'none';
 
+  // Save breakfast/lunch defaults for next week
+  prefs.defaultBreakfasts = [...weekBreakfasts];
+  prefs.defaultLunches    = [...weekLunches];
+  try {
+    await fetch('/prefs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(prefs) });
+  } catch(e) {}
+
   const prefsText = buildPreferencesPrompt();
   const includeNew = document.getElementById('includeNew').checked;
+  const usePantry  = document.getElementById('usePantry')?.checked ?? true;
+  const pantrySection = usePantry ? buildPantryPrompt() : '';
 
   const newMealInstruction = includeNew
     ? `IMPORTANT: Exactly 2 of the 7 meals must be completely new recipes this family has NOT cooked before.
@@ -895,7 +981,7 @@ async function runMealPlan() {
 
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
-${buildRecipeRepoPrompt()}${buildPantryPrompt()}
+${buildRecipeRepoPrompt()}${pantrySection}
 PREFERENCES:
 ${prefsText}
 
@@ -1096,13 +1182,13 @@ async function startCartBuild() {
     return;
   }
 
-  startCartProgress(54);
+  startCartProgress(72);
 
   try {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, household: [...householdChecked], zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked], zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();
@@ -1136,9 +1222,9 @@ function renderCart(groups, mealOrder, total, url) {
 
   list.innerHTML = sourcesPresent.map(source => {
     const items = groups[source];
-    const isSpecial = source === 'staples' || source === 'household';
-    const label = source === 'staples' ? 'Weekly Staples'
-                : source === 'household' ? 'Household'
+    const isSpecial = ['staples', 'household', 'Breakfasts', 'Lunches'].includes(source);
+    const label = source === 'staples'    ? 'Weekly Staples'
+                : source === 'household'  ? 'Household'
                 : source;
     const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
     return `<div class="cart-group">
@@ -1656,8 +1742,8 @@ async function wizardFinish() {
 // ===== INIT =====
 goToStep(0);
 renderSchedule();
-loadPrefs().then(() => checkOnboarding());
+loadPrefs().then(() => { renderStep0Extras(); checkOnboarding(); });
 loadHouseholdItems();
 loadRecipes();
-loadPantry();
+loadPantry().then(() => renderPantryToggle());
 loadCalendarStatus();

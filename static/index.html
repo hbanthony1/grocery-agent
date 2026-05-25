@@ -56,20 +56,42 @@
 
   <!-- STEP 0: Your Week -->
   <div id="step0">
-    <div id="calSection"></div>
-    <div class="card">
-      <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
-      <div class="schedule-grid" id="scheduleGrid"></div>
-      <div class="schedule-legend">
-        <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
-        <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
-        <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
+    <div class="step0-grid">
+      <!-- Left: Calendar + Schedule -->
+      <div class="step0-col">
+        <div id="calSection"></div>
+        <div class="card">
+          <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
+          <div class="schedule-grid" id="scheduleGrid"></div>
+          <div class="schedule-legend">
+            <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
+            <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
+            <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
+          </div>
+        </div>
+      </div>
+      <!-- Right: Breakfast + Lunch picks -->
+      <div class="step0-col">
+        <div class="card">
+          <div class="card-label">breakfast this week</div>
+          <div id="breakfastSection"><span class="hh-loading">loading...</span></div>
+        </div>
+        <div class="card">
+          <div class="card-label">lunch this week</div>
+          <div id="lunchSection"><span class="hh-loading">loading...</span></div>
+        </div>
       </div>
     </div>
-    <div class="actions">
-      <div class="new-meal-toggle">
-        <input type="checkbox" id="includeNew" checked />
-        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+    <div class="actions step0-actions">
+      <div class="step0-toggles">
+        <div class="new-meal-toggle">
+          <input type="checkbox" id="includeNew" checked />
+          <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+        </div>
+        <div class="new-meal-toggle" id="pantryToggleRow" style="display:none">
+          <input type="checkbox" id="usePantry" checked />
+          <label for="usePantry">Use pantry items where possible</label>
+        </div>
       </div>
       <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
     </div>

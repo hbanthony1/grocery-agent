@@ -532,35 +532,43 @@ Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step sh
 @app.route('/build-cart', methods=['POST'])
 def build_cart():
     try:
-        data      = request.json
-        meals     = data.get('meals', [])
-        household = data.get('household', [])
-        zip_code  = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
+        data       = request.json
+        meals      = data.get('meals', [])
+        breakfasts = data.get('breakfasts', [])
+        lunches    = data.get('lunches', [])
+        household  = data.get('household', [])
+        zip_code   = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
 
         print(f"\n=== BUILD CART REQUEST ===")
-        print(f"Meals: {meals}")
+        print(f"Meals: {meals}, Breakfasts: {breakfasts}, Lunches: {lunches}")
 
         # ── Phase 1: all Claude calls in parallel ─────────────────────────
-        # One call per meal to generate search queries + one for staples.
+        # One call per meal/breakfast/lunch + one for staples.
         all_search_tasks = []
 
+        # Map: future -> source label
+        job_sources = (
+            [(name, name)          for name in meals] +
+            [(name, 'Breakfasts')  for name in breakfasts] +
+            [(name, 'Lunches')     for name in lunches]
+        )
+
         claude_jobs = {}
-        with ThreadPoolExecutor(max_workers=min(len(meals) + 1, 10)) as ex:
-            for name in meals:
-                claude_jobs[ex.submit(get_search_queries_for_meal, name)] = name
+        with ThreadPoolExecutor(max_workers=min(len(job_sources) + 1, 12)) as ex:
+            for name, source_label in job_sources:
+                claude_jobs[ex.submit(get_search_queries_for_meal, name)] = source_label
             staple_fut = ex.submit(get_staple_queries)
-            claude_jobs[staple_fut] = '__staples__'
+            claude_jobs[staple_fut] = 'staples'
 
             for fut in as_completed(claude_jobs):
-                label = claude_jobs[fut]
+                source = claude_jobs[fut]
                 try:
                     queries = fut.result()
-                    source = label if label != '__staples__' else 'staples'
                     print(f"  [{source}]: {len(queries)} queries")
                     for q in queries:
                         all_search_tasks.append({**q, 'source': source})
                 except Exception as e:
-                    print(f"  ERROR getting queries for {label}: {e}")
+                    print(f"  ERROR getting queries for {source}: {e}")
                     traceback.print_exc()
 
         # Household items search directly — no Claude step needed
@@ -605,7 +613,7 @@ def build_cart():
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
-        meal_order = list(meals) + ['staples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'staples', 'household']
 
         cart_url = build_cart_url(cart_items, staple_items=[])
 

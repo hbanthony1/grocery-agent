@@ -101,6 +101,26 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .new-meal-toggle input { accent-color: var(--primary); width: 14px; height: 14px; }
 .new-meal-toggle label { cursor: pointer; }
 
+/* Step 0 full-width two-column layout */
+.step0-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+.step0-col { display: flex; flex-direction: column; gap: 16px; }
+.step0-toggles { display: flex; flex-direction: column; gap: 8px; }
+.step0-actions { justify-content: space-between; align-items: flex-end; }
+
+/* Meal picks (breakfast/lunch) */
+.meal-pick-banner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text2); padding: 10px 12px; background: var(--surface); border-radius: var(--r); border: 1.5px solid var(--border); line-height: 1.5; }
+.meal-pick-banner strong { color: var(--text); font-weight: 600; }
+.btn-link { background: none; border: none; color: var(--primary); font-family: var(--sans); font-size: 12px; font-weight: 500; cursor: pointer; padding: 0; white-space: nowrap; flex-shrink: 0; }
+.btn-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.meal-pick-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.meal-pick-chip { border: 1.5px solid var(--border); border-radius: var(--r-pill); padding: 5px 12px; font-size: 12px; font-family: var(--sans); color: var(--text2); cursor: pointer; background: var(--bg); transition: all 120ms; user-select: none; }
+.meal-pick-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.meal-pick-chip.selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 500; }
+.meal-pick-custom { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.meal-pick-custom input { flex: 1; border: 1.5px solid var(--border); border-radius: var(--r); padding: 6px 10px; font-family: var(--sans); font-size: 12px; outline: none; background: var(--bg); color: var(--text); transition: border-color 0.15s; }
+.meal-pick-custom input:focus { border-color: var(--primary); }
+.meal-pick-hint { font-size: 11px; font-family: var(--mono); color: var(--text3); display: block; margin-bottom: 6px; }
+
 /* Meal grid */
 /* Meal plan — single-column vertical list */
 .meal-grid { display: flex; flex-direction: column; gap: 0; margin: 0 -20px; }
@@ -417,6 +437,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 /* ===== TABLET (≤ 900px) ===== */
 @media (max-width: 900px) {
   .app { padding: 72px 24px 48px; }
+  .step0-grid { grid-template-columns: 1fr; }
   .hero-step-card { padding: 10px 10px; gap: 8px; }
   .hero-step-desc { display: none; }
   .recipes-panel { width: 360px; }
@@ -469,6 +490,10 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 
   /* Preferences panel */
   .prefs-household-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Step 0 */
+  .step0-grid { grid-template-columns: 1fr; gap: 16px; }
+  .step0-actions { flex-direction: column; align-items: stretch; gap: 12px; }
 
   /* Prefs page */
   .prefs-page-header { padding: 0 16px; }
