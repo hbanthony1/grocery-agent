@@ -244,6 +244,32 @@ def delete_pantry_item(item_id):
     return jsonify({'ok': True})
 
 
+@app.route('/pantry/batch', methods=['POST'])
+def batch_add_pantry():
+    bodies = (request.json or {}).get('items', [])
+    if not bodies:
+        return jsonify({'added': 0, 'items': []})
+    pantry = _load_pantry()
+    added = []
+    base_ms = int(time.time() * 1000)
+    for i, body in enumerate(bodies):
+        name = (body.get('name') or '').strip()
+        if not name:
+            continue
+        item = {
+            'id':        str(base_ms + i),
+            'name':      name,
+            'amount':    body.get('amount', ''),
+            'unit':      body.get('unit', ''),
+            'expiresOn': body.get('expiresOn', ''),
+            'addedOn':   body.get('addedOn', ''),
+        }
+        pantry.append(item)
+        added.append(item)
+    _save_pantry(pantry)
+    return jsonify({'added': len(added), 'items': added})
+
+
 @app.route('/recipes', methods=['GET'])
 def get_recipes():
     return jsonify(_load_recipes())
@@ -278,6 +304,42 @@ def add_recipe():
     recipes.append(recipe)
     _save_recipes(recipes)
     return jsonify(recipe), 201
+
+
+@app.route('/recipes/batch-rate', methods=['POST'])
+def batch_rate_recipes():
+    ratings = (request.json or {}).get('ratings', [])
+    if not ratings:
+        return jsonify({'ok': True})
+    recipes = _load_recipes()
+    today = datetime.now().strftime('%Y-%m-%d')
+    base_ms = int(time.time() * 1000)
+    new_count = 0
+    for entry in ratings:
+        name = (entry.get('name') or '').strip()
+        rating = entry.get('rating', 0)
+        if not name:
+            continue
+        for r in recipes:
+            if r['name'].lower() == name.lower():
+                r['timesPlanned'] = r.get('timesPlanned', 0) + 1
+                r['lastPlanned'] = today
+                if rating:
+                    r['rating'] = rating
+                break
+        else:
+            recipes.append({
+                'id': str(base_ms + new_count),
+                'name': name,
+                'rating': rating,
+                'tags': [],
+                'notes': '',
+                'timesPlanned': 1,
+                'lastPlanned': today,
+            })
+            new_count += 1
+    _save_recipes(recipes)
+    return jsonify({'ok': True})
 
 
 @app.route('/recipes/<recipe_id>', methods=['PATCH'])

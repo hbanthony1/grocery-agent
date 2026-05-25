@@ -1127,9 +1127,14 @@ function renderOrderCsvPreview(data) {
 async function applyOrderCsvItems() {
   if (!_orderCsvData?.pantryItems?.length) return;
   const toAdd = _orderCsvData.pantryItems.filter((_, i) => document.getElementById(`rpi-${i}`)?.checked);
-  for (const item of toAdd) {
-    try { await savePantryItem({ name: item.name, amount: item.amount || '', unit: item.unit || '' }); } catch(e) {}
-  }
+  try {
+    await fetch('/pantry/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: toAdd.map(i => ({ name: i.name, amount: i.amount || '', unit: i.unit || '' })) }),
+    });
+    await loadPantry();
+  } catch(e) {}
   document.getElementById('orderCsvPreview').innerHTML =
     `<div class="hh-loading" style="padding:4px 0">✓ ${toAdd.length} item${toAdd.length !== 1 ? 's' : ''} added to pantry</div>`;
   document.getElementById('orderCsvStatus').textContent = '';
@@ -1394,9 +1399,15 @@ async function _finalizeWeek() {
 
 async function saveRatings() {
   const today = new Date().toISOString().split('T')[0];
-  for (const [name, rating] of Object.entries(pendingRatings)) {
-    await saveRecipe({ name, rating, tags: [], notes: '', timesPlanned: 1, lastPlanned: today });
-  }
+  const ratings = Object.entries(pendingRatings).map(([name, rating]) => ({ name, rating, lastPlanned: today }));
+  try {
+    await fetch('/recipes/batch-rate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ratings }),
+    });
+    await loadRecipes();
+  } catch(e) {}
   await _finalizeWeek();
   document.getElementById('ratingPanel').style.display = 'none';
 }
@@ -1722,17 +1733,6 @@ async function startCartBuild() {
 
   const mealNames = meals.map(m => m.meal.replace(' [NEW]','').trim());
 
-  try {
-    const ping = await fetch('/ping');
-    if (!ping.ok) throw new Error('Server not responding');
-  } catch(e) {
-    stopMicrocopy();
-    document.getElementById('cartLoadingBar').style.display = 'none';
-    document.getElementById('serverNotice').style.display = 'block';
-    document.getElementById('buildCartBtn').style.display = 'inline-flex';
-    return;
-  }
-
   startCartProgress(72);
 
   try {
@@ -1757,9 +1757,13 @@ async function startCartBuild() {
     stopCartProgress();
     document.getElementById('cartLoadingBar').style.display = 'none';
     document.getElementById('buildCartBtn').style.display = 'inline-flex';
-    const errBox = document.getElementById('cartError');
-    errBox.style.display = 'block';
-    errBox.textContent = `Cart build error:\n${e.message}\n\nCheck your Terminal for the full error log.`;
+    if (e instanceof TypeError) {
+      document.getElementById('serverNotice').style.display = 'block';
+    } else {
+      const errBox = document.getElementById('cartError');
+      errBox.style.display = 'block';
+      errBox.textContent = `Cart build error:\n${e.message}\n\nCheck your Terminal for the full error log.`;
+    }
   }
 }
 
