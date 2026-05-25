@@ -117,6 +117,7 @@ function goToStep(n) {
       else            hero.className = 'hero-step-card todo';
     }
   });
+  document.getElementById('mainApp')?.classList.toggle('step0-active', n === 0);
   currentStep = n;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

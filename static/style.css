@@ -57,6 +57,7 @@
 body { background: var(--bg); font-family: var(--sans); color: var(--text); font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
 .app { max-width: 960px; margin: 0 auto; padding: 80px 40px 64px; }
+.app.step0-active { max-width: none; }
 
 /* Top nav */
 .top-nav { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: var(--bg); border-bottom: 1.5px solid var(--border); display: flex; align-items: center; padding: 0 32px; z-index: 50; box-shadow: var(--shadow-sm); }
