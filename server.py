@@ -63,7 +63,7 @@ _SEED_RECIPES = [
     {"name": "Pesto Pasta with Chicken",       "rating": 4, "tags": ["quick"],                            "notes": "jarred pesto + rotini + grilled chicken thighs + cherry tomatoes"},
     {"name": "Spaghetti Carbonara",            "rating": 4, "tags": ["quick"],                            "notes": "eggs + parmesan + pancetta or bacon — 20 min, no cream needed"},
     # ── American comfort ────────────────────────────────────────────────────
-    {"name": "Sloppy Joes",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "80/20 ground beef + Manwich sauce + Martin's potato rolls"},
+    {"name": "Sloppy Joes",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Manwich + 80/20 ground beef + Martin's potato rolls — 15 min dinner"},
     {"name": "Shepherd's Pie",                 "rating": 4, "tags": ["weekend","comfort-food"],           "notes": "ground beef + frozen mixed veg + mashed potato topping"},
     {"name": "Chicken and Dumplings",          "rating": 4, "tags": ["comfort-food"],                     "notes": "rotisserie chicken + Grands biscuits as dumplings — hearty and quick"},
     {"name": "White Chicken Chili",            "rating": 4, "tags": ["comfort-food"],                     "notes": "rotisserie chicken + white beans + green chiles + cream cheese"},
@@ -72,7 +72,6 @@ _SEED_RECIPES = [
     {"name": "BBQ Chicken",                    "rating": 4, "tags": ["weekend","kid-friendly"],           "notes": "Sweet Baby Ray's + Perdue thighs — oven-baked or grilled"},
     {"name": "Sheet Pan Chicken Thighs",       "rating": 4, "tags": ["kid-friendly"],                     "notes": "Perdue thighs + roasted potatoes and broccoli — one pan, minimal cleanup"},
     {"name": "Grilled Cheese and Tomato Soup", "rating": 4, "tags": ["quick","kid-friendly","comfort-food"],"notes": "Campbell's or Great Value tomato soup + thick-sliced buttered bread"},
-    {"name": "Sloppy Joes",                    "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "Manwich + 80/20 ground beef + Martin's potato rolls — 15 min dinner"},
     {"name": "Homemade Pizza Night",           "rating": 4, "tags": ["weekend","kid-friendly"],           "notes": "Pillsbury dough or Stonefire naan + sauce + toppings — kids build their own"},
     {"name": "Mac and Cheese with Hot Dogs",   "rating": 3, "tags": ["quick","kid-friendly"],             "notes": "Nathan's sliced into Kraft mac — reliable low-effort kid meal"},
     # ── Asian-inspired ──────────────────────────────────────────────────────
