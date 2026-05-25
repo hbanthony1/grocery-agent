@@ -830,12 +830,16 @@ function renderMealPicks(type) {
 
   const chips = options.map(opt => {
     const sel = selections.includes(opt);
-    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleMealPick('${type}',${JSON.stringify(opt)})">${opt}</button>`;
+    const esc = opt.replace(/'/g, '&#39;');
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleMealPick('${type}','${esc}')">${opt}</button>`;
   }).join('');
 
   const customChips = selections
     .filter(s => !options.includes(s))
-    .map(s => `<button class="meal-pick-chip selected" onclick="toggleMealPick('${type}',${JSON.stringify(s)})">${s} ×</button>`)
+    .map(s => {
+      const esc = s.replace(/'/g, '&#39;');
+      return `<button class="meal-pick-chip selected" onclick="toggleMealPick('${type}','${esc}')">${s} ×</button>`;
+    })
     .join('');
 
   const hint = selections.length >= 3 ? '<span class="meal-pick-hint">max 3 selected</span>' : '';
