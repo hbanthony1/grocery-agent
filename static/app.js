@@ -1,3 +1,33 @@
+// ===== TOAST SYSTEM =====
+function showToast(message, opts = {}) {
+  const { type = 'success', duration = 2500, undoFn = null } = opts;
+  const toastType     = undoFn ? 'undo' : type;
+  const toastDuration = undoFn ? 4000 : duration;
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${toastType}`;
+  toast.innerHTML = `<span class="toast-msg">${message}</span>` +
+    (undoFn ? `<button class="toast-undo">Undo</button>` : '');
+  if (undoFn) {
+    toast.querySelector('.toast-undo').addEventListener('click', () => {
+      undoFn();
+      _dismissToast(toast);
+    });
+  }
+  stack.appendChild(toast);
+  const timer = setTimeout(() => _dismissToast(toast), toastDuration);
+  toast._timer = timer;
+  return toast;
+}
+
+function _dismissToast(toast) {
+  if (!toast.parentNode) return;
+  clearTimeout(toast._timer);
+  toast.classList.add('removing');
+  setTimeout(() => toast.remove(), 200);
+}
+
 // ===== STATE =====
 let currentStep = 0;
 let meals = [];
@@ -202,17 +232,32 @@ function renderHousehold() {
 }
 
 async function removeHouseholdItem(name) {
-  prefs.householdItems = (prefs.householdItems || []).filter(item => item !== name);
+  const displayName = _hhDisplayName(name);
+  const removedIdx  = (prefs.householdItems || []).indexOf(name);
+
+  // Optimistic remove from local state only
+  prefs.householdItems = (prefs.householdItems || []).filter(i => i !== name);
+  householdItems       = householdItems.filter(i => i !== name);
   householdChecked.delete(name);
   localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
-  try {
-    await fetch('/prefs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(prefs),
-    });
-  } catch(e) {}
-  await loadHouseholdItems();
+  renderHousehold();
+
+  // Stage server call — fires after undo window
+  const timer = setTimeout(async () => {
+    try {
+      await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+    } catch(e) {}
+  }, 4000);
+
+  showToast(`${displayName} removed`, {
+    undoFn: () => {
+      clearTimeout(timer);
+      if (removedIdx >= 0) prefs.householdItems.splice(removedIdx, 0, name);
+      else prefs.householdItems.push(name);
+      householdItems = [...(prefs.householdItems || [])];
+      renderHousehold();
+    },
+  });
 }
 
 function toggleHousehold(name, checked) {
@@ -473,9 +518,24 @@ async function patchRecipe(id, data) {
 }
 
 async function removeRecipe(id) {
-  await fetch(`/recipes/${id}`, { method: 'DELETE' });
-  await loadRecipes();
+  const removed = recipes.find(r => r.id === id);
+  if (!removed) return;
+
+  // Optimistic remove
+  recipes = recipes.filter(r => r.id !== id);
   renderRecipesPanel();
+
+  const timer = setTimeout(async () => {
+    try { await fetch(`/recipes/${id}`, { method: 'DELETE' }); } catch(e) {}
+  }, 4000);
+
+  showToast(`${removed.name} removed from recipe book`, {
+    undoFn: () => {
+      clearTimeout(timer);
+      recipes.push(removed);
+      renderRecipesPanel();
+    },
+  });
 }
 
 function starsHtml(rating, size = 'display') {
@@ -740,9 +800,25 @@ async function patchPantryItem(id, data) {
 }
 
 async function removePantryItem(id) {
-  await fetch(`/pantry/${id}`, { method: 'DELETE' });
-  await loadPantry();
+  const removed = pantry.find(p => p.id === id);
+  if (!removed) return;
+
+  // Optimistic remove
+  pantry = pantry.filter(p => p.id !== id);
   renderPantryPanel();
+
+  const timer = setTimeout(async () => {
+    try { await fetch(`/pantry/${id}`, { method: 'DELETE' }); } catch(e) {}
+  }, 4000);
+
+  showToast(`${removed.name} removed`, {
+    undoFn: () => {
+      clearTimeout(timer);
+      pantry.push(removed);
+      pantry.sort((a, b) => a.name.localeCompare(b.name));
+      renderPantryPanel();
+    },
+  });
 }
 
 function pantryExpiryStatus(expiresOn) {
@@ -918,6 +994,11 @@ function renderRecapCard() {
   const card = document.getElementById('recapCard');
   if (!card) return;
   if (!prefs.lastWeekMeals?.length) { card.style.display = 'none'; return; }
+  // Always start expanded
+  const collapsed = document.getElementById('recapCollapsed');
+  const full      = document.getElementById('recapFull');
+  if (collapsed) collapsed.style.display = 'none';
+  if (full)      full.style.display = 'block';
   card.style.display = 'block';
   renderRecapMeals();
 }
@@ -1027,9 +1108,22 @@ async function saveRecapMeals() {
   try {
     await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
   } catch(e) {}
-  document.getElementById('recapMealList').innerHTML =
-    '<div class="hh-loading" style="padding:4px 0">✓ saved — Claude will use this for next week\'s plan</div>';
-  document.getElementById('recapSaveMealsBtn')?.remove();
+  collapseRecap();
+  showToast('Recap saved — Claude will use this for next week\'s plan');
+}
+
+function collapseRecap() {
+  const collapsed = document.getElementById('recapCollapsed');
+  const full      = document.getElementById('recapFull');
+  if (collapsed) collapsed.style.display = 'flex';
+  if (full)      full.style.display = 'none';
+}
+
+function expandRecap() {
+  const collapsed = document.getElementById('recapCollapsed');
+  const full      = document.getElementById('recapFull');
+  if (collapsed) collapsed.style.display = 'none';
+  if (full)      full.style.display = 'block';
 }
 
 function renderRecapPantry() {
@@ -1069,9 +1163,23 @@ async function recapSavePantryAmt(id, val) {
 }
 
 async function recapRemovePantry(id) {
-  await fetch(`/pantry/${id}`, { method: 'DELETE' });
-  await loadPantry();
+  const removed = pantry.find(p => p.id === id);
+  if (!removed) return;
+
+  pantry = pantry.filter(p => p.id !== id);
   renderRecapPantry();
+
+  const timer = setTimeout(async () => {
+    try { await fetch(`/pantry/${id}`, { method: 'DELETE' }); } catch(e) {}
+  }, 4000);
+
+  showToast(`${removed.name} removed`, {
+    undoFn: () => {
+      clearTimeout(timer);
+      pantry.push(removed);
+      renderRecapPantry();
+    },
+  });
 }
 
 async function dismissRecap() {
@@ -1242,19 +1350,24 @@ function skipRating() {
 function initServingSize() {
   const adults = parseInt(prefs.household?.adults) || 2;
   const kids   = parseInt(prefs.household?.kids)   || 0;
-  servingSize  = Math.min(8, Math.max(2, adults + kids)) || 4;
-  const slider = document.getElementById('servingSizeSlider');
-  const val    = document.getElementById('servingSizeVal');
-  if (slider) { slider.value = servingSize; slider.setAttribute('aria-valuetext', `${servingSize} servings`); }
-  if (val)    val.textContent = servingSize;
+  servingSize  = Math.min(12, Math.max(1, adults + kids)) || 4;
+  const val = document.getElementById('servingSizeVal');
+  if (val) val.textContent = servingSize;
+  _updateStepperButtons();
 }
 
 function updateServingSize(v) {
-  servingSize = parseInt(v);
-  const val    = document.getElementById('servingSizeVal');
-  const slider = document.getElementById('servingSizeSlider');
-  if (val)    val.textContent = servingSize;
-  if (slider) slider.setAttribute('aria-valuetext', `${servingSize} servings`);
+  servingSize = Math.max(1, Math.min(12, parseInt(v) || 1));
+  const val = document.getElementById('servingSizeVal');
+  if (val) val.textContent = servingSize;
+  _updateStepperButtons();
+}
+
+function _updateStepperButtons() {
+  const minus = document.querySelector('.stepper-btn[aria-label="Fewer servings"]');
+  const plus  = document.querySelector('.stepper-btn[aria-label="More servings"]');
+  if (minus) minus.disabled = servingSize <= 1;
+  if (plus)  plus.disabled  = servingSize >= 12;
 }
 
 // ===== MEAL PLAN =====
@@ -1758,6 +1871,7 @@ async function savePrefsPage() {
 
   renderPrefsSummary();
   closePrefsPage();
+  showToast('Preferences saved');
 }
 
 function readPrefsList(containerId) {

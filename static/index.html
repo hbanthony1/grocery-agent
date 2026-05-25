@@ -60,47 +60,57 @@
 
     <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
     <div id="recapCard" class="card recap-card" style="display:none">
-      <div class="recap-title-row">
-        <span class="card-label" style="margin-bottom:0">last week's recap</span>
-        <button class="btn-link" onclick="dismissRecap()">skip →</button>
+
+      <!-- Collapsed state (shown after saving) -->
+      <div id="recapCollapsed" class="recap-collapsed-row" style="display:none">
+        <span class="recap-done-msg">✓ last week's recap saved</span>
+        <button class="btn-link" onclick="expandRecap()">re-open ›</button>
       </div>
 
-      <div class="recap-section">
-        <button class="recap-sec-hdr" onclick="toggleRecapSection('order')">
-          <span>📦 last week's Walmart order</span>
-          <span class="recap-chev" id="recapChev-order">▾</span>
-        </button>
-        <div id="recapBody-order" class="recap-sec-body">
-          <p class="recap-hint">Upload your Walmart order CSV to add items to your pantry and flag brand preferences.</p>
-          <div class="recap-upload-row">
-            <input type="file" id="orderCsvInput" accept=".csv,.txt" style="display:none" onchange="handleOrderCsv(this)">
-            <button class="btn" onclick="document.getElementById('orderCsvInput').click()">upload order CSV</button>
-            <span class="hh-loading" id="orderCsvStatus"></span>
+      <!-- Full state -->
+      <div id="recapFull">
+        <div class="recap-title-row">
+          <span class="card-label" style="margin-bottom:0">last week's recap</span>
+          <button class="btn-link" onclick="dismissRecap()">skip →</button>
+        </div>
+
+        <div class="recap-section">
+          <button class="recap-sec-hdr" onclick="toggleRecapSection('order')">
+            <span>📦 last week's Walmart order</span>
+            <span class="recap-chev" id="recapChev-order">▾</span>
+          </button>
+          <div id="recapBody-order" class="recap-sec-body">
+            <p class="recap-hint">Upload your Walmart order CSV to add items to your pantry and flag brand preferences.</p>
+            <div class="recap-upload-row">
+              <input type="file" id="orderCsvInput" accept=".csv,.txt" style="display:none" onchange="handleOrderCsv(this)">
+              <button class="btn" onclick="document.getElementById('orderCsvInput').click()">upload order CSV</button>
+              <span class="hh-loading" id="orderCsvStatus"></span>
+            </div>
+            <div id="orderCsvPreview" style="display:none;margin-top:10px"></div>
           </div>
-          <div id="orderCsvPreview" style="display:none;margin-top:10px"></div>
         </div>
-      </div>
 
-      <div class="recap-section">
-        <button class="recap-sec-hdr" onclick="toggleRecapSection('meals')">
-          <span>🍽️ what we actually ate</span>
-          <span class="recap-chev" id="recapChev-meals">▾</span>
-        </button>
-        <div id="recapBody-meals" class="recap-sec-body">
-          <p class="recap-hint">Check off what you made. Uncheck anything skipped and note what you had instead.</p>
-          <div id="recapMealList"></div>
-          <button class="btn primary" id="recapSaveMealsBtn" onclick="saveRecapMeals()" style="margin-top:10px">save →</button>
+        <div class="recap-section">
+          <button class="recap-sec-hdr" onclick="toggleRecapSection('meals')">
+            <span>🍽️ what we actually ate</span>
+            <span class="recap-chev" id="recapChev-meals">▾</span>
+          </button>
+          <div id="recapBody-meals" class="recap-sec-body">
+            <p class="recap-hint">Check off what you made. Uncheck anything skipped and note what you had instead.</p>
+            <div id="recapMealList"></div>
+            <button class="btn primary" id="recapSaveMealsBtn" onclick="saveRecapMeals()" style="margin-top:10px">save →</button>
+          </div>
         </div>
-      </div>
 
-      <div class="recap-section">
-        <button class="recap-sec-hdr" onclick="toggleRecapSection('pantry')">
-          <span>🥫 pantry check</span>
-          <span class="recap-chev" id="recapChev-pantry">›</span>
-        </button>
-        <div id="recapBody-pantry" class="recap-sec-body" style="display:none">
-          <p class="recap-hint">Update amounts or remove anything that's expired or used up.</p>
-          <div id="recapPantryList"></div>
+        <div class="recap-section">
+          <button class="recap-sec-hdr" onclick="toggleRecapSection('pantry')">
+            <span>🥫 pantry check</span>
+            <span class="recap-chev" id="recapChev-pantry">›</span>
+          </button>
+          <div id="recapBody-pantry" class="recap-sec-body" style="display:none">
+            <p class="recap-hint">Update amounts or remove anything that's expired or used up.</p>
+            <div id="recapPantryList"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -142,8 +152,12 @@
           <label for="usePantry">Use pantry items where possible</label>
         </div>
         <div class="serving-size-row">
-          <span class="serving-size-label">cooking for <strong><span id="servingSizeVal">4</span></strong></span>
-          <input type="range" id="servingSizeSlider" min="2" max="8" value="4" oninput="updateServingSize(this.value)" aria-label="Dinner servings" aria-valuetext="4 servings" />
+          <span class="serving-size-label">cooking for</span>
+          <div class="serving-stepper">
+            <button class="stepper-btn" onclick="updateServingSize(servingSize - 1)" aria-label="Fewer servings">−</button>
+            <strong id="servingSizeVal">4</strong>
+            <button class="stepper-btn" onclick="updateServingSize(servingSize + 1)" aria-label="More servings">+</button>
+          </div>
           <span class="serving-size-hint">dinner servings</span>
         </div>
       </div>
@@ -381,6 +395,7 @@
 </div>
 
 <input type="file" id="photoUploadInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">
+<div class="toast-stack" id="toastStack"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>
