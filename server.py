@@ -113,7 +113,7 @@ def get_household_items():
             return jsonify({'items': p['householdItems']})
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    return jsonify({'items': _parse_household_items()})
+    return jsonify({'items': []})
 
 
 @app.route('/prefs', methods=['GET'])
@@ -136,15 +136,6 @@ def save_prefs():
     return jsonify({'ok': True})
 
 
-@app.route('/preferences', methods=['GET'])
-def get_preferences():
-    prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
-    try:
-        with open(prefs_path, encoding='utf-8') as f:
-            content = f.read()
-        return jsonify({"content": content})
-    except FileNotFoundError:
-        return jsonify({"content": ""})
 
 
 @app.route('/pantry', methods=['GET'])
@@ -694,12 +685,9 @@ def build_cart():
         print(f"\nCart URL: {cart_url}")
         print(f"Total: ${total:.2f} across {sum(len(v) for v in groups.values())} items")
 
-        flat_items = [item for src in meal_order for item in groups.get(src, [])]
-
         return jsonify({
             "groups":    groups,
             "mealOrder": meal_order,
-            "items":     flat_items,
             "total":     f"${total:.2f}",
             "cartUrl":   cart_url
         })
@@ -902,30 +890,6 @@ def _merge_seed_recipes() -> None:
         _save_recipes(existing + to_add)
 
 
-def _parse_household_items() -> list[str]:
-    """Extract bullet points from the Household / non-grocery section of preferences.md."""
-    prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
-    try:
-        with open(prefs_path, encoding='utf-8') as f:
-            prefs = f.read()
-    except FileNotFoundError:
-        return []
-    items = []
-    in_section = False
-    for line in prefs.split('\n'):
-        if line.startswith('## Household') and 'non-grocery' in line:
-            in_section = True
-            continue
-        if in_section:
-            if line.startswith('## '):
-                break
-            if line.startswith('- '):
-                item = line[2:].strip()
-                item = re.sub(r'\s*\*\(.*?\)\*', '', item).strip()
-                if item:
-                    items.append(item)
-    return items
-
 
 def get_search_queries_for_meal(meal_name: str, servings: int = 4) -> list[dict]:
     """Ask Claude to generate brand-aware Walmart search queries for a meal."""
@@ -958,7 +922,6 @@ Rules:
 
 def get_staple_queries() -> list[dict]:
     """Return weekly staples from prefs.json as Walmart search queries via Claude."""
-    # Load staples from prefs.json, fall back to parsing preferences.md
     staples = []
     try:
         with open(PREFS_PATH, encoding='utf-8') as f:
@@ -968,22 +931,7 @@ def get_staple_queries() -> list[dict]:
         pass
 
     if not staples:
-        # Legacy fallback: parse preferences.md
-        prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
-        try:
-            in_section = False
-            with open(prefs_path, encoding='utf-8') as pf:
-                for line in pf:
-                    if '## Weekly staples' in line:
-                        in_section = True
-                        continue
-                    if in_section:
-                        if line.startswith('## '):
-                            break
-                        if line.startswith('- '):
-                            staples.append(line[2:].strip())
-        except FileNotFoundError:
-            return []
+        return []
 
     staples_text = '\n'.join(f'- {s}' for s in staples)
     client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
