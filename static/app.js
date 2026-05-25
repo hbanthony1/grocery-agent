@@ -2233,7 +2233,8 @@ async function suggestCheaperSwaps() {
       body: JSON.stringify({ prompt: `Budget target: $${target} (max $${budgetMax}). Current cart:\n${itemList}\n\nSuggest 3-5 specific, practical swaps to reduce the total by 10-15%. Focus on the most expensive items. Be concise — one line per swap like "• Swap [expensive item] for [cheaper alternative] — save ~$X".` }),
     });
     const data = await resp.json();
-    const text  = (data.result || '').trim();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    const text  = (data.content || '').trim();
     swapBox.innerHTML = text.split('\n').filter(Boolean).map(l => `<div class="recap-hint" style="margin-bottom:4px">${l}</div>`).join('');
   } catch(e) {
     swapBox.innerHTML = '<div class="recap-hint">Could not load suggestions — check your Terminal.</div>';

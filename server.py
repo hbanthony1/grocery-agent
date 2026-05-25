@@ -536,7 +536,7 @@ def claude_prompt():
         client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         msg = client.messages.create(
             model=MODEL,
-            max_tokens=600,
+            max_tokens=800,
             messages=[{'role': 'user', 'content': prompt}]
         )
         return jsonify({'content': msg.content[0].text})
