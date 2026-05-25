@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, redirect, session, Response
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
-import anthropic, os, json, re, time, traceback, csv, io
+import anthropic, os, json, re, time, traceback, csv, io, socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -895,11 +895,38 @@ Use descriptive terms that work on Walmart search (e.g. "organic bananas bunch" 
     return json.loads(text)
 
 
+def _get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '127.0.0.1'
+
+
+def _print_startup(local_ip: str) -> None:
+    url = f"http://{local_ip}:5000"
+    width = 52
+    print("=" * width)
+    print(f"  Grocery Agent is running")
+    print(f"  Desktop : http://localhost:5000")
+    print(f"  Phone   : {url}")
+    print("=" * width)
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr.print_ascii(invert=True)
+    except ImportError:
+        print("  (install qrcode for a scannable QR code: pip install qrcode)")
+    print("=" * width)
+
+
 if __name__ == '__main__':
     _merge_seed_recipes()
-    print("=" * 50)
-    print("Grocery agent server running at http://localhost:5000")
-    print("Health check: http://localhost:5000/ping")
-    print("Open index.html in Chrome to start planning.")
-    print("=" * 50)
-    app.run(port=5000, debug=False)
+    local_ip = _get_local_ip()
+    _print_startup(local_ip)
+    app.run(host='0.0.0.0', port=5000, debug=False)
