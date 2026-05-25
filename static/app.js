@@ -1911,26 +1911,6 @@ function buildPreferencesPrompt() {
   return lines.join('\n');
 }
 
-function renderPrefsSummary() {
-  const el = document.getElementById('prefsSummary');
-  if (!el) return;
-  const h = prefs.household || {};
-  if (!h.adults && !h.zip) { el.style.display = 'none'; return; }
-  const kids = h.kids > 0 ? `, ${h.kids} kid${h.kids !== 1 ? 's' : ''}` : '';
-  const skipping = prefs.doNotRepeat?.length ? prefs.doNotRepeat.join(', ') : null;
-  el.style.display = 'block';
-  el.innerHTML = `
-    <div class="prefs-summary-actions">
-      <div class="prefs-summary-grid">
-        <div class="prefs-chip"><span class="prefs-chip-label">household</span><span class="prefs-chip-val">${h.adults || 2} adults${kids} · ${h.zip || '59047'}</span></div>
-        <div class="prefs-chip"><span class="prefs-chip-label">budget</span><span class="prefs-chip-val">~$${h.budgetTarget || 175} / week</span></div>
-        <div class="prefs-chip"><span class="prefs-chip-label">weekly staples</span><span class="prefs-chip-val">${(prefs.weeklyStaples||[]).length} items</span></div>
-        <div class="prefs-chip"><span class="prefs-chip-label">brand rules</span><span class="prefs-chip-val">${(prefs.brandRules||[]).length} rules</span></div>
-        ${skipping ? `<div class="prefs-chip prefs-chip-skip"><span class="prefs-chip-label">skipping</span><span class="prefs-chip-val">${skipping}</span></div>` : ''}
-      </div>
-      <button class="btn-link" onclick="openPrefsPage()">edit preferences →</button>
-    </div>`;
-}
 
 // ===== PREFERENCES PAGE =====
 function openPrefsPage(fromHistory = false) {
@@ -1986,7 +1966,6 @@ async function savePrefsPage() {
 
   householdItems = (prefs.householdItems || []).map(_normalizeHhItem);
   renderHousehold();
-  renderPrefsSummary();
   closePrefsPage();
   showToast('Preferences saved');
 }
@@ -2388,7 +2367,7 @@ async function wizardFinish() {
 history.replaceState({ step: 0, overlay: null }, '');
 goToStep(0, true); // true = don't push another history entry on top of the replaceState above
 renderSchedule();
-loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); renderPrefsSummary(); checkOnboarding(); });
+loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); checkOnboarding(); });
 loadHouseholdItems();
 loadRecipes();
 loadPantry().then(() => renderPantryToggle());

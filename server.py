@@ -107,7 +107,8 @@ def ping():
 @app.route('/household-items', methods=['GET'])
 def get_household_items():
     try:
-        p = json.load(open(PREFS_PATH, encoding='utf-8'))
+        with open(PREFS_PATH, encoding='utf-8') as f:
+            p = json.load(f)
         if p.get('householdItems'):
             return jsonify({'items': p['householdItems']})
     except (FileNotFoundError, json.JSONDecodeError):
@@ -118,15 +119,20 @@ def get_household_items():
 @app.route('/prefs', methods=['GET'])
 def get_prefs():
     try:
-        return jsonify(json.load(open(PREFS_PATH, encoding='utf-8')))
+        with open(PREFS_PATH, encoding='utf-8') as f:
+            return jsonify(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError):
         return jsonify({})
 
 
 @app.route('/prefs', methods=['POST'])
 def save_prefs():
+    data = request.json
+    if not isinstance(data, dict):
+        return jsonify({'error': 'invalid prefs payload'}), 400
     os.makedirs(os.path.dirname(PREFS_PATH), exist_ok=True)
-    json.dump(request.json, open(PREFS_PATH, 'w', encoding='utf-8'), indent=2)
+    with open(PREFS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
     return jsonify({'ok': True})
 
 
@@ -134,7 +140,8 @@ def save_prefs():
 def get_preferences():
     prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
     try:
-        content = open(prefs_path, encoding='utf-8').read()
+        with open(prefs_path, encoding='utf-8') as f:
+            content = f.read()
         return jsonify({"content": content})
     except FileNotFoundError:
         return jsonify({"content": ""})
@@ -555,7 +562,8 @@ def generate_recipe():
     try:
         h = {}
         try:
-            p = json.load(open(PREFS_PATH, encoding='utf-8'))
+            with open(PREFS_PATH, encoding='utf-8') as f:
+                p = json.load(f)
             h = p.get('household', {})
         except (FileNotFoundError, json.JSONDecodeError):
             pass
@@ -840,9 +848,8 @@ def _load_google_creds():
     if not os.path.exists(GOOGLE_TOKEN_PATH):
         return None
     try:
-        return Credentials.from_authorized_user_info(
-            json.load(open(GOOGLE_TOKEN_PATH)), GOOGLE_SCOPES
-        )
+        with open(GOOGLE_TOKEN_PATH) as f:
+            return Credentials.from_authorized_user_info(json.load(f), GOOGLE_SCOPES)
     except Exception:
         return None
 
@@ -857,26 +864,30 @@ def _save_google_creds(creds):
 
 def _load_pantry() -> list:
     try:
-        return json.load(open(PANTRY_PATH, encoding='utf-8'))
+        with open(PANTRY_PATH, encoding='utf-8') as f:
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
 def _save_pantry(pantry: list) -> None:
     os.makedirs(os.path.dirname(PANTRY_PATH), exist_ok=True)
-    json.dump(pantry, open(PANTRY_PATH, 'w', encoding='utf-8'), indent=2)
+    with open(PANTRY_PATH, 'w', encoding='utf-8') as f:
+        json.dump(pantry, f, indent=2)
 
 
 def _load_recipes() -> list:
     try:
-        return json.load(open(RECIPES_PATH, encoding='utf-8'))
+        with open(RECIPES_PATH, encoding='utf-8') as f:
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
 def _save_recipes(recipes: list) -> None:
     os.makedirs(os.path.dirname(RECIPES_PATH), exist_ok=True)
-    json.dump(recipes, open(RECIPES_PATH, 'w', encoding='utf-8'), indent=2)
+    with open(RECIPES_PATH, 'w', encoding='utf-8') as f:
+        json.dump(recipes, f, indent=2)
 
 
 def _merge_seed_recipes() -> None:
@@ -895,7 +906,8 @@ def _parse_household_items() -> list[str]:
     """Extract bullet points from the Household / non-grocery section of preferences.md."""
     prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
     try:
-        prefs = open(prefs_path, encoding='utf-8').read()
+        with open(prefs_path, encoding='utf-8') as f:
+            prefs = f.read()
     except FileNotFoundError:
         return []
     items = []
@@ -949,7 +961,8 @@ def get_staple_queries() -> list[dict]:
     # Load staples from prefs.json, fall back to parsing preferences.md
     staples = []
     try:
-        p = json.load(open(PREFS_PATH, encoding='utf-8'))
+        with open(PREFS_PATH, encoding='utf-8') as f:
+            p = json.load(f)
         staples = p.get('weeklyStaples', [])
     except (FileNotFoundError, json.JSONDecodeError):
         pass
@@ -959,15 +972,16 @@ def get_staple_queries() -> list[dict]:
         prefs_path = os.path.join(os.path.dirname(__file__), 'preferences.md')
         try:
             in_section = False
-            for line in open(prefs_path, encoding='utf-8'):
-                if '## Weekly staples' in line:
-                    in_section = True
-                    continue
-                if in_section:
-                    if line.startswith('## '):
-                        break
-                    if line.startswith('- '):
-                        staples.append(line[2:].strip())
+            with open(prefs_path, encoding='utf-8') as pf:
+                for line in pf:
+                    if '## Weekly staples' in line:
+                        in_section = True
+                        continue
+                    if in_section:
+                        if line.startswith('## '):
+                            break
+                        if line.startswith('- '):
+                            staples.append(line[2:].strip())
         except FileNotFoundError:
             return []
 

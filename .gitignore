@@ -10,6 +10,7 @@ __pycache__/
 venv/
 
 # Data files — personal, versioned separately or kept local
+data/prefs.json
 data/recipes.json
 data/pantry.json
 data/google_token.json
