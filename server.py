@@ -915,11 +915,17 @@ def _print_startup(local_ip: str) -> None:
     print(f"  Phone   : {url}")
     print("=" * width)
     try:
-        import qrcode
+        import qrcode, sys, io
         qr = qrcode.QRCode(border=1)
         qr.add_data(url)
         qr.make(fit=True)
-        qr.print_ascii(invert=True)
+        buf = io.StringIO()
+        qr.print_ascii(out=buf, invert=True)
+        try:
+            print(buf.getvalue())
+        except UnicodeEncodeError:
+            sys.stdout.buffer.write(buf.getvalue().encode('utf-8'))
+            sys.stdout.buffer.flush()
     except ImportError:
         print("  (install qrcode for a scannable QR code: pip install qrcode)")
     print("=" * width)
