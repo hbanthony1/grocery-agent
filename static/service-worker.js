@@ -1,4 +1,4 @@
-const CACHE = 'grocery-agent-v3';
+const CACHE = 'grocery-agent-dev'; // overwritten at serve time by server.py with startup timestamp
 const SHELL = [
   '/',
   '/static/app.js',

@@ -1496,7 +1496,7 @@ Return ONLY a JSON array of exactly 7 objects, no other text, no markdown:
 Set isNew:true only for the brand new recipes.`;
 
   try {
-    const resp = await fetch('/generate-meal-plan', {
+    const resp = await fetch('/claude-prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })
@@ -1597,7 +1597,7 @@ async function toggleEasyMode(i, checked) {
     meals[i].easyLoading = true;
     renderMeals();
     try {
-      const resp = await fetch('/generate-meal-plan', {
+      const resp = await fetch('/claude-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: `Give a store-bought or frozen version of exactly this dish: "${meals[i].originalMeal}". Keep the same meal — just make it the easy ready-made version (e.g. "Stuffed Crust Pizza" → "Frozen Stuffed Crust Pizza", "Chicken Tacos" → "Rotisserie Chicken Tacos", "Lasagna" → "Frozen Lasagna"). Return ONLY the new meal name (2–6 words), no quotes, no explanation.` })

@@ -33,6 +33,10 @@ PANTRY_PATH  = os.path.join(os.path.dirname(__file__), 'data', 'pantry.json')
 PREFS_PATH   = os.path.join(os.path.dirname(__file__), 'data', 'prefs.json')
 PHOTOS_DIR   = os.path.join(os.path.dirname(__file__), 'static', 'photos')
 
+MODEL = 'claude-sonnet-4-6'
+_SERVER_START = format(int(time.time()), 'x')[-6:]  # hex timestamp — changes on every restart
+_staple_query_cache: dict = {}
+
 # Seeded from confirmed meal patterns in preferences.md — runs once on first launch
 _SEED_RECIPES = [
     # ── Household favorites (original) ──────────────────────────────────────
@@ -94,7 +98,11 @@ def manifest():
 
 @app.route('/service-worker.js')
 def service_worker():
-    resp = send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
+    sw_path = os.path.join(os.path.dirname(__file__), 'static', 'service-worker.js')
+    with open(sw_path, encoding='utf-8') as f:
+        content = f.read()
+    content = re.sub(r"const CACHE = '[^']*'", f"const CACHE = 'grocery-agent-{_SERVER_START}'", content)
+    resp = Response(content, mimetype='application/javascript')
     resp.headers['Service-Worker-Allowed'] = '/'
     return resp
 
@@ -429,7 +437,7 @@ Return ONLY the JSON object, no markdown, no extra text.
 Notes: {recipe.get('notes', '')}"""
         try:
             msg = client.messages.create(
-                model='claude-sonnet-4-6',
+                model=MODEL,
                 max_tokens=1000,
                 messages=[{'role': 'user', 'content': prompt}]
             )
@@ -457,15 +465,15 @@ Notes: {recipe.get('notes', '')}"""
     return jsonify({'filled': filled, 'converted': converted, 'total': len(recipes)})
 
 
-@app.route('/generate-meal-plan', methods=['POST'])
-def generate_meal_plan():
+@app.route('/claude-prompt', methods=['POST'])
+def claude_prompt():
     prompt = (request.json or {}).get('prompt', '').strip()
     if not prompt:
         return jsonify({'error': 'prompt required'}), 400
     try:
         client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         msg = client.messages.create(
-            model='claude-sonnet-4-6',
+            model=MODEL,
             max_tokens=600,
             messages=[{'role': 'user', 'content': prompt}]
         )
@@ -495,7 +503,7 @@ Return ONLY the recipe name — no explanation, no punctuation, just the name.""
     try:
         client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         msg = client.messages.create(
-            model='claude-sonnet-4-6', max_tokens=30,
+            model=MODEL, max_tokens=30,
             messages=[{'role': 'user', 'content': prompt}]
         )
         name = msg.content[0].text.strip().strip('"\'.')
@@ -513,7 +521,7 @@ def parse_order_csv():
     try:
         client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         msg = client.messages.create(
-            model='claude-sonnet-4-6',
+            model=MODEL,
             max_tokens=1200,
             messages=[{
                 'role': 'user',
@@ -573,7 +581,7 @@ Return ONLY a JSON object, no markdown, no explanation:
 Use real kitchen measurements for amounts: cups, tbsp, tsp, oz, lbs, cans, cloves, etc. (e.g. "2 cups flour", "1 tbsp olive oil", "1/2 tsp salt", "1.5 lbs chicken breast").
 Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step should be one clear sentence.'''
         msg = client.messages.create(
-            model='claude-sonnet-4-6',
+            model=MODEL,
             max_tokens=800,
             messages=[{'role': 'user', 'content': content}]
         )
@@ -644,7 +652,7 @@ def build_cart():
 
         # ── Phase 2: all Walmart searches in parallel ─────────────────────
         search_results = []
-        with ThreadPoolExecutor(max_workers=20) as ex:
+        with ThreadPoolExecutor(max_workers=min(len(all_search_tasks), 10)) as ex:
             fut_to_task = {ex.submit(search_product, t['search_query']): t for t in all_search_tasks}
             for fut in as_completed(fut_to_task):
                 task = fut_to_task[fut]
@@ -899,7 +907,7 @@ def get_search_queries_for_meal(meal_name: str, servings: int = 4) -> list[dict]
 
     client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL,
         max_tokens=600,
         messages=[{
             "role": "user",
@@ -933,10 +941,14 @@ def get_staple_queries() -> list[dict]:
     if not staples:
         return []
 
+    cache_key = ','.join(sorted(staples))
+    if cache_key in _staple_query_cache:
+        return _staple_query_cache[cache_key]
+
     staples_text = '\n'.join(f'- {s}' for s in staples)
     client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
     msg = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL,
         max_tokens=400,
         messages=[{
             "role": "user",
@@ -951,7 +963,9 @@ Use descriptive terms that work on Walmart search (e.g. "organic bananas bunch" 
         }]
     )
     text = msg.content[0].text.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(text)
+    result = json.loads(text)
+    _staple_query_cache[cache_key] = result
+    return result
 
 
 def _get_local_ip() -> str:
