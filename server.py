@@ -31,6 +31,7 @@ GOOGLE_SCOPES     = ['https://www.googleapis.com/auth/calendar.readonly']
 RECIPES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'recipes.json')
 PANTRY_PATH  = os.path.join(os.path.dirname(__file__), 'data', 'pantry.json')
 PREFS_PATH   = os.path.join(os.path.dirname(__file__), 'data', 'prefs.json')
+PHOTOS_DIR   = os.path.join(os.path.dirname(__file__), 'static', 'photos')
 
 # Seeded from confirmed meal patterns in preferences.md — runs once on first launch
 _SEED_RECIPES = [
@@ -355,6 +356,28 @@ def import_recipes():
 def delete_recipe(recipe_id):
     _save_recipes([r for r in _load_recipes() if r['id'] != recipe_id])
     return jsonify({'ok': True})
+
+
+@app.route('/recipes/photo', methods=['POST'])
+def upload_recipe_photo():
+    recipe_id = request.form.get('recipe_id', '').strip()
+    f = request.files.get('file')
+    if not recipe_id or not f:
+        return jsonify({'error': 'missing recipe_id or file'}), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'}:
+        ext = '.jpg'
+    os.makedirs(PHOTOS_DIR, exist_ok=True)
+    filename = f'{recipe_id}{ext}'
+    f.save(os.path.join(PHOTOS_DIR, filename))
+    url = f'/static/photos/{filename}'
+    recipes = _load_recipes()
+    for r in recipes:
+        if r['id'] == recipe_id:
+            r['photo'] = url
+            _save_recipes(recipes)
+            return jsonify({'url': url})
+    return jsonify({'error': 'recipe not found'}), 404
 
 
 def _ingredient_to_str(ing) -> str:

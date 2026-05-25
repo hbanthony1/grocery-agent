@@ -445,18 +445,25 @@ function renderRecipesPanel() {
 
 function recipeCardHtml(r) {
   const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
+  const thumb = r.photo
+    ? `<img class="recipe-thumb" src="${r.photo}" alt="" onclick="triggerPhotoUpload('${r.id}')" title="change photo">`
+    : '';
   return `<div class="recipe-card" id="rc-${r.id}">
     <div class="recipe-card-main">
-      <div>
-        <div class="recipe-name">${r.name}</div>
-        <div class="recipe-meta">
-          ${starsHtml(r.rating)}
-          ${r.timesPlanned ? `<span class="recipe-times">${r.timesPlanned}× planned</span>` : ''}
+      <div class="recipe-card-left">
+        ${thumb}
+        <div style="flex:1;min-width:0">
+          <div class="recipe-name">${r.name}</div>
+          <div class="recipe-meta">
+            ${starsHtml(r.rating)}
+            ${r.timesPlanned ? `<span class="recipe-times">${r.timesPlanned}× planned</span>` : ''}
+          </div>
+          ${tags ? `<div class="recipe-tags">${tags}</div>` : ''}
+          ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
         </div>
-        ${tags ? `<div class="recipe-tags">${tags}</div>` : ''}
-        ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
       </div>
       <div class="recipe-actions">
+        <button class="btn-icon" onclick="triggerPhotoUpload('${r.id}')">${r.photo ? '📷' : '+ photo'}</button>
         <button class="btn-icon" id="rd-btn-${r.id}" onclick="toggleRecipeDetail('${r.id}')">view ▾</button>
         <button class="btn-icon" onclick="editRecipeInline('${r.id}')">edit</button>
         <button class="btn-icon danger" onclick="removeRecipe('${r.id}')">×</button>
@@ -977,6 +984,8 @@ function renderMeals() {
     const dom = dates[m.day] || '';
     const dow = DAY_ABBR[m.day] || m.day.slice(0,3);
     const mealName = m.meal.replace(' [NEW]','');
+    const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
+    const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
     return `
       <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''}" id="meal${i}">
         <div class="day-badge">
@@ -990,6 +999,7 @@ function renderMeals() {
             ${tagsHtml}
           </div>
         </div>
+        ${mealPhoto}
         <span class="cx cx-${cx}">${cxLabel}</span>
         <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})">↺</button>
       </div>`;
@@ -1369,6 +1379,33 @@ function addBrandRule() {
   document.querySelector('#pf-brandList .prefs-brand-row:last-child .prefs-brand-item').focus();
 }
 
+// ===== RECIPE PHOTOS =====
+let _photoUploadTarget = null;
+
+function triggerPhotoUpload(recipeId) {
+  _photoUploadTarget = recipeId;
+  const input = document.getElementById('photoUploadInput');
+  input.value = '';
+  input.click();
+}
+
+async function handlePhotoUpload(input) {
+  const file = input.files[0];
+  if (!file || !_photoUploadTarget) return;
+  const fd = new FormData();
+  fd.append('recipe_id', _photoUploadTarget);
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/recipes/photo', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (data.url) {
+      await loadRecipes();
+      renderRecipesPanel();
+      renderMeals();
+    }
+  } catch(e) {}
+}
+
 // ===== RECIPE MODAL =====
 async function openMealRecipe(i) {
   const mealObj = meals[i];
@@ -1383,6 +1420,7 @@ async function openMealRecipe(i) {
   if (r) {
     const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
     body.innerHTML = `
+      ${r.photo ? `<img class="recipe-modal-hero" src="${r.photo}" alt="">` : ''}
       <div class="recipe-modal-meta">
         <div style="display:flex;align-items:center;gap:10px">
           ${starsHtml(r.rating)}
