@@ -390,7 +390,7 @@ function _syncPanelOpen() {
 function toggleRecipesPanel() {
   const panel = document.getElementById('recipesPanel');
   const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'block';
+  panel.style.display = visible ? 'none' : 'flex';
   _syncPanelOpen();
   if (!visible) { document.getElementById('recipesSearch').value = ''; renderRecipesPanel(); }
 }
