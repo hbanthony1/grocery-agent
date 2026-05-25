@@ -131,12 +131,29 @@ function renderHousehold() {
     const checked = householdChecked.has(name);
     const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const display = _hhDisplayName(name);
-    return `<label class="hh-item">
-      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
-      <span class="hh-item-name">${display}</span>
-    </label>`;
+    return `<div class="hh-item-row">
+      <label class="hh-item">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
+        <span class="hh-item-name">${display}</span>
+      </label>
+      <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" title="remove">×</button>
+    </div>`;
   }).join('');
   updateHhCount();
+}
+
+async function removeHouseholdItem(name) {
+  prefs.householdItems = (prefs.householdItems || []).filter(item => item !== name);
+  householdChecked.delete(name);
+  localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+  await loadHouseholdItems();
 }
 
 function toggleHousehold(name, checked) {
@@ -384,7 +401,7 @@ function setStar(rating, pickerId) {
 
 // Recipe panel
 function _syncPanelOpen() {
-  const prefsOpen   = document.getElementById('prefsEditor').style.display  !== 'none';
+  const prefsOpen   = document.getElementById('prefsPage').style.display  !== 'none';
   const recipesOpen = document.getElementById('recipesPanel').style.display !== 'none';
   const pantryOpen  = document.getElementById('pantryPanel').style.display  !== 'none';
   document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
@@ -1221,24 +1238,27 @@ function renderPrefsSummary() {
     </div>`;
 }
 
-// ===== PREFERENCES EDITOR =====
-function togglePrefsPanel() {
-  const panel = document.getElementById('prefsEditor');
-  const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'flex';
+// ===== PREFERENCES PAGE =====
+function openPrefsPage() {
+  document.getElementById('prefsPage').style.display = 'flex';
   _syncPanelOpen();
-  if (!visible) renderPrefsEditor();
+  renderPrefsPage();
 }
 
-function openPrefsEditor() { togglePrefsPanel(); }
-
-function closePrefsEditor() {
-  document.getElementById('prefsEditor').style.display = 'none';
+function closePrefsPage() {
+  document.getElementById('prefsPage').style.display = 'none';
   _syncPanelOpen();
 }
 
-async function saveAndClosePrefsEditor() {
-  const btn = document.querySelector('#prefsEditor .btn.mustard');
+function switchPrefsTab(tab) {
+  ['household', 'mealplan', 'staples', 'brands'].forEach(t => {
+    document.getElementById(`prefTab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`prefContent-${t}`).style.display = t === tab ? '' : 'none';
+  });
+}
+
+async function savePrefsPage() {
+  const btn = document.getElementById('prefsSaveBtn');
   if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
 
   prefs.household = {
@@ -1252,8 +1272,6 @@ async function saveAndClosePrefsEditor() {
   prefs.dietaryNotes    = readPrefsList('pf-dietList');
   prefs.weeklyStaples   = readPrefsList('pf-weeklyList');
   prefs.frequentStaples = readPrefsList('pf-frequentList');
-  prefs.doNotRepeat     = readPrefsList('pf-doNotRepeatList');
-  prefs.householdItems  = readPrefsList('pf-hhList');
   prefs.brandRules      = readBrandRules();
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
   prefs.notes           = document.getElementById('pf-notes').value.trim();
@@ -1268,8 +1286,7 @@ async function saveAndClosePrefsEditor() {
   } catch(e) {}
 
   renderPrefsSummary();
-  loadHouseholdItems();
-  closePrefsEditor();
+  closePrefsPage();
 }
 
 function readPrefsList(containerId) {
@@ -1286,7 +1303,7 @@ function readBrandRules() {
     .filter(r => r.item && r.brand);
 }
 
-function renderPrefsEditor() {
+function renderPrefsPage() {
   const h = prefs.household || {};
   document.getElementById('pf-adults').value       = h.adults ?? 2;
   document.getElementById('pf-kids').value         = h.kids ?? 0;
@@ -1298,17 +1315,13 @@ function renderPrefsEditor() {
   document.getElementById('pf-notes').value        = prefs.notes || '';
   document.getElementById('pf-storeOk').value      = prefs.storeOk || '';
 
-  renderPrefsList('pf-dietList',        prefs.dietaryNotes    || []);
-  renderPrefsList('pf-weeklyList',      prefs.weeklyStaples   || []);
-  renderPrefsList('pf-frequentList',    prefs.frequentStaples || []);
-  renderPrefsList('pf-doNotRepeatList', prefs.doNotRepeat     || []);
-  renderPrefsList('pf-hhList',          prefs.householdItems  || []);
-  renderBrandList(prefs.brandRules      || []);
+  renderPrefsList('pf-dietList',     prefs.dietaryNotes    || []);
+  renderPrefsList('pf-weeklyList',   prefs.weeklyStaples   || []);
+  renderPrefsList('pf-frequentList', prefs.frequentStaples || []);
+  renderBrandList(prefs.brandRules   || []);
 
-  // Reset save button state
-  document.querySelectorAll('#prefsEditor .btn.mustard').forEach(b => {
-    b.textContent = 'Save →'; b.disabled = false;
-  });
+  const btn = document.getElementById('prefsSaveBtn');
+  if (btn) { btn.textContent = 'save →'; btn.disabled = false; }
 }
 
 function renderPrefsList(containerId, items) {
@@ -1331,7 +1344,7 @@ function addRecipeListItem(containerId) {
 }
 
 function addPrefItem(key) {
-  const map = { diet:'pf-dietList', weekly:'pf-weeklyList', frequent:'pf-frequentList', doNotRepeat:'pf-doNotRepeatList', householdItems:'pf-hhList' };
+  const map = { diet:'pf-dietList', weekly:'pf-weeklyList', frequent:'pf-frequentList' };
   const el = document.getElementById(map[key]);
   if (!el) return;
   el.insertAdjacentHTML('beforeend', prefItemHtml(''));

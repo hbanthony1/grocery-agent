@@ -13,7 +13,7 @@
   <div class="top-nav-actions">
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
-    <button class="btn-nav" id="navPrefs" onclick="togglePrefsPanel()">⚙</button>
+    <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">⚙</button>
   </div>
 </nav>
 
@@ -188,69 +188,71 @@
     </div>
   </div>
 
-  <!-- PREFERENCES PANEL -->
-  <div id="prefsEditor" class="recipes-panel" style="display:none">
-    <div class="recipes-header">
-      <span class="recipes-title">preferences</span>
-      <button class="btn mustard" onclick="saveAndClosePrefsEditor()">save →</button>
-      <button class="btn" onclick="closePrefsEditor()">close</button>
+  <!-- PREFERENCES PAGE (full-screen) -->
+  <div id="prefsPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closePrefsPage()">← back</button>
+      <span class="prefs-page-title">preferences</span>
+      <button class="btn mustard" id="prefsSaveBtn" onclick="savePrefsPage()">save →</button>
     </div>
-    <div class="panel-body">
-      <div class="card">
-        <div class="card-label">household</div>
-        <div class="prefs-household-grid">
-          <div class="prefs-field"><label>adults</label><input type="number" id="pf-adults" min="1" max="10" /></div>
-          <div class="prefs-field"><label>kids</label><input type="number" id="pf-kids" min="0" max="10" /></div>
-          <div class="prefs-field prefs-field-wide"><label>kids ages</label><input type="text" id="pf-kidsAges" placeholder="e.g. ages ~10 and toddler" /></div>
-          <div class="prefs-field"><label>zip code</label><input type="text" id="pf-zip" /></div>
-          <div class="prefs-field"><label>budget target ($)</label><input type="number" id="pf-budgetTarget" /></div>
-          <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
-          <div class="prefs-field prefs-field-wide"><label>time zone</label><input type="text" id="pf-timezone" placeholder="e.g. America/Denver" /></div>
+    <div class="prefs-page-tabs">
+      <button class="prefs-tab active" id="prefTab-household" onclick="switchPrefsTab('household')">Household</button>
+      <button class="prefs-tab" id="prefTab-mealplan" onclick="switchPrefsTab('mealplan')">Meal Plan</button>
+      <button class="prefs-tab" id="prefTab-staples" onclick="switchPrefsTab('staples')">Staples</button>
+      <button class="prefs-tab" id="prefTab-brands" onclick="switchPrefsTab('brands')">Brands</button>
+    </div>
+    <div class="prefs-page-body">
+      <!-- TAB: Household -->
+      <div class="prefs-tab-content" id="prefContent-household">
+        <div class="card">
+          <div class="card-label">household</div>
+          <div class="prefs-household-grid">
+            <div class="prefs-field"><label>adults</label><input type="number" id="pf-adults" min="1" max="10" /></div>
+            <div class="prefs-field"><label>kids</label><input type="number" id="pf-kids" min="0" max="10" /></div>
+            <div class="prefs-field prefs-field-wide"><label>kids ages</label><input type="text" id="pf-kidsAges" placeholder="e.g. ages ~10 and toddler" /></div>
+            <div class="prefs-field"><label>zip code</label><input type="text" id="pf-zip" /></div>
+            <div class="prefs-field"><label>budget target ($)</label><input type="number" id="pf-budgetTarget" /></div>
+            <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
+            <div class="prefs-field prefs-field-wide"><label>time zone</label><input type="text" id="pf-timezone" placeholder="e.g. America/Denver" /></div>
+          </div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">diet &amp; preferences</div>
-        <div id="pf-dietList" class="prefs-list"></div>
-        <button class="btn prefs-add-btn" onclick="addPrefItem('diet')">+ add note</button>
-        <div style="margin-top:14px">
-          <span class="prefs-sublabel">general notes</span>
-          <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
+      <!-- TAB: Meal Plan -->
+      <div class="prefs-tab-content" id="prefContent-mealplan" style="display:none">
+        <div class="card">
+          <div class="card-label">diet &amp; preferences</div>
+          <div id="pf-dietList" class="prefs-list"></div>
+          <button class="btn prefs-add-btn" onclick="addPrefItem('diet')">+ add note</button>
+          <div style="margin-top:14px">
+            <span class="prefs-sublabel">general notes</span>
+            <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
+          </div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">weekly staples — ordered every week</div>
-        <div id="pf-weeklyList" class="prefs-list"></div>
-        <button class="btn prefs-add-btn" onclick="addPrefItem('weekly')">+ add staple</button>
-      </div>
-
-      <div class="card">
-        <div class="card-label">frequent staples — ordered most weeks</div>
-        <div id="pf-frequentList" class="prefs-list"></div>
-        <button class="btn prefs-add-btn" onclick="addPrefItem('frequent')">+ add staple</button>
-      </div>
-
-      <div class="card">
-        <div class="card-label">brand rules</div>
-        <div id="pf-brandList" class="prefs-brand-list"></div>
-        <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
-        <div style="margin-top:14px">
-          <span class="prefs-sublabel">store brand / Great Value ok for</span>
-          <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
+      <!-- TAB: Staples -->
+      <div class="prefs-tab-content" id="prefContent-staples" style="display:none">
+        <div class="card">
+          <div class="card-label">weekly staples — ordered every week</div>
+          <div id="pf-weeklyList" class="prefs-list"></div>
+          <button class="btn prefs-add-btn" onclick="addPrefItem('weekly')">+ add staple</button>
+        </div>
+        <div class="card">
+          <div class="card-label">frequent staples — ordered most weeks</div>
+          <div id="pf-frequentList" class="prefs-list"></div>
+          <button class="btn prefs-add-btn" onclick="addPrefItem('frequent')">+ add staple</button>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-label">do not repeat this week</div>
-        <div id="pf-doNotRepeatList" class="prefs-list"></div>
-        <button class="btn prefs-add-btn" onclick="addPrefItem('doNotRepeat')">+ add meal to skip</button>
-      </div>
-
-      <div class="card">
-        <div class="card-label">household &amp; non-grocery items</div>
-        <div id="pf-hhList" class="prefs-list"></div>
-        <button class="btn prefs-add-btn" onclick="addPrefItem('householdItems')">+ add item</button>
+      <!-- TAB: Brands -->
+      <div class="prefs-tab-content" id="prefContent-brands" style="display:none">
+        <div class="card">
+          <div class="card-label">brand rules</div>
+          <div id="pf-brandList" class="prefs-brand-list"></div>
+          <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
+          <div style="margin-top:14px">
+            <span class="prefs-sublabel">store brand / Great Value ok for</span>
+            <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
+          </div>
+        </div>
       </div>
     </div>
   </div>
