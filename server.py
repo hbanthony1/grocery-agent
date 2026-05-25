@@ -662,6 +662,7 @@ def build_cart():
         lunches          = data.get('lunches', [])
         household        = data.get('household', [])
         frequent_staples = data.get('frequentStaples', [])
+        dessert          = data.get('dessert', '')
         zip_code         = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
         servings         = int(data.get('servings', 4))
 
@@ -704,6 +705,10 @@ def build_cart():
         # Frequent staples — also direct search, no Claude step
         for name in frequent_staples:
             all_search_tasks.append({"search_query": name, "qty": 1, "source": "frequentStaples"})
+
+        # Dessert — direct search for ingredients
+        if dessert:
+            all_search_tasks.append({"search_query": dessert, "qty": 1, "source": "dessert"})
 
         # Deduplicate search tasks: same query = same product, no need to search twice
         _seen_q = {}
@@ -753,7 +758,7 @@ def build_cart():
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'staples', 'frequentStaples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'dessert', 'staples', 'frequentStaples', 'household']
 
         cart_url = build_cart_url(cart_items, staple_items=[])
 

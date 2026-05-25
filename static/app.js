@@ -57,7 +57,8 @@ let _pendingGeneratedRecipe = null;
 let calendarEvents = null;
 let weekBreakfasts = [];
 let weekLunches    = [];
-const _pickerOpen  = { breakfast: false, lunch: false };
+let weekDessert    = '';
+const _pickerOpen  = { breakfast: false, lunch: false, dessert: false };
 let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
 let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
@@ -67,6 +68,11 @@ let _pantryTrap = null;
 
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
+const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
+
+function toTitleCase(s) {
+  return (s || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
 
 // ===== HOUSEHOLD CATEGORIES =====
 let hhExtras = []; // {name, save} — one-off items added on step 2
@@ -1061,7 +1067,7 @@ function addPantryItem() {
 }
 
 async function submitNewPantryItem() {
-  const name      = (document.getElementById('pa-name')?.value || '').trim();
+  const name      = toTitleCase((document.getElementById('pa-name')?.value || '').trim());
   if (!name) return;
   const amount    = document.getElementById('pa-amt')?.value.trim()  || '';
   const unit      = document.getElementById('pa-unit')?.value.trim() || '';
@@ -1113,6 +1119,7 @@ function renderRecapCard() {
   if (full)      full.style.display = 'block';
   card.style.display = 'block';
   renderRecapMeals();
+  renderRecapRating();
 }
 
 function toggleRecapSection(name) {
@@ -1123,6 +1130,23 @@ function toggleRecapSection(name) {
   body.style.display = open ? 'none' : 'block';
   if (chev) chev.textContent = open ? '›' : '▾';
   if (!open && name === 'pantry') renderRecapPantry();
+  if (!open && name === 'rating') renderRecapRating();
+}
+
+function renderRecapRating() {
+  const list = document.getElementById('recapRatingList');
+  if (!list) return;
+  const lastMeals = prefs.lastWeekMeals || [];
+  if (!lastMeals.length) { list.innerHTML = '<div class="hh-loading">no meals from last week</div>'; return; }
+  lastMeals.forEach(m => { if (!(m.meal in pendingRatings)) pendingRatings[m.meal] = 0; });
+  list.innerHTML = lastMeals.map(m => {
+    const pid = 'rate-' + m.meal.replace(/[^a-z0-9]/gi, '-');
+    const rating = pendingRatings[m.meal] || 0;
+    return `<div class="rating-row">
+      <span class="rating-meal-name">${m.meal}</span>
+      <div class="star-picker" id="${pid}" data-rating="${rating}">${starPickerHtml(pid, rating, 'setRatingStar')}</div>
+    </div>`;
+  }).join('');
 }
 
 async function handleOrderCsv(input) {
@@ -1183,7 +1207,7 @@ async function applyOrderCsvItems() {
     await fetch('/pantry/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: toAdd.map(i => ({ name: i.name, amount: i.amount || '', unit: i.unit || '' })) }),
+      body: JSON.stringify({ items: toAdd.map(i => ({ name: toTitleCase(i.name), amount: i.amount || '', unit: i.unit || '' })) }),
     });
     await loadPantry();
   } catch(e) {}
@@ -1308,14 +1332,17 @@ async function dismissRecap() {
   document.getElementById('recapCard').style.display = 'none';
 }
 
-// ===== BREAKFAST / LUNCH PICKS =====
+// ===== BREAKFAST / LUNCH / DESSERT PICKS =====
 function renderStep0Extras() {
   weekBreakfasts = prefs.defaultBreakfasts?.length ? [...prefs.defaultBreakfasts] : [];
   weekLunches    = prefs.defaultLunches?.length    ? [...prefs.defaultLunches]    : [];
+  weekDessert    = prefs.defaultDessert            || '';
   _pickerOpen.breakfast = !weekBreakfasts.length;
   _pickerOpen.lunch     = !weekLunches.length;
+  _pickerOpen.dessert   = false;
   renderMealPicks('breakfast');
   renderMealPicks('lunch');
+  renderDessertPick();
 }
 
 function renderMealPicks(type) {
@@ -1378,6 +1405,57 @@ function addCustomMealPick(type) {
   renderMealPicks(type);
 }
 
+function renderDessertPick() {
+  const el = document.getElementById('dessertSection');
+  if (!el) return;
+
+  if (!_pickerOpen.dessert) {
+    if (weekDessert) {
+      el.innerHTML = `<div class="meal-pick-banner">
+        <span>🍩 ${weekDessert}</span>
+        <button class="btn-link" onclick="_pickerOpen.dessert=true;renderDessertPick()">change →</button>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="meal-pick-banner">
+        <span style="opacity:0.6">no dessert this week</span>
+        <button class="btn-link" onclick="_pickerOpen.dessert=true;renderDessertPick()">add one →</button>
+      </div>`;
+    }
+    return;
+  }
+
+  const chips = DESSERT_OPTIONS.map(opt => {
+    const sel = weekDessert === opt;
+    const esc = opt.replace(/'/g, '&#39;');
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="setDessert('${esc}')">${opt}</button>`;
+  }).join('');
+
+  const customChip = weekDessert && !DESSERT_OPTIONS.includes(weekDessert)
+    ? `<button class="meal-pick-chip selected" onclick="setDessert('')">${weekDessert} ×</button>`
+    : '';
+
+  el.innerHTML = `
+    <div class="meal-pick-grid">${chips}${customChip}</div>
+    <div class="meal-pick-custom">
+      <input type="text" id="dessertCustom" placeholder="+ something else..." onkeydown="if(event.key==='Enter')addCustomDessert()" />
+      <button class="btn" style="padding:5px 12px;font-size:12px;height:30px" onclick="addCustomDessert()">add</button>
+    </div>
+    ${weekDessert ? '<div style="text-align:right;margin-top:4px"><button class="btn-link" onclick="setDessert(\'\')">skip dessert</button></div>' : ''}`;
+}
+
+function setDessert(name) {
+  weekDessert = name;
+  _pickerOpen.dessert = false;
+  renderDessertPick();
+}
+
+function addCustomDessert() {
+  const input = document.getElementById('dessertCustom');
+  const val   = (input?.value || '').trim();
+  if (!val) return;
+  setDessert(val);
+}
+
 function renderPantryToggle() {
   const row = document.getElementById('pantryToggleRow');
   if (row) row.style.display = pantry.length ? 'flex' : 'none';
@@ -1409,31 +1487,17 @@ function pickSwapRecipe(name) {
   cancelSwap();
 }
 
-// Post-order rating panel
-function showRatingPanel() {
-  const panel = document.getElementById('ratingPanel');
-  const list  = document.getElementById('ratingList');
-  panel.style.display = 'block';
-  meals.forEach(m => { pendingRatings[m.meal.replace(' [NEW]','')] = 0; });
-  list.innerHTML = meals.map(m => {
-    const name = m.meal.replace(' [NEW]','');
-    const pid  = 'rate-' + name.replace(/[^a-z0-9]/gi,'-');
-    return `<div class="rating-row">
-      <span class="rating-meal-name">${name}</span>
-      <div class="star-picker" id="${pid}" data-rating="0">${starPickerHtml(pid, 0, 'setRatingStar')}</div>
-    </div>`;
-  }).join('');
-}
 
 function setRatingStar(rating, pickerId) {
   const el = document.getElementById(pickerId);
   if (!el) return;
   el.dataset.rating = rating;
   el.innerHTML = starPickerHtml(pickerId, rating, 'setRatingStar');
-  const mealName = meals.find(m => {
-    const pid = 'rate-' + m.meal.replace(' [NEW]','').replace(/[^a-z0-9]/gi,'-');
-    return pid === pickerId;
-  })?.meal.replace(' [NEW]','') || '';
+  const allNames = [
+    ...meals.map(m => m.meal.replace(' [NEW]', '')),
+    ...(prefs.lastWeekMeals || []).map(m => m.meal),
+  ];
+  const mealName = allNames.find(name => 'rate-' + name.replace(/[^a-z0-9]/gi, '-') === pickerId) || '';
   if (mealName) pendingRatings[mealName] = rating;
 }
 
@@ -1451,7 +1515,7 @@ async function _finalizeWeek() {
 
 async function saveRatings() {
   const today = new Date().toISOString().split('T')[0];
-  const ratings = Object.entries(pendingRatings).map(([name, rating]) => ({ name, rating, lastPlanned: today }));
+  const ratings = Object.entries(pendingRatings).filter(([, r]) => r > 0).map(([name, rating]) => ({ name, rating, lastPlanned: today }));
   try {
     await fetch('/recipes/batch-rate', {
       method: 'POST',
@@ -1461,12 +1525,10 @@ async function saveRatings() {
     await loadRecipes();
   } catch(e) {}
   await _finalizeWeek();
-  document.getElementById('ratingPanel').style.display = 'none';
-}
-
-function skipRating() {
-  document.getElementById('ratingPanel').style.display = 'none';
-  _finalizeWeek(); // fire and forget
+  // Collapse the recap rating section
+  const ratingBody = document.getElementById('recapBody-rating');
+  if (ratingBody) { ratingBody.style.display = 'none'; const chev = document.getElementById('recapChev-rating'); if (chev) chev.textContent = '›'; }
+  showToast('Ratings saved to recipe book');
 }
 
 // ===== SERVING SIZE =====
@@ -1779,7 +1841,6 @@ async function startCartBuild() {
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
-  document.getElementById('ratingPanel').style.display = 'none';
   resetCartProgress();
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
@@ -1791,7 +1852,7 @@ async function startCartBuild() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();
@@ -1857,8 +1918,8 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
     list.innerHTML = sourcesPresent.map(source => {
       const items = groups[source];
-      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches'].includes(source);
-      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source;
+      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert'].includes(source);
+      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source;
       const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
@@ -1926,7 +1987,7 @@ function confirmOrder() {
   btn.textContent = '✓ order placed';
   btn.disabled = true;
   btn.className = 'btn mustard';
-  showRatingPanel();
+  _finalizeWeek(); // fire and forget — saves doNotRepeat; rating happens next week in recap
 }
 
 // ===== PREFERENCES =====
@@ -1945,6 +2006,7 @@ function buildPreferencesPrompt() {
   const lines = [];
   lines.push(`HOUSEHOLD: Family of ${h.adults || 2} adults + ${h.kids || 0} kids (${h.kidsAges || ''}), zip ${h.zip || '59047'}`);
   lines.push(`BUDGET: Target ~$${h.budgetTarget || 175}, flex to $${h.budgetMax || 225}`);
+  if (prefs.nutritionFocus) lines.push(`NUTRITION FOCUS: ${prefs.nutritionFocus}`);
   if (prefs.dietaryNotes?.length) {
     lines.push('\nDIETARY NOTES:');
     prefs.dietaryNotes.forEach(n => lines.push(`- ${n}`));
@@ -2010,6 +2072,7 @@ async function savePrefsPage() {
   prefs.householdItems  = readHhItemsPrefs();
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
   prefs.notes           = document.getElementById('pf-notes').value.trim();
+  prefs.nutritionFocus  = document.getElementById('pf-nutritionFocus').value;
   prefs.timezone        = document.getElementById('pf-timezone').value.trim() || 'America/Denver';
 
   try {
@@ -2050,8 +2113,9 @@ function renderPrefsPage() {
   document.getElementById('pf-budgetTarget').value = h.budgetTarget ?? 175;
   document.getElementById('pf-budgetMax').value    = h.budgetMax ?? 225;
   document.getElementById('pf-timezone').value     = prefs.timezone || '';
-  document.getElementById('pf-notes').value        = prefs.notes || '';
-  document.getElementById('pf-storeOk').value      = prefs.storeOk || '';
+  document.getElementById('pf-notes').value          = prefs.notes || '';
+  document.getElementById('pf-nutritionFocus').value = prefs.nutritionFocus || '';
+  document.getElementById('pf-storeOk').value        = prefs.storeOk || '';
 
   renderPrefsList('pf-dietList',     prefs.dietaryNotes    || []);
   renderPrefsList('pf-weeklyList',   prefs.weeklyStaples   || []);

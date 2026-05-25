@@ -119,6 +119,20 @@
             <div id="recapPantryList"></div>
           </div>
         </div>
+
+        <div class="recap-section">
+          <button class="recap-sec-hdr" onclick="toggleRecapSection('rating')">
+            <span>⭐ rate last week's meals</span>
+            <span class="recap-chev" id="recapChev-rating">›</span>
+          </button>
+          <div id="recapBody-rating" class="recap-sec-body" style="display:none">
+            <p class="recap-hint">Rate each meal to improve future recommendations.</p>
+            <div id="recapRatingList" class="rating-list"></div>
+            <div class="actions" style="margin-top:12px">
+              <button class="btn mustard" onclick="saveRatings()">save to recipe book →</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -145,6 +159,10 @@
         <div class="card">
           <div class="card-label">lunch this week</div>
           <div id="lunchSection"><span class="hh-loading">loading...</span></div>
+        </div>
+        <div class="card">
+          <div class="card-label">dessert this week</div>
+          <div id="dessertSection"><span class="hh-loading">loading...</span></div>
         </div>
       </div>
     </div>
@@ -260,14 +278,6 @@
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
     </div>
-    <div id="ratingPanel" class="card" style="display:none">
-      <div class="card-label">how did this week's meals go? — optional</div>
-      <div id="ratingList" class="rating-list"></div>
-      <div class="actions" style="margin-top:12px">
-        <button class="btn" onclick="skipRating()">skip</button>
-        <button class="btn mustard" onclick="saveRatings()">save to recipe book →</button>
-      </div>
-    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(2)">← back</button>
       <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()" style="display:none">retry →</button>
@@ -340,6 +350,17 @@
           <div class="card-label">diet &amp; preferences</div>
           <div id="pf-dietList" class="prefs-list"></div>
           <button class="btn prefs-add-btn" onclick="addPrefItem('diet')">+ add note</button>
+          <div style="margin-top:14px">
+            <span class="prefs-sublabel">nutrition focus</span>
+            <select id="pf-nutritionFocus" class="schedule-note" style="width:100%;margin-top:4px">
+              <option value="">Balanced (default)</option>
+              <option value="keto">Keto / Low-carb</option>
+              <option value="high-protein">High-protein</option>
+              <option value="mediterranean">Mediterranean</option>
+              <option value="vegetarian">Vegetarian-friendly</option>
+              <option value="low-calorie">Low-calorie</option>
+            </select>
+          </div>
           <div style="margin-top:14px">
             <span class="prefs-sublabel">general notes</span>
             <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
