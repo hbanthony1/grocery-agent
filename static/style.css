@@ -234,9 +234,12 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .cart-group-label { font-size: 11px; font-weight: 600; color: var(--primary); background: var(--primary-light); padding: 3px 10px; border-radius: var(--r-pill); }
 .cart-group-label.special { color: var(--text2); background: var(--surface2); }
 .cart-group-subtotal { font-size: 11px; font-family: var(--mono); color: var(--text3); }
-.cart-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface); }
-.cart-item-name { font-size: 12px; color: var(--text); }
-.cart-item-price { font-size: 12px; font-family: var(--mono); color: var(--text2); flex-shrink: 0; }
+.cart-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface); }
+.cart-item-name { font-size: 12px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cart-item-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.cart-item-price { font-size: 12px; font-family: var(--mono); color: var(--text2); }
+.cart-item-swap { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--text3); opacity: 0.45; padding: 0 2px; line-height: 1; transition: opacity 120ms, color 120ms; }
+.cart-item-swap:hover { opacity: 1; color: var(--primary); }
 
 .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 0; border-top: 1px solid var(--border); margin-top: 4px; }
 .total-label { font-size: 12px; font-family: var(--mono); color: var(--text3); }

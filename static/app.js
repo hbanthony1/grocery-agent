@@ -2109,8 +2109,10 @@ function _renderCartList(groups, mealOrder) {
           const esc = item.name.replace(/'/g, '&#39;');
           return `<div class="cart-item" data-swap-key="${key}">
             <span class="cart-item-name">${item.name}</span>
-            <span class="cart-item-price">${item.price}</span>
-            <button class="btn-link" style="font-size:10px;opacity:0.5;margin-left:6px" title="find alternative" onclick="swapCartItem('${source}',${idx},'${esc}')">↕</button>
+            <span class="cart-item-right">
+              <span class="cart-item-price">${item.price}</span>
+              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${source}',${idx},'${esc}')">↕</button>
+            </span>
           </div>`;
         }).join('')}
       </div>`;
