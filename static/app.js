@@ -58,7 +58,8 @@ let calendarEvents = null;
 let weekBreakfasts = [];
 let weekLunches    = [];
 let weekDessert    = '';
-const _pickerOpen  = { breakfast: false, lunch: false, dessert: false };
+let weekSnacks     = [];
+const _pickerOpen  = { breakfast: false, lunch: false, dessert: false, snacks: false };
 let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
 let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
@@ -69,6 +70,7 @@ let _pantryTrap = null;
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
+const SNACK_OPTIONS     = ['Trail mix', 'Chips & salsa', 'Crackers & cheese', 'Popcorn', 'Granola bars', 'Veggies & hummus', 'Fruit'];
 
 function toTitleCase(s) {
   return (s || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -1181,12 +1183,22 @@ function renderOrderCsvPreview(data) {
   const brands = data.brandSuggestions || [];
   let html = '';
   if (items.length) {
+    const today = new Date();
     html += `<div class="recap-preview-label">add to pantry</div>
     <div class="recap-pantry-preview">
-      ${items.map((item, i) => `<label class="recap-preview-item">
-        <input type="checkbox" id="rpi-${i}" checked>
-        <span>${item.name}${item.amount ? ' — ' + item.amount + (item.unit ? ' ' + item.unit : '') : ''}</span>
-      </label>`).join('')}
+      ${items.map((item, i) => {
+        const days = item.shelfDays || 14;
+        const exp  = new Date(today); exp.setDate(today.getDate() + days);
+        const expStr = exp.toISOString().split('T')[0];
+        const amtStr = item.amount ? ` — ${item.amount}${item.unit ? ' ' + item.unit : ''}` : '';
+        return `<div class="recap-preview-item">
+          <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer">
+            <input type="checkbox" id="rpi-${i}" checked>
+            <span>${item.name}${amtStr}</span>
+          </label>
+          <input class="recap-pantry-amt" type="date" id="rpi-exp-${i}" value="${expStr}" title="expiry date" style="width:130px" onclick="event.stopPropagation()">
+        </div>`;
+      }).join('')}
     </div>
     <button class="btn primary" onclick="applyOrderCsvItems()" style="margin-top:8px">add checked items →</button>`;
   }
@@ -1207,7 +1219,11 @@ async function applyOrderCsvItems() {
     await fetch('/pantry/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: toAdd.map(i => ({ name: toTitleCase(i.name), amount: i.amount || '', unit: i.unit || '' })) }),
+      body: JSON.stringify({ items: toAdd.map(item => {
+        const origIdx = _orderCsvData.pantryItems.indexOf(item);
+        const expEl   = document.getElementById(`rpi-exp-${origIdx}`);
+        return { name: toTitleCase(item.name), amount: item.amount || '', unit: item.unit || '', expiresOn: expEl?.value || '' };
+      }) }),
     });
     await loadPantry();
   } catch(e) {}
@@ -1337,12 +1353,15 @@ function renderStep0Extras() {
   weekBreakfasts = prefs.defaultBreakfasts?.length ? [...prefs.defaultBreakfasts] : [];
   weekLunches    = prefs.defaultLunches?.length    ? [...prefs.defaultLunches]    : [];
   weekDessert    = prefs.defaultDessert            || '';
+  weekSnacks     = prefs.defaultSnacks?.length ? [...prefs.defaultSnacks] : [];
   _pickerOpen.breakfast = !weekBreakfasts.length;
   _pickerOpen.lunch     = !weekLunches.length;
   _pickerOpen.dessert   = false;
+  _pickerOpen.snacks    = false;
   renderMealPicks('breakfast');
   renderMealPicks('lunch');
   renderDessertPick();
+  renderSnackPick();
 }
 
 function renderMealPicks(type) {
@@ -1454,6 +1473,64 @@ function addCustomDessert() {
   const val   = (input?.value || '').trim();
   if (!val) return;
   setDessert(val);
+}
+
+function renderSnackPick() {
+  const el = document.getElementById('snacksSection');
+  if (!el) return;
+
+  if (!_pickerOpen.snacks && weekSnacks.length) {
+    el.innerHTML = `<div class="meal-pick-banner">
+      <span>🍿 ${weekSnacks.join(', ')}</span>
+      <button class="btn-link" onclick="_pickerOpen.snacks=true;renderSnackPick()">change →</button>
+    </div>`;
+    return;
+  }
+
+  if (!_pickerOpen.snacks) {
+    el.innerHTML = `<div class="meal-pick-banner">
+      <span style="opacity:0.6">no snacks this week</span>
+      <button class="btn-link" onclick="_pickerOpen.snacks=true;renderSnackPick()">add some →</button>
+    </div>`;
+    return;
+  }
+
+  const chips = SNACK_OPTIONS.map(opt => {
+    const sel = weekSnacks.includes(opt);
+    const esc = opt.replace(/'/g, '&#39;');
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleSnack('${esc}')">${opt}</button>`;
+  }).join('');
+
+  const customChips = weekSnacks.filter(s => !SNACK_OPTIONS.includes(s)).map(s => {
+    const esc = s.replace(/'/g, '&#39;');
+    return `<button class="meal-pick-chip selected" onclick="toggleSnack('${esc}')">${s} ×</button>`;
+  }).join('');
+
+  const hint = weekSnacks.length >= 3 ? '<span class="meal-pick-hint">max 3 selected</span>' : '';
+
+  el.innerHTML = `
+    <div class="meal-pick-grid">${chips}${customChips}</div>
+    ${hint}
+    <div class="meal-pick-custom">
+      <input type="text" id="snacksCustom" placeholder="+ something else..." onkeydown="if(event.key==='Enter')addCustomSnack()" />
+      <button class="btn" style="padding:5px 12px;font-size:12px;height:30px" onclick="addCustomSnack()">add</button>
+    </div>`;
+}
+
+function toggleSnack(option) {
+  const idx = weekSnacks.indexOf(option);
+  if (idx >= 0) weekSnacks.splice(idx, 1);
+  else if (weekSnacks.length < 3) weekSnacks.push(option);
+  renderSnackPick();
+}
+
+function addCustomSnack() {
+  const input = document.getElementById('snacksCustom');
+  const val   = (input?.value || '').trim();
+  if (!val) return;
+  if (!weekSnacks.includes(val) && weekSnacks.length < 3) weekSnacks.push(val);
+  if (input) input.value = '';
+  renderSnackPick();
 }
 
 function renderPantryToggle() {
@@ -1801,7 +1878,6 @@ async function approveMealPlan() {
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
-  document.getElementById('ratingPanel').style.display = 'none';
   // Save this week's meals so next Sunday's recap can show them
   prefs.lastWeekMeals = meals.map(m => ({
     day: m.day,
@@ -1841,6 +1917,7 @@ async function startCartBuild() {
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
+  const ssb = document.getElementById('swapSuggestBox'); if (ssb) ssb.style.display = 'none';
   resetCartProgress();
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
@@ -1852,7 +1929,7 @@ async function startCartBuild() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();
@@ -1918,7 +1995,7 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
     list.innerHTML = sourcesPresent.map(source => {
       const items = groups[source];
-      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert'].includes(source);
+      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks'].includes(source);
       const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source;
       const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
       return `<div class="cart-group">
@@ -1926,11 +2003,15 @@ function _renderCartList(groups, mealOrder) {
           <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
           <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
         </div>
-        ${items.map(item => `
-          <div class="cart-item">
+        ${items.map((item, idx) => {
+          const key = `${source}-${idx}`;
+          const esc = item.name.replace(/'/g, '&#39;');
+          return `<div class="cart-item" data-swap-key="${key}">
             <span class="cart-item-name">${item.name}</span>
             <span class="cart-item-price">${item.price}</span>
-          </div>`).join('')}
+            <button class="btn-link" style="font-size:10px;opacity:0.5;margin-left:6px" title="find alternative" onclick="swapCartItem('${source}',${idx},'${esc}')">↕</button>
+          </div>`;
+        }).join('')}
       </div>`;
     }).join('');
   }
@@ -1969,7 +2050,7 @@ function renderCart(groups, mealOrder, total, url) {
         msg = `⚠ $${(totalNum - ref).toFixed(0)} over $${ref} ${budgetMax ? 'max' : 'target'} budget`;
       }
       budgetBar.className = `budget-bar ${cls}`;
-      budgetBar.textContent = msg;
+      budgetBar.innerHTML = msg + (cls === 'budget-over' ? ` <button class="btn-link" style="margin-left:10px;font-size:11px" onclick="suggestCheaperSwaps()">suggest cheaper swaps →</button>` : '');
       budgetBar.style.display = 'block';
     } else {
       budgetBar.style.display = 'none';
@@ -1988,6 +2069,87 @@ function confirmOrder() {
   btn.disabled = true;
   btn.className = 'btn mustard';
   _finalizeWeek(); // fire and forget — saves doNotRepeat; rating happens next week in recap
+}
+
+async function suggestCheaperSwaps() {
+  const swapBox = document.getElementById('swapSuggestBox');
+  if (!swapBox) return;
+  swapBox.style.display = 'block';
+  swapBox.innerHTML = '<span class="hh-loading">Asking Claude for ideas...</span>';
+  const allItems = [];
+  (_cartData?.mealOrder || []).forEach(src => (_cartData?.groups[src] || []).forEach(i => allItems.push(i)));
+  const target    = prefs.household?.budgetTarget || 175;
+  const budgetMax = prefs.household?.budgetMax || 225;
+  const itemList  = allItems.map(i => `${i.name} — ${i.price}`).join('\n');
+  try {
+    const resp = await fetch('/claude-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: `Budget target: $${target} (max $${budgetMax}). Current cart:\n${itemList}\n\nSuggest 3-5 specific, practical swaps to reduce the total by 10-15%. Focus on the most expensive items. Be concise — one line per swap like "• Swap [expensive item] for [cheaper alternative] — save ~$X".` }),
+    });
+    const data = await resp.json();
+    const text  = (data.result || '').trim();
+    swapBox.innerHTML = text.split('\n').filter(Boolean).map(l => `<div class="recap-hint" style="margin-bottom:4px">${l}</div>`).join('');
+  } catch(e) {
+    swapBox.innerHTML = '<div class="recap-hint">Could not load suggestions — check your Terminal.</div>';
+  }
+}
+
+async function swapCartItem(source, itemIdx, origName) {
+  const inputId = `swap-input-${source}-${itemIdx}`;
+  const existing = document.getElementById(inputId);
+  if (existing) { existing.focus(); return; }
+
+  const itemEl = document.querySelector(`[data-swap-key="${source}-${itemIdx}"]`);
+  if (!itemEl) return;
+
+  const input = document.createElement('input');
+  input.className = 'schedule-note';
+  input.id = inputId;
+  input.value = origName;
+  input.style.cssText = 'width:100%;margin-top:4px;font-size:12px';
+  input.placeholder = 'enter alternative product...';
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-top:4px';
+  const goBtn = document.createElement('button');
+  goBtn.className = 'btn';
+  goBtn.style.cssText = 'padding:3px 10px;font-size:11px;height:26px';
+  goBtn.textContent = 'find →';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn';
+  cancelBtn.style.cssText = 'padding:3px 10px;font-size:11px;height:26px';
+  cancelBtn.textContent = 'cancel';
+  row.append(input, goBtn, cancelBtn);
+  itemEl.after(row);
+  input.focus();
+  input.select();
+
+  const doSwap = async () => {
+    const query = input.value.trim();
+    if (!query) return;
+    goBtn.textContent = '…';
+    goBtn.disabled = true;
+    try {
+      const resp = await fetch('/swap-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const product = await resp.json();
+      if (!resp.ok || product.error) { goBtn.textContent = 'not found'; goBtn.disabled = false; return; }
+      _cartData.groups[source][itemIdx] = { name: product.name, price: product.price };
+      const newTotal = Object.values(_cartData.groups).flat().reduce((s, i) => s + parseFloat(i.price.replace('$', '')), 0);
+      _cartData.total = `$${newTotal.toFixed(2)}`;
+      renderCart(_cartData.groups, _cartData.mealOrder, _cartData.total, _cartData.url);
+    } catch(e) {
+      goBtn.textContent = 'error'; goBtn.disabled = false;
+    }
+  };
+
+  goBtn.onclick     = doSwap;
+  cancelBtn.onclick = () => row.remove();
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSwap(); if (e.key === 'Escape') row.remove(); });
 }
 
 // ===== PREFERENCES =====

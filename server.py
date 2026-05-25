@@ -589,13 +589,14 @@ def parse_order_csv():
                 'role': 'user',
                 'content': f'''Parse this Walmart order history CSV and extract grocery/food items.
 Return ONLY a JSON object, no markdown, no explanation:
-{{"pantryItems": [{{"name": "normalized item name", "amount": "numeric quantity", "unit": "lb/oz/count/gallon/etc"}}], "brandSuggestions": ["short brand note worth remembering"]}}
+{{"pantryItems": [{{"name": "normalized item name", "amount": "numeric quantity", "unit": "lb/oz/count/gallon/etc", "shelfDays": 14}}], "brandSuggestions": ["short brand note worth remembering"]}}
 
 Rules for pantryItems:
 - Normalize names: "Great Value 2% Milk 1 gallon" → name:"milk", amount:"1", unit:"gallon"
 - Include all food/grocery items ordered
 - Skip household supplies, electronics, clothing, etc.
 - amount: just the number (or empty string if unknown). unit: the measurement word.
+- shelfDays: realistic shelf life in days (e.g. milk=10, eggs=21, bread=7, chicken=2, canned goods=365, crackers=90, frozen=180)
 
 Rules for brandSuggestions:
 - Only flag non-generic brands worth remembering for future orders
@@ -610,6 +611,25 @@ CSV content:
         return jsonify(json.loads(text))
     except Exception as e:
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/swap-item', methods=['POST'])
+def swap_item():
+    query = (request.json or {}).get('query', '').strip()
+    if not query:
+        return jsonify({'error': 'query required'}), 400
+    try:
+        product = search_product(query)
+        if not product:
+            return jsonify({'error': 'no product found'}), 404
+        price = float(product.get('salePrice', product.get('msrp', 0)))
+        return jsonify({
+            'name':   product.get('name', query),
+            'price':  f'${price:.2f}',
+            'itemId': str(product['itemId']),
+        })
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
@@ -663,6 +683,7 @@ def build_cart():
         household        = data.get('household', [])
         frequent_staples = data.get('frequentStaples', [])
         dessert          = data.get('dessert', '')
+        snacks           = data.get('snacks', [])
         zip_code         = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
         servings         = int(data.get('servings', 4))
 
@@ -709,6 +730,10 @@ def build_cart():
         # Dessert — direct search for ingredients
         if dessert:
             all_search_tasks.append({"search_query": dessert, "qty": 1, "source": "dessert"})
+
+        # Snacks — direct search per snack type
+        for name in snacks:
+            all_search_tasks.append({"search_query": name, "qty": 1, "source": "Snacks"})
 
         # Deduplicate search tasks: same query = same product, no need to search twice
         _seen_q = {}
@@ -758,7 +783,7 @@ def build_cart():
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'dessert', 'staples', 'frequentStaples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'dessert', 'Snacks', 'staples', 'frequentStaples', 'household']
 
         cart_url = build_cart_url(cart_items, staple_items=[])
 
