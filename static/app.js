@@ -339,6 +339,53 @@ async function loadHouseholdItems() {
   }
 }
 
+// ===== FREQUENT STAPLES =====
+const LS_FREQUENT_SKIP_KEY = 'grocery_frequent_skip'; // names the user has explicitly unchecked
+let frequentSkipped = new Set(JSON.parse(localStorage.getItem(LS_FREQUENT_SKIP_KEY) || '[]'));
+
+function renderFrequentStaples() {
+  const staples = prefs.frequentStaples || [];
+  const card = document.getElementById('fsCard');
+  const grid = document.getElementById('fsGrid');
+  if (!card || !grid) return;
+  if (!staples.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const validNames = new Set(staples);
+  for (const name of frequentSkipped) {
+    if (!validNames.has(name)) frequentSkipped.delete(name);
+  }
+  localStorage.setItem(LS_FREQUENT_SKIP_KEY, JSON.stringify([...frequentSkipped]));
+
+  grid.innerHTML = staples.map(name => {
+    const checked = !frequentSkipped.has(name);
+    const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const display = _hhDisplayName(name);
+    return `<div class="hh-item-row">
+      <label class="hh-item">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleFrequent('${esc}', this.checked)">
+        <span class="hh-item-name">${display}</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  updateFsCount();
+}
+
+function toggleFrequent(name, checked) {
+  if (checked) frequentSkipped.delete(name);
+  else frequentSkipped.add(name);
+  localStorage.setItem(LS_FREQUENT_SKIP_KEY, JSON.stringify([...frequentSkipped]));
+  updateFsCount();
+}
+
+function updateFsCount() {
+  const staples = prefs.frequentStaples || [];
+  const selected = staples.filter(s => !frequentSkipped.has(s)).length;
+  const el = document.getElementById('fsCount');
+  if (el) el.textContent = `${selected} of ${staples.length}`;
+}
+
 function showHhAddRow() {
   document.getElementById('hhAddRow').style.display = 'flex';
   document.getElementById('hhAddBtn').style.display = 'none';
@@ -1744,7 +1791,7 @@ async function startCartBuild() {
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], servings: servingSize, zip: prefs.household?.zip || '59047' })
+      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' })
     });
 
     const data = await resp.json();
@@ -1810,8 +1857,8 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
     list.innerHTML = sourcesPresent.map(source => {
       const items = groups[source];
-      const isSpecial = ['staples', 'household', 'Breakfasts', 'Lunches'].includes(source);
-      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source;
+      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches'].includes(source);
+      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source;
       const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
@@ -1975,6 +2022,7 @@ async function savePrefsPage() {
 
   householdItems = (prefs.householdItems || []).map(_normalizeHhItem);
   renderHousehold();
+  renderFrequentStaples();
   closePrefsPage();
   showToast('Preferences saved');
 }
@@ -2376,7 +2424,7 @@ async function wizardFinish() {
 history.replaceState({ step: 0, overlay: null }, '');
 goToStep(0, true); // true = don't push another history entry on top of the replaceState above
 renderSchedule();
-loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); checkOnboarding(); });
+loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); renderFrequentStaples(); checkOnboarding(); });
 loadHouseholdItems();
 loadRecipes();
 loadPantry().then(() => renderPantryToggle());

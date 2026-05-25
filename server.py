@@ -656,13 +656,14 @@ Keep it practical and family-friendly. 6-10 ingredients, 5-8 steps. Each step sh
 @app.route('/build-cart', methods=['POST'])
 def build_cart():
     try:
-        data       = request.json
-        meals      = data.get('meals', [])
-        breakfasts = data.get('breakfasts', [])
-        lunches    = data.get('lunches', [])
-        household  = data.get('household', [])
-        zip_code   = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
-        servings   = int(data.get('servings', 4))
+        data             = request.json
+        meals            = data.get('meals', [])
+        breakfasts       = data.get('breakfasts', [])
+        lunches          = data.get('lunches', [])
+        household        = data.get('household', [])
+        frequent_staples = data.get('frequentStaples', [])
+        zip_code         = data.get('zip', os.getenv('DELIVERY_ZIP', '59047'))
+        servings         = int(data.get('servings', 4))
 
         print(f"\n=== BUILD CART REQUEST ===")
         print(f"Meals: {meals}, Breakfasts: {breakfasts}, Lunches: {lunches}")
@@ -699,6 +700,10 @@ def build_cart():
         # Household items search directly — no Claude step needed
         for name in household:
             all_search_tasks.append({"search_query": name, "qty": 1, "source": "household"})
+
+        # Frequent staples — also direct search, no Claude step
+        for name in frequent_staples:
+            all_search_tasks.append({"search_query": name, "qty": 1, "source": "frequentStaples"})
 
         # Deduplicate search tasks: same query = same product, no need to search twice
         _seen_q = {}
@@ -748,7 +753,7 @@ def build_cart():
                 print(f"  - No result: {task['search_query']}")
 
         # Preserve meal order for the frontend (meals list + fixed categories)
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'staples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'staples', 'frequentStaples', 'household']
 
         cart_url = build_cart_url(cart_items, staple_items=[])
 
