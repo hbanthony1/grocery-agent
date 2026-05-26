@@ -739,7 +739,14 @@ def build_cart():
             [(name, 'Breakfasts')  for name in breakfasts] +
             [(name, 'Lunches')     for name in lunches]
         )
-        if holiday.get('type'):
+        if holiday.get('menu'):
+            # Full menu: one job per dish (all go into 'holiday' group)
+            holiday_dishes = []
+            for dishes in holiday['menu'].values():
+                holiday_dishes.extend(dishes)
+            job_sources = job_sources + [(dish, 'holiday') for dish in holiday_dishes if dish]
+        elif holiday.get('type'):
+            # Basic: treat whole event as one meal
             holiday_label = f"{holiday['type']} for {holiday.get('guests', 8)} people"
             job_sources = job_sources + [(holiday_label, 'holiday')]
 

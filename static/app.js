@@ -65,6 +65,7 @@ let _prefsDirty    = false;
 let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
 let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
+let _cartFilter = '';            // current search query
 let _prefsTrap = null;           // focus trap cleanup fns
 let _recipesTrap = null;
 let _pantryTrap = null;
@@ -91,15 +92,19 @@ const HH_CATEGORIES = {
   frozen:    ['frozen','ice cream','pizza','fries','nuggets','waffle','edamame'],
   drinks:    ['water','juice','soda','coffee','tea','lemonade','gatorade','wine','beer','sparkling','diet coke','coke','pepsi','sprite','dr pepper','kombucha','drink','creamer'],
   snacks:    ['snack','nut','almond','cashew','walnut','popcorn','cookie','brownie','bar','candy','chocolate','gummy','trail mix'],
-  household: ['paper towel','toilet paper','tissue','napkin','trash bag','ziploc','foil','wrap','detergent','soap','shampoo','conditioner','toothpaste','toothbrush','deodorant','razor','cleaner','sponge','dish','laundry','dryer','bleach','wipe','sanitizer','lotion','floss'],
-  baby:      ['diaper','formula','baby','pacifier'],
-  pet:       ['dog food','cat food','pet','kibble','litter'],
+  medicine:     ['medicine','vitamin','supplement','ibuprofen','tylenol','aspirin','advil','motrin','benadryl','nyquil','dayquil','pepto','tums','melatonin','zinc','probiotic','antacid','allergy','bandaid','band-aid','cough','remedy','pill','tablet','capsule','prescription'],
+  personal_care:['shampoo','conditioner','toothpaste','toothbrush','deodorant','razor','lotion','floss','body wash','face wash','moisturizer','sunscreen','tampon','feminine','mascara','lip balm','cologne','perfume','cotton ball','q-tip'],
+  cleaning:     ['detergent','bleach','sponge','laundry','dryer sheet','disinfect','lysol','dish soap','cleaner','sanitizer','wipe','scrub','toilet cleaner','floor cleaner','glass cleaner'],
+  household:    ['paper towel','toilet paper','tissue','napkin','trash bag','ziploc','foil','wrap','soap','dish','dryer'],
+  baby:         ['diaper','formula','baby','pacifier'],
+  pet:          ['dog food','cat food','pet','kibble','litter'],
 };
-const HH_CATEGORY_ORDER  = ['produce','dairy','meat','bakery','pantry','frozen','drinks','snacks','household','baby','pet','other'];
+const HH_CATEGORY_ORDER  = ['produce','dairy','meat','bakery','pantry','frozen','drinks','snacks','medicine','personal_care','cleaning','household','baby','pet','other'];
 const HH_CATEGORY_LABELS = {
   produce:'Produce', dairy:'Dairy & Eggs', meat:'Meat & Seafood',
   bakery:'Bakery & Bread', pantry:'Pantry', frozen:'Frozen',
-  drinks:'Drinks', snacks:'Snacks', household:'Household',
+  drinks:'Drinks', snacks:'Snacks',
+  medicine:'Medicine', personal_care:'Personal Care', cleaning:'Cleaning Supplies', household:'Household',
   baby:'Baby', pet:'Pet', other:'Other',
 };
 
@@ -138,7 +143,6 @@ const CART_BUILD_MSGS = [
 ];
 
 let _microcopyTimer = null;
-let _cartProgressTimer = null;
 
 function startMicrocopy(msgs, elId, intervalMs = 3400) {
   stopMicrocopy();
@@ -158,50 +162,6 @@ function stopMicrocopy() {
   if (_microcopyTimer) { clearInterval(_microcopyTimer); _microcopyTimer = null; }
 }
 
-function startCartProgress(durationSecs = 54) {
-  stopCartProgress();
-  let progress = 0;
-  const maxProgress = 0.9;
-  const tickMs = 250;
-  const increment = maxProgress / ((durationSecs * 1000) / tickMs);
-  _cartProgressTimer = setInterval(() => {
-    progress = Math.min(progress + increment, maxProgress);
-    _setCartProgress(progress);
-    if (progress >= maxProgress) stopCartProgress();
-  }, tickMs);
-}
-
-function stopCartProgress() {
-  if (_cartProgressTimer) { clearInterval(_cartProgressTimer); _cartProgressTimer = null; }
-}
-
-function finishCartProgress() {
-  stopCartProgress();
-  _setCartProgress(1.0, true);
-}
-
-function resetCartProgress() {
-  stopCartProgress();
-  const fill = document.getElementById('cartBuildProgress');
-  const cart = document.getElementById('cartBuildCart');
-  if (fill) { fill.style.transition = 'none'; fill.style.width = '0'; }
-  if (cart) { cart.style.transition = 'none'; cart.style.left = '0'; }
-}
-
-function _setCartProgress(p, fast = false) {
-  const fill = document.getElementById('cartBuildProgress');
-  const cart = document.getElementById('cartBuildCart');
-  const trackEl = fill?.parentElement;
-  if (!fill || !cart || !trackEl) return;
-  const trackW = trackEl.offsetWidth;
-  const pxLeft = p * trackW;
-  if (fast) {
-    fill.style.transition = 'width 0.4s ease';
-    cart.style.transition = 'left 0.4s ease';
-  }
-  fill.style.width = (p * trackW) + 'px';
-  cart.style.left = pxLeft + 'px';
-}
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
@@ -229,9 +189,11 @@ window.addEventListener('popstate', e => {
   const state = e.state || { step: 0, overlay: null };
 
   // Close any open overlay without touching history (we're already mid-popstate)
-  const prefsOpen   = document.getElementById('prefsPage')?.style.display   !== 'none';
-  const recipesOpen = document.getElementById('recipesPage')?.style.display  !== 'none';
-  const pantryOpen  = document.getElementById('pantryPanel')?.style.display  !== 'none';
+  const prefsOpen   = document.getElementById('prefsPage')?.style.display    !== 'none';
+  const recipesOpen = document.getElementById('recipesPage')?.style.display   !== 'none';
+  const pantryOpen  = document.getElementById('pantryPanel')?.style.display   !== 'none';
+  const holidayOpen = document.getElementById('holidayPage')?.style.display   !== 'none';
+  if (holidayOpen) closeHolidayPlanner(true);
   if (prefsOpen)   closePrefsPage(true);
   if (recipesOpen) closeRecipesPage(true);
   if (pantryOpen)  closePantryPage(true);
@@ -240,6 +202,7 @@ window.addEventListener('popstate', e => {
   if      (state.overlay === 'prefs')   openPrefsPage(true);
   else if (state.overlay === 'recipes') openRecipesPage(true);
   else if (state.overlay === 'pantry')  openPantryPage(true);
+  else if (state.overlay === 'holiday') openHolidayPlanner(true);
 
   // Navigate to the correct step
   if (typeof state.step === 'number' && state.step !== currentStep) {
@@ -1567,66 +1530,150 @@ function addCustomSnack() {
   renderSnackPick();
 }
 
-function toggleHolidaySection() {
-  const card = document.getElementById('holidayCard');
-  if (!card) return;
-  const visible = card.style.display !== 'none';
-  if (visible) weekHoliday = null; // clear when dismissing
-  card.style.display = visible ? 'none' : 'block';
-  document.getElementById('navHoliday')?.classList.toggle('active', !visible);
-  if (!visible) {
-    renderHolidaySection();
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+// ===== HOLIDAY PLANNER =====
+
+function openHolidayPlanner(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'holiday' }, '');
+  const page = document.getElementById('holidayPage');
+  if (!page) return;
+  page.style.display = 'flex';
+  _renderHolidayPlanner();
+}
+
+function closeHolidayPlanner(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
+  document.getElementById('holidayPage').style.display = 'none';
+}
+
+function _renderHolidayPlanner() {
+  const curType = weekHoliday?.type || '';
+  const curGuests = weekHoliday?.guests || (parseInt(prefs.household?.adults || 2) + parseInt(prefs.household?.kids || 0) + 4);
+  const picker = document.getElementById('hpTypePicker');
+  if (picker) {
+    picker.innerHTML = HOLIDAY_OPTIONS.map(opt => {
+      const esc = opt.replace(/'/g, '&#39;');
+      return `<button class="meal-pick-chip${curType === opt ? ' selected' : ''}" data-opt="${esc}" onclick="selectHpType('${esc}')">${opt}</button>`;
+    }).join('');
   }
+  const gEl = document.getElementById('hpGuests');
+  if (gEl) gEl.value = curGuests;
+  if (weekHoliday?.menu) {
+    _renderHolidayMenuEdit(weekHoliday.menu);
+    document.getElementById('hpNotesCard').style.display = 'block';
+  } else {
+    const mc = document.getElementById('hpMenuCard'); if (mc) mc.style.display = 'none';
+    const nc = document.getElementById('hpNotesCard'); if (nc) nc.style.display = 'none';
+  }
+  const nEl = document.getElementById('hpNotes');
+  if (nEl) nEl.value = weekHoliday?.notes || '';
+  const tEl = document.getElementById('hpTimeline');
+  if (tEl) tEl.value = weekHoliday?.timeline || '';
+}
+
+function selectHpType(type) {
+  document.querySelectorAll('#hpTypePicker .meal-pick-chip').forEach(c => c.classList.toggle('selected', c.dataset.opt === type));
+}
+
+async function generateHolidayMenu() {
+  const selected = document.querySelector('#hpTypePicker .meal-pick-chip.selected');
+  if (!selected) { showToast('Pick an event type first'); return; }
+  const type = selected.dataset.opt;
+  const guests = parseInt(document.getElementById('hpGuests')?.value) || 8;
+  const btn = document.getElementById('hpGenerateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'generating...'; }
+  const menuCard = document.getElementById('hpMenuCard');
+  const menuBody = document.getElementById('hpMenuBody');
+  if (menuCard) menuCard.style.display = 'block';
+  if (menuBody) menuBody.innerHTML = '<span class="hh-loading">Asking Claude for menu ideas...</span>';
+  try {
+    const resp = await fetch('/claude-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: `Plan a ${type} menu for ${guests} people. Return ONLY valid JSON with no extra text:\n{"appetizers":["...","..."],"mains":["..."],"sides":["...","...","...","..."],"desserts":["...","..."]}\nUse 2-3 appetizers, 1-2 mains, 4-6 sides, 1-2 desserts. Specific dish names only.` }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    const menu = JSON.parse((data.content || '').replace(/```json|```/g, '').trim());
+    _renderHolidayMenuEdit(menu);
+    const nc = document.getElementById('hpNotesCard'); if (nc) nc.style.display = 'block';
+  } catch(e) {
+    if (menuBody) menuBody.innerHTML = '<div class="recap-hint" style="color:var(--urgent-red-text)">Could not generate menu — try again.</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'generate menu →'; }
+  }
+}
+
+function _renderHolidayMenuEdit(menu) {
+  const menuCard = document.getElementById('hpMenuCard');
+  const menuBody = document.getElementById('hpMenuBody');
+  if (!menuCard || !menuBody) return;
+  menuCard.style.display = 'block';
+  const sections = [
+    { key: 'appetizers', label: 'Appetizers' },
+    { key: 'mains',      label: 'Mains' },
+    { key: 'sides',      label: 'Sides' },
+    { key: 'desserts',   label: 'Desserts' },
+  ];
+  menuBody.innerHTML = sections.map(s => {
+    const items = (menu[s.key] || []);
+    const rows  = Math.max(2, items.length + 1);
+    return `<div class="holiday-menu-section">
+      <span class="prefs-sublabel">${s.label}</span>
+      <textarea class="prefs-notes-area" id="hpMenu-${s.key}" rows="${rows}" placeholder="one dish per line...">${items.join('\n')}</textarea>
+    </div>`;
+  }).join('');
+}
+
+function saveHolidayPlan() {
+  const selected = document.querySelector('#hpTypePicker .meal-pick-chip.selected');
+  const type = selected?.dataset.opt || weekHoliday?.type || '';
+  if (!type) { showToast('Pick an event type first'); return; }
+  const guests   = parseInt(document.getElementById('hpGuests')?.value) || 8;
+  const notes    = document.getElementById('hpNotes')?.value.trim() || '';
+  const timeline = document.getElementById('hpTimeline')?.value.trim() || '';
+  let menu = null;
+  const menuCard = document.getElementById('hpMenuCard');
+  if (menuCard?.style.display !== 'none') {
+    menu = {};
+    ['appetizers','mains','sides','desserts'].forEach(k => {
+      const ta = document.getElementById(`hpMenu-${k}`);
+      menu[k] = ta ? ta.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    });
+  }
+  weekHoliday = { type, guests, menu, notes, timeline };
+  closeHolidayPlanner();
+  document.getElementById('navHoliday')?.classList.add('active');
+  const card = document.getElementById('holidayCard');
+  if (card) { card.style.display = 'block'; card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  renderHolidaySection();
+  showToast('Holiday plan saved');
 }
 
 function renderHolidaySection() {
   const el = document.getElementById('holidaySection');
   if (!el) return;
-  if (!weekHoliday) {
-    el.innerHTML = `<div class="meal-pick-banner">
-      <span style="opacity:0.6">no holiday meal planned</span>
-      <button class="btn-link" onclick="openHolidayPicker()">plan one →</button>
-    </div>`;
+  if (!weekHoliday?.type) {
+    el.innerHTML = '';
     return;
   }
-  el.innerHTML = `<div class="meal-pick-banner">
-    <span>🎄 ${weekHoliday.type} · ${weekHoliday.guests} guests</span>
-    <button class="btn-link" onclick="openHolidayPicker()">change →</button>
-    <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="weekHoliday=null;renderHolidaySection()">remove</button>
+  const allDishes = weekHoliday.menu ? Object.values(weekHoliday.menu).flat() : [];
+  const preview   = allDishes.slice(0, 5).join(' · ') + (allDishes.length > 5 ? '…' : '');
+  el.innerHTML = `<div class="meal-pick-banner" style="flex-direction:column;align-items:flex-start;gap:4px">
+    <div style="display:flex;width:100%;justify-content:space-between;align-items:center">
+      <span>🎄 ${weekHoliday.type} · ${weekHoliday.guests} guests</span>
+      <div>
+        <button class="btn-link" onclick="openHolidayPlanner()">edit →</button>
+        <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="clearHolidayPlan()">remove</button>
+      </div>
+    </div>
+    ${preview ? `<span style="font-size:11px;opacity:0.65">${preview}</span>` : ''}
   </div>`;
 }
 
-function openHolidayPicker() {
-  const el = document.getElementById('holidaySection');
-  if (!el) return;
-  const curType   = weekHoliday?.type || '';
-  const curGuests = weekHoliday?.guests || (parseInt(prefs.household?.adults || 2) + parseInt(prefs.household?.kids || 0) + 4);
-  const chips = HOLIDAY_OPTIONS.map(opt => {
-    const sel = curType === opt;
-    const esc = opt.replace(/'/g, '&#39;');
-    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" data-opt="${esc}" onclick="selectHolidayType('${esc}')">${opt}</button>`;
-  }).join('');
-  el.innerHTML = `
-    <div class="meal-pick-grid" id="holidayChips">${chips}</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
-      <span class="prefs-sublabel">guests:</span>
-      <input class="schedule-note" id="holidayGuests" type="number" min="2" max="60" value="${curGuests}" style="width:64px" />
-      <button class="btn primary" style="height:28px;padding:0 12px;font-size:12px" onclick="confirmHoliday()">set →</button>
-      ${weekHoliday ? `<button class="btn-link" style="opacity:0.6" onclick="weekHoliday=null;renderHolidaySection()">remove</button>` : `<button class="btn-link" style="opacity:0.6" onclick="renderHolidaySection()">cancel</button>`}
-    </div>`;
-}
-
-function selectHolidayType(type) {
-  document.querySelectorAll('#holidayChips .meal-pick-chip').forEach(c => c.classList.toggle('selected', c.dataset.opt === type));
-}
-
-function confirmHoliday() {
-  const selected = document.querySelector('#holidayChips .meal-pick-chip.selected');
-  if (!selected) { showToast('Pick a holiday type first'); return; }
-  const guests = parseInt(document.getElementById('holidayGuests')?.value) || 8;
-  weekHoliday = { type: selected.dataset.opt, guests };
-  renderHolidaySection();
+function clearHolidayPlan() {
+  weekHoliday = null;
+  document.getElementById('navHoliday')?.classList.remove('active');
+  const card = document.getElementById('holidayCard');
+  if (card) card.style.display = 'none';
 }
 
 function renderPantryToggle() {
@@ -1969,7 +2016,6 @@ function cancelSwap() {
 async function approveMealPlan() {
   document.getElementById('buildCartBtn').style.display = 'none';
   document.getElementById('cartLoadingBar').style.display = 'none';
-  resetCartProgress();
   document.getElementById('cartCard').style.display = 'none';
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
@@ -2016,12 +2062,11 @@ async function startCartBuild() {
   const ssb = document.getElementById('swapSuggestBox'); if (ssb) ssb.style.display = 'none';
   const nfb = document.getElementById('notFoundBox');    if (nfb) nfb.style.display = 'none';
   const spb = document.getElementById('spikeBox');       if (spb) spb.style.display = 'none';
-  resetCartProgress();
+  const reb = document.getElementById('reuseBox');       if (reb) reb.style.display = 'none';
+  const snb = document.getElementById('sanityBox');      if (snb) snb.style.display = 'none';
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
   const mealNames = meals.map(m => m.meal.replace(' [NEW]','').trim());
-
-  startCartProgress(72);
 
   try {
     const controller = new AbortController();
@@ -2037,7 +2082,6 @@ async function startCartBuild() {
     if (!resp.ok || data.error) throw new Error(data.error || 'Unknown server error');
 
     stopMicrocopy();
-    finishCartProgress();
     setTimeout(() => {
       document.getElementById('cartLoadingBar').style.display = 'none';
       renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl, data.notFound || []);
@@ -2045,7 +2089,6 @@ async function startCartBuild() {
 
   } catch(e) {
     stopMicrocopy();
-    stopCartProgress();
     document.getElementById('cartLoadingBar').style.display = 'none';
     document.getElementById('buildCartBtn').style.display = 'inline-flex';
     if (e instanceof TypeError) {
@@ -2065,17 +2108,23 @@ function setCartView(view) {
   if (_cartData) _renderCartList(_cartData.groups, _cartData.mealOrder);
 }
 
+function filterCart(query) {
+  _cartFilter = query.toLowerCase().trim();
+  if (_cartData) _renderCartList(_cartData.groups, _cartData.mealOrder);
+}
+
 function _renderCartList(groups, mealOrder) {
   const list = document.getElementById('cartList');
+  const q = _cartFilter;
+  const _match = name => !q || name.toLowerCase().includes(q);
   if (_cartView === 'category') {
-    // Flatten all items, group by grocery category
+    // Flatten all items with source/idx, group by grocery category
     const allItems = [];
-    mealOrder.forEach(src => (groups[src] || []).forEach(i => allItems.push(i)));
+    mealOrder.forEach(src => (groups[src] || []).forEach((i, idx) => allItems.push({ ...i, _src: src, _idx: idx })));
     const catGroups = {};
-    allItems.forEach(item => {
+    allItems.filter(i => _match(i.name)).forEach(item => {
       const cat = _hhCategory(item.name);
-      if (!catGroups[cat]) catGroups[cat] = [];
-      catGroups[cat].push(item);
+      (catGroups[cat] = catGroups[cat] || []).push(item);
     });
     list.innerHTML = HH_CATEGORY_ORDER.filter(cat => catGroups[cat]).map(cat => {
       const items = catGroups[cat];
@@ -2085,17 +2134,22 @@ function _renderCartList(groups, mealOrder) {
           <span class="cart-group-label">${HH_CATEGORY_LABELS[cat] || cat}</span>
           <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
         </div>
-        ${items.map(item => `
-          <div class="cart-item">
+        ${items.map(item => {
+          const esc = item.name.replace(/'/g, '&#39;');
+          return `<div class="cart-item" data-swap-key="${item._src}-${item._idx}">
             <span class="cart-item-name">${item.name}</span>
-            <span class="cart-item-price">${item.price}</span>
-          </div>`).join('')}
+            <span class="cart-item-right">
+              <span class="cart-item-price">${item.price}</span>
+              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${item._src}',${item._idx},'${esc}')">↕</button>
+            </span>
+          </div>`;
+        }).join('')}
       </div>`;
     }).join('');
   } else {
-    const sourcesPresent = mealOrder.filter(src => groups[src]?.length);
+    const sourcesPresent = mealOrder.filter(src => groups[src]?.some(i => _match(i.name)));
     list.innerHTML = sourcesPresent.map(source => {
-      const items = groups[source];
+      const items = (groups[source] || []).filter(i => _match(i.name));
       const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday'].includes(source);
       const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source;
       const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
@@ -2141,9 +2195,124 @@ function checkPriceSpikes(groups) {
   return spikes;
 }
 
-function renderCart(groups, mealOrder, total, url, notFound) {
+function runSanityCheck(groups, mealOrder, url) {
+  const sanityBox = document.getElementById('sanityBox');
+  if (!sanityBox) return;
+
+  const issues = [];
+
+  // 1. Duplicates — items with the same normalized name across any two groups
+  const normName = n => n.toLowerCase().replace(/\d+(\.\d+)?(\s*(oz|lb|ct|pk|g|ml|qt|pt|gal))?\b/gi, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const seen = {}; // normName → first source
+  mealOrder.forEach(src => {
+    (groups[src] || []).forEach(item => {
+      const norm = normName(item.name);
+      if (norm.length < 4) return;
+      if (seen[norm] && seen[norm] !== src) {
+        issues.push(`<span class="sanity-item">• <strong>Possible duplicate:</strong> "${item.name}" appears in both <em>${seen[norm]}</em> and <em>${src}</em></span>`);
+      } else {
+        seen[norm] = src;
+      }
+    });
+  });
+
+  // 2. Pantry overlap — cart items that overlap with items already in pantry
+  const pantryNames = (pantry || []).map(p => (p.name || p).toLowerCase());
+  const allCartItems = mealOrder.flatMap(src => (groups[src] || []).map(i => i.name));
+  allCartItems.forEach(name => {
+    const lower = name.toLowerCase();
+    const match = pantryNames.find(p => p.length > 3 && (lower.includes(p) || p.includes(lower.split(' ')[0])));
+    if (match) {
+      issues.push(`<span class="sanity-item">• <strong>Already in pantry:</strong> "${name}" — you may have <em>${match}</em></span>`);
+    }
+  });
+
+  // 3. Expected staples missing — frequentStaples not found in cart
+  const cartLower = allCartItems.map(n => n.toLowerCase());
+  const expectedStaples = (prefs.frequentStaples || []).slice(0, 8); // check top 8 only
+  expectedStaples.forEach(staple => {
+    const stapleLower = staple.toLowerCase();
+    const inCart = cartLower.some(n => n.includes(stapleLower) || stapleLower.includes(n.split(' ')[0]));
+    if (!inCart) {
+      issues.push(`<span class="sanity-item">• <strong>Expected staple not found:</strong> <em>${staple}</em></span>`);
+    }
+  });
+
+  const cartUrlBox = document.getElementById('cartUrlBox');
+  if (!issues.length) {
+    // All clear — show Walmart button immediately
+    sanityBox.style.display = 'none';
+    if (url && cartUrlBox) cartUrlBox.style.display = 'flex';
+    return;
+  }
+
+  // Show sanity check; hold Walmart button until approved
+  if (cartUrlBox) cartUrlBox.style.display = 'none';
+  sanityBox.style.display = 'block';
+  sanityBox.innerHTML = `<strong>Cart review — ${issues.length} thing${issues.length > 1 ? 's' : ''} to check:</strong>
+    ${issues.join('<br>')}
+    <div class="sanity-actions">
+      <button class="btn primary" onclick="approveSanityCheck()">looks good →</button>
+      <span class="sanity-ok" id="sanityOkMsg" style="display:none">✓ approved</span>
+    </div>`;
+  // Store url for when user approves
+  sanityBox.dataset.cartUrl = url || '';
+}
+
+function approveSanityCheck() {
+  const sanityBox = document.getElementById('sanityBox');
+  const cartUrlBox = document.getElementById('cartUrlBox');
+  const url = sanityBox?.dataset.cartUrl;
+  if (cartUrlBox) cartUrlBox.style.display = 'flex';
+  if (url) {
+    document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
+  }
+  const msg = document.getElementById('sanityOkMsg');
+  if (msg) { msg.style.display = 'inline'; }
+  const approveBtn = sanityBox?.querySelector('.btn.primary');
+  if (approveBtn) approveBtn.style.display = 'none';
+}
+
+function flagIngredientReuse(groups, mealOrder) {
+  const STOP = new Set(['great','value','brand','fresh','count','pack','ounce','fluid','large','small','organic','natural','original','classic','premium','select','whole','ready','quick','easy','family','serving','style','grade','extra','light','dark','lean','boneless','skinless','sliced','diced','chopped','shredded','grated','cooked','added','free','each','with','from','your','the','and','for','box','bag','jar','can','bottle','gallon','quart','pint','liter','walmart','best','choice']);
+
+  function kws(name) {
+    return name.toLowerCase()
+      .replace(/\d+(\.\d+)?(\s*(oz|lb|fl|ct|pk|g|ml|qt|pt|gal))?\b/gi, '')
+      .replace(/[^a-z\s]/g, ' ').split(/\s+/)
+      .filter(w => w.length > 3 && !STOP.has(w));
+  }
+
+  const SKIP_SOURCES = new Set(['staples','frequentStaples','household','Snacks','dessert','Breakfasts','Lunches','holiday']);
+  const mealSources = mealOrder.filter(src => !SKIP_SOURCES.has(src) && groups[src]?.length);
+
+  const wordMap = {}; // word → [{meal, name}]
+  mealSources.forEach(meal => {
+    (groups[meal] || []).forEach(item => {
+      kws(item.name).forEach(kw => {
+        (wordMap[kw] = wordMap[kw] || []).push({ meal, name: item.name });
+      });
+    });
+  });
+
+  const results = [];
+  for (const [kw, entries] of Object.entries(wordMap)) {
+    const meals = [...new Set(entries.map(e => e.meal))];
+    if (meals.length >= 2) {
+      const seen = new Set();
+      const items = entries.filter(e => { if (seen.has(e.name)) return false; seen.add(e.name); return true; }).slice(0, 3);
+      results.push({ keyword: kw, items });
+    }
+  }
+  return results.slice(0, 5);
+}
+
+function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false) {
   _cartData = { groups, mealOrder, total, url };
   _cartView = 'meal';
+  _cartFilter = '';
+  const searchEl = document.getElementById('cartSearch');
+  if (searchEl) searchEl.value = '';
   document.getElementById('cartViewMeal').classList.add('active');
   document.getElementById('cartViewCategory').classList.remove('active');
   document.getElementById('cartCard').style.display = 'block';
@@ -2192,6 +2361,19 @@ function renderCart(groups, mealOrder, total, url, notFound) {
     }
   }
 
+  // Ingredient reuse flag
+  const reuseBox = document.getElementById('reuseBox');
+  if (reuseBox) {
+    const overlaps = flagIngredientReuse(groups, mealOrder);
+    if (overlaps.length) {
+      reuseBox.style.display = 'block';
+      reuseBox.innerHTML = `<strong>Possible ingredient overlaps — review before ordering:</strong><br>` +
+        overlaps.map(o => `• <em>${o.keyword}</em>: ${o.items.map(i => `${i.name} (${i.meal})`).join(' · ')}`).join('<br>');
+    } else {
+      reuseBox.style.display = 'none';
+    }
+  }
+
   // Price spike detection
   const spikes = checkPriceSpikes(groups);
   const spikeBox = document.getElementById('spikeBox');
@@ -2204,9 +2386,18 @@ function renderCart(groups, mealOrder, total, url, notFound) {
     }
   }
 
-  if (url) {
-    document.getElementById('cartUrlBox').style.display = 'flex';
+  // Sanity check — gates the "open in Walmart" button on first build
+  if (skipSanity || !url) {
+    if (url) {
+      document.getElementById('cartUrlBox').style.display = 'flex';
+      document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
+    }
+  } else {
+    const sanityBoxEl = document.getElementById('sanityBox');
+    if (sanityBoxEl) sanityBoxEl.style.display = 'none';
+    document.getElementById('cartUrlBox').style.display = 'none';
     document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
+    runSanityCheck(groups, mealOrder, url);
   }
 }
 
@@ -2290,7 +2481,7 @@ async function swapCartItem(source, itemIdx, origName) {
       _cartData.groups[source][itemIdx] = { name: product.name, price: product.price };
       const newTotal = Object.values(_cartData.groups).flat().reduce((s, i) => s + parseFloat(i.price.replace('$', '')), 0);
       _cartData.total = `$${newTotal.toFixed(2)}`;
-      renderCart(_cartData.groups, _cartData.mealOrder, _cartData.total, _cartData.url);
+      renderCart(_cartData.groups, _cartData.mealOrder, _cartData.total, _cartData.url, [], true);
     } catch(e) {
       goBtn.textContent = 'error'; goBtn.disabled = false;
     }

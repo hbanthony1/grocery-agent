@@ -21,7 +21,7 @@
   <div class="top-nav-actions">
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
-    <button class="btn-nav" id="navHoliday" onclick="toggleHolidaySection()">holiday</button>
+    <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">holiday</button>
     <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">preferences</button>
   </div>
 </nav>
@@ -66,10 +66,10 @@
   <!-- STEP 0: Your Week -->
   <div id="step0">
 
-    <!-- HOLIDAY PLANNING CARD (shown when nav button toggled) -->
+    <!-- HOLIDAY SUMMARY CARD (shown when a holiday is planned) -->
     <div id="holidayCard" class="card" style="display:none">
-      <div class="card-label">🎄 holiday meal planning</div>
-      <div id="holidaySection"><span class="hh-loading">loading...</span></div>
+      <div class="card-label">🎄 holiday meal</div>
+      <div id="holidaySection"></div>
     </div>
 
     <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
@@ -261,12 +261,8 @@
 
   <!-- STEP 3: Cart -->
   <div id="step3" style="display:none">
-    <div id="cartLoadingBar" class="cart-loader" style="display:none">
-      <div class="cart-track">
-        <div class="cart-track-bg"></div>
-        <div class="cart-track-progress" id="cartBuildProgress"></div>
-        <span class="cart-emoji" id="cartBuildCart">🛒</span>
-      </div>
+    <div id="cartLoadingBar" class="loading-spinner" style="display:none">
+      <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="cartLoadingMsg" aria-live="polite">Building your Walmart cart...</div>
     </div>
     <div id="cartError" class="error-box" style="display:none"></div>
@@ -281,6 +277,9 @@
           <button class="cart-view-pill"         id="cartViewCategory" onclick="setCartView('category')">by category</button>
         </div>
       </div>
+      <div class="cart-search-row">
+        <input class="cart-search" id="cartSearch" type="search" placeholder="search items..." oninput="filterCart(this.value)" autocomplete="off">
+      </div>
       <div class="cart-list" id="cartList"></div>
       <div class="total-row">
         <span class="total-label">estimated total</span>
@@ -289,7 +288,9 @@
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
       <div id="notFoundBox" class="cart-info-box warn" style="display:none"></div>
       <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
+      <div id="reuseBox" class="cart-info-box note" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>
+      <div id="sanityBox" class="sanity-box" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
@@ -426,6 +427,44 @@
     <div class="recipes-page-body">
       <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
       <div id="pantryList"></div>
+    </div>
+  </div>
+
+  <!-- HOLIDAY PLANNER PAGE (full-screen) -->
+  <div id="holidayPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeHolidayPlanner()">← back</button>
+      <span class="prefs-page-title">holiday planner</span>
+      <button class="btn primary" onclick="saveHolidayPlan()">save →</button>
+    </div>
+    <div class="prefs-page-body holiday-planner-body">
+      <div class="card">
+        <div class="card-label">event</div>
+        <div class="meal-pick-grid" id="hpTypePicker"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <span class="prefs-sublabel" style="margin:0">guests</span>
+          <input id="hpGuests" type="number" class="schedule-note" min="1" max="80" style="width:72px">
+          <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpGenerateBtn" onclick="generateHolidayMenu()">generate menu →</button>
+        </div>
+      </div>
+      <div id="hpMenuCard" style="display:none">
+        <div class="card">
+          <div class="card-label">menu <span style="font-size:10px;font-weight:400;opacity:0.55">(one dish per line)</span></div>
+          <div id="hpMenuBody"></div>
+        </div>
+      </div>
+      <div id="hpNotesCard" style="display:none">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <span class="prefs-sublabel">guest notes</span>
+            <textarea id="hpNotes" class="prefs-notes-area" rows="3" placeholder="dietary restrictions, special guests, allergies..."></textarea>
+          </div>
+          <div>
+            <span class="prefs-sublabel">prep timeline</span>
+            <textarea id="hpTimeline" class="prefs-notes-area" rows="4" placeholder="e.g. Thursday 8am: turkey in oven · 2pm: prep sides..."></textarea>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
