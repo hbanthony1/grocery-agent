@@ -189,6 +189,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .cx-quick  { background: var(--accent-light);   color: var(--accent-dark); }
 .cx-normal { background: var(--approval-light); color: var(--approval); }
 .cx-open   { background: var(--surface2);       color: var(--text2); }
+.cx-out    { background: var(--surface);        color: var(--text3); }
 
 .btn-swap { background: none; border: 1.5px solid var(--border); border-radius: var(--r); padding: 4px 8px; font-size: 12px; color: var(--text3); cursor: pointer; transition: all 120ms; flex-shrink: 0; }
 .btn-swap:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
@@ -201,6 +202,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .easy-toggle input[type="checkbox"] { display: none; }
 .easy-badge { font-size: 10px; font-family: var(--mono); color: var(--approval-dark); background: var(--approval-light); border-radius: var(--r-pill); padding: 1px 6px; }
 .meal-card.easy-meal { background: var(--approval-light); border-left-color: var(--approval); }
+.meal-card.out-night { opacity: 0.55; }
+.meal-card.out-night .meal-name { color: var(--text2); font-style: italic; cursor: default; }
 
 /* Serving size stepper */
 .serving-size-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
@@ -243,6 +246,9 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .cart-item-price { font-size: 12px; font-family: var(--mono); color: var(--text2); }
 .cart-item-swap { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--text3); opacity: 0.45; padding: 0 2px; line-height: 1; transition: opacity 120ms, color 120ms; }
 .cart-item-swap:hover { opacity: 1; color: var(--primary); }
+.cart-item-check { width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; accent-color: var(--primary); }
+.cart-item.deselected { opacity: 0.4; }
+.cart-item.deselected .cart-item-name { text-decoration: line-through; }
 
 .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 0; border-top: 1px solid var(--border); margin-top: 4px; }
 .total-label { font-size: 12px; font-family: var(--mono); color: var(--text3); }
@@ -355,6 +361,7 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .complexity-btn.normal { background: var(--approval-light); color: var(--approval);   border-color: var(--approval); }
 .complexity-btn.quick  { background: var(--accent-light);   color: var(--accent-dark); border-color: var(--accent); }
 .complexity-btn.open   { background: var(--surface2);       color: var(--text2);       border-color: var(--border); }
+.complexity-btn.out    { background: var(--surface);        color: var(--text3);       border-color: var(--border); border-style: dashed; }
 .schedule-note { border: 1.5px solid var(--border); border-radius: var(--r); padding: 4px 6px; font-family: var(--sans); font-size: 11px; color: var(--text2); background: var(--bg); outline: none; width: 100%; box-sizing: border-box; transition: border-color 0.15s, box-shadow 0.15s; }
 .schedule-note:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255,107,53,.12); }
 

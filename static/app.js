@@ -70,6 +70,7 @@ let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
 let _cartData = null;            // { groups, mealOrder, total, url } — kept for view toggle
 let _cartFilter = '';            // current search query
+let _cartDeselected = new Set(); // keys of deselected items ("source-origIdx")
 let _prefsTrap = null;           // focus trap cleanup fns
 let _recipesTrap = null;
 let _pantryTrap = null;
@@ -451,12 +452,13 @@ const SCHEDULE_DAYS = [
   { key: 'Saturday',  short: 'Sat', default: 'open'   },
   { key: 'Sunday',    short: 'Sun', default: 'open'   },
 ];
-const COMPLEXITY_CYCLE = ['normal', 'quick', 'open'];
-const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open' };
+const COMPLEXITY_CYCLE = ['normal', 'quick', 'open', 'out'];
+const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open', out: 'Out' };
 const COMPLEXITY_DESC  = {
   quick:  'QUICK — 30 min or less (frozen, heat-and-eat, or simple assembly)',
   normal: 'NORMAL — standard weeknight (30–60 min)',
   open:   'OPEN — plenty of time (elaborate recipes welcome: lasagna, slow cooker, etc.)',
+  out:    'OUT — eating out or away from home, no dinner needed',
 };
 
 let schedule = {};
@@ -561,9 +563,10 @@ function cycleComplexity(day) {
 }
 
 function buildSchedulePrompt() {
-  return SCHEDULE_DAYS.map(d => {
-    return `- ${d.key}: ${COMPLEXITY_DESC[schedule[d.key].complexity]}`;
-  }).join('\n');
+  return SCHEDULE_DAYS
+    .filter(d => schedule[d.key].complexity !== 'out')
+    .map(d => `- ${d.key}: ${COMPLEXITY_DESC[schedule[d.key].complexity]}`)
+    .join('\n');
 }
 
 function resetApp() {
@@ -1821,16 +1824,24 @@ async function runMealPlan() {
       ).join('\n')}\n`
     : '';
 
+  const outDays  = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity === 'out').map(d => d.key);
+  const planDays = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity !== 'out').map(d => d.key);
+  const dinnerCount = planDays.length;
+
   const newMealInstruction = includeNew
-    ? `IMPORTANT: Exactly 2 of the 7 meals must be completely new recipes this family has NOT cooked before.
+    ? `IMPORTANT: Exactly 2 of the planned meals must be completely new recipes this family has NOT cooked before.
        Choose these based on their taste profile (kid-friendly, protein-forward, comfort food) but pick
        dishes not mentioned anywhere in their history or favorites lists.
        Mark these new meals with [NEW] at the end of the meal name so they stand out.
-       The other 5 meals should come from their recipe book or favorites list, rotating in variety.`
-    : `All 7 meals should come from the recipe book or favorites list, rotating for variety.`;
+       The remaining meals should come from their recipe book or favorites list, rotating in variety.`
+    : `All planned meals should come from the recipe book or favorites list, rotating for variety.`;
+
+  const outNote = outDays.length
+    ? `\nSkip these days entirely — family is eating out or has no dinner planned: ${outDays.join(', ')}\n`
+    : '';
 
   const prompt = `You are a weekly meal planner for a family household in Montana.
-Based on the preferences below, generate exactly 7 dinners for the week — one per day Monday through Sunday.
+Based on the preferences below, generate exactly ${dinnerCount} dinners — one for each of: ${planDays.join(', ')}.
 This week they are cooking for ${servingSize} people.
 ${buildRecipeRepoPrompt()}${pantrySection}${lastWeekSection}
 PREFERENCES:
@@ -1838,7 +1849,7 @@ ${prefsText}
 
 SCHEDULE (match meal complexity to each day's availability):
 ${buildSchedulePrompt()}
-
+${outNote}
 ${newMealInstruction}
 
 Rules:
@@ -1847,9 +1858,8 @@ Rules:
 - Never repeat a meal from the "Do NOT repeat" list
 - Vary proteins: no same protein two days in a row
 - Keep meals practical and kid-friendly
-- Assign one meal per day of the week
 
-Return ONLY a JSON array of exactly 7 objects, no other text, no markdown:
+Return ONLY a JSON array of exactly ${dinnerCount} objects (one per planned day), no other text, no markdown:
 [{"day":"Monday","meal":"Meal Name","isNew":false},{"day":"Tuesday","meal":"Meal Name [NEW]","isNew":true},...]
 
 Set isNew:true only for the brand new recipes.`;
@@ -1864,6 +1874,12 @@ Set isNew:true only for the brand new recipes.`;
     if (!resp.ok || data.error) throw new Error(data.error || 'Server error');
     const text = data.content.trim().replace(/```json|```/g,'').trim();
     meals = JSON.parse(text);
+    // Insert Out entries for skipped days and sort by week order
+    outDays.forEach(day => {
+      if (!meals.find(m => m.day === day)) meals.push({ day, meal: 'Out', isOut: true, isNew: false });
+    });
+    const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
+    meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
   } catch(e) {
     meals = [
       {day:'Monday',    meal:"Pasta with Rao's Sauce",         isNew:false},
@@ -1913,13 +1929,27 @@ function renderMeals() {
   const dates = getUpcomingWeekDates();
   const grid = document.getElementById('mealGrid');
   grid.innerHTML = meals.map((m,i) => {
+    const dom = dates[m.day] || '';
+    const dow = DAY_ABBR[m.day] || m.day.slice(0,3);
+    if (m.isOut) {
+      return `
+      <div class="meal-card out-night" id="meal${i}">
+        <div class="day-badge">
+          <span class="dow">${dow}</span>
+          <span class="dom">${dom}</span>
+        </div>
+        <div class="meal-info">
+          <div class="meal-name">Eating out</div>
+          <div class="meal-tags"></div>
+        </div>
+        <span class="cx cx-out">Out</span>
+      </div>`;
+    }
     const isSwapping = swappingIndex === i;
     const tags = lookupTags(m.meal);
     const tagsHtml = tags.map(t => `<span class="tag">${t}</span>`).join('');
     const cx = schedule[m.day]?.complexity || 'normal';
     const cxLabel = COMPLEXITY_LABEL[cx] || 'Normal';
-    const dom = dates[m.day] || '';
-    const dow = DAY_ABBR[m.day] || m.day.slice(0,3);
     const mealName = m.meal.replace(' [NEW]','');
     const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
@@ -2080,7 +2110,7 @@ async function startCartBuild() {
   const snb = document.getElementById('sanityBox');      if (snb) snb.style.display = 'none';
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
-  const mealNames = meals.map(m => m.meal.replace(' [NEW]','').trim());
+  const mealNames = meals.filter(m => !m.isOut).map(m => m.meal.replace(' [NEW]','').trim());
 
   try {
     const controller = new AbortController();
@@ -2149,8 +2179,11 @@ function _renderCartList(groups, mealOrder) {
           <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
         </div>
         ${items.map(item => {
+          const key = `${item._src}-${item._idx}`;
+          const desel = _cartDeselected.has(key);
           const esc = item.name.replace(/'/g, '&#39;');
-          return `<div class="cart-item" data-swap-key="${item._src}-${item._idx}">
+          return `<div class="cart-item${desel ? ' deselected' : ''}" data-swap-key="${key}">
+            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')">
             <span class="cart-item-name">${item.name}</span>
             <span class="cart-item-right">
               <span class="cart-item-price">${item.price}</span>
@@ -2172,20 +2205,42 @@ function _renderCartList(groups, mealOrder) {
           <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
           <span class="cart-group-subtotal">$${groupTotal.toFixed(2)}</span>
         </div>
-        ${items.map((item, idx) => {
-          const key = `${source}-${idx}`;
+        ${items.map((item) => {
+          const origIdx = (groups[source] || []).indexOf(item);
+          const key = `${source}-${origIdx}`;
+          const desel = _cartDeselected.has(key);
           const esc = item.name.replace(/'/g, '&#39;');
-          return `<div class="cart-item" data-swap-key="${key}">
+          return `<div class="cart-item${desel ? ' deselected' : ''}" data-swap-key="${key}">
+            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')">
             <span class="cart-item-name">${item.name}</span>
             <span class="cart-item-right">
               <span class="cart-item-price">${item.price}</span>
-              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${source}',${idx},'${esc}')">↕</button>
+              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${source}',${origIdx},'${esc}')">↕</button>
             </span>
           </div>`;
         }).join('')}
       </div>`;
     }).join('');
   }
+}
+
+function toggleCartItem(key) {
+  if (_cartDeselected.has(key)) _cartDeselected.delete(key);
+  else _cartDeselected.add(key);
+  _renderCartList(_cartData.groups, _cartData.mealOrder);
+  _updateCartTotal();
+}
+
+function _updateCartTotal() {
+  let total = 0;
+  _cartData.mealOrder.forEach(src => {
+    (_cartData.groups[src] || []).forEach((item, origIdx) => {
+      if (!_cartDeselected.has(`${src}-${origIdx}`)) {
+        total += parseFloat(item.price.replace('$', '')) || 0;
+      }
+    });
+  });
+  document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
 }
 
 function checkPriceSpikes(groups) {
@@ -2325,6 +2380,7 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
   _cartData = { groups, mealOrder, total, url };
   _cartView = 'meal';
   _cartFilter = '';
+  _cartDeselected = new Set();
   const searchEl = document.getElementById('cartSearch');
   if (searchEl) searchEl.value = '';
   document.getElementById('cartViewMeal').classList.add('active');
