@@ -1874,9 +1874,10 @@ Set isNew:true only for the brand new recipes.`;
     if (!resp.ok || data.error) throw new Error(data.error || 'Server error');
     const text = data.content.trim().replace(/```json|```/g,'').trim();
     meals = JSON.parse(text);
-    // Insert Out entries for skipped days and sort by week order
+    // Force Out entries for skipped days regardless of what Claude returned
     outDays.forEach(day => {
-      if (!meals.find(m => m.day === day)) meals.push({ day, meal: 'Out', isOut: true, isNew: false });
+      meals = meals.filter(m => m.day !== day);
+      meals.push({ day, meal: 'Out', isOut: true, isNew: false });
     });
     const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
     meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
