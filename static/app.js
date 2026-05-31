@@ -2172,7 +2172,7 @@ function _renderCartList(groups, mealOrder) {
     });
     list.innerHTML = HH_CATEGORY_ORDER.filter(cat => catGroups[cat]).map(cat => {
       const items = catGroups[cat];
-      const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
+      const groupTotal = items.reduce((sum, i) => _cartDeselected.has(`${i._src}-${i._idx}`) ? sum : sum + parseFloat(i.price.replace('$', '')), 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
           <span class="cart-group-label">${HH_CATEGORY_LABELS[cat] || cat}</span>
@@ -2199,7 +2199,7 @@ function _renderCartList(groups, mealOrder) {
       const items = (groups[source] || []).filter(i => _match(i.name));
       const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday'].includes(source);
       const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source;
-      const groupTotal = items.reduce((sum, i) => sum + parseFloat(i.price.replace('$', '')), 0);
+      const groupTotal = items.reduce((sum, i) => { const k=`${source}-${(groups[source]||[]).indexOf(i)}`; return _cartDeselected.has(k) ? sum : sum + parseFloat(i.price.replace('$','')); }, 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
           <span class="cart-group-label${isSpecial ? ' special' : ''}">${label}</span>
