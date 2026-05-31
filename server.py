@@ -798,7 +798,7 @@ def build_cart():
 
         # ── Phase 2: all Walmart searches in parallel ─────────────────────
         search_results = []
-        with ThreadPoolExecutor(max_workers=min(len(all_search_tasks), 10)) as ex:
+        with ThreadPoolExecutor(max_workers=max(1, min(len(all_search_tasks), 10))) as ex:
             fut_to_task = {ex.submit(search_product, t['search_query']): t for t in all_search_tasks}
             for fut in as_completed(fut_to_task):
                 task = fut_to_task[fut]
