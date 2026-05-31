@@ -824,8 +824,10 @@ def build_cart():
                     cart_items.append({"itemId": item_id, "quantity": task.get('qty', 1)})
                     source = task.get('source', 'other')
                     groups.setdefault(source, []).append({
-                        "name":  product.get("name", "Unknown"),
-                        "price": f"${price:.2f}",
+                        "name":   product.get("name", "Unknown"),
+                        "price":  f"${price:.2f}",
+                        "itemId": item_id,
+                        "qty":    task.get("qty", 1),
                     })
                     total += price
                     print(f"  + [{source}] {product['name']} ${price}")

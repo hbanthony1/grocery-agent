@@ -2242,6 +2242,30 @@ function _updateCartTotal() {
     });
   });
   document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
+  _updateBudgetBar(total);
+}
+
+function _updateBudgetBar(totalNum) {
+  const budgetBar = document.getElementById('budgetBar');
+  if (!budgetBar) return;
+  const target    = prefs.household?.budgetTarget;
+  const budgetMax = prefs.household?.budgetMax;
+  if (!target) { budgetBar.style.display = 'none'; return; }
+  let cls, msg;
+  if (totalNum <= target) {
+    cls = 'budget-ok';
+    msg = `✓ within budget — $${(target - totalNum).toFixed(0)} under $${target} target`;
+  } else if (budgetMax && totalNum <= budgetMax) {
+    cls = 'budget-warn';
+    msg = `↑ $${(totalNum - target).toFixed(0)} over $${target} target — $${(budgetMax - totalNum).toFixed(0)} left before $${budgetMax} max`;
+  } else {
+    cls = 'budget-over';
+    const ref = budgetMax || target;
+    msg = `⚠ $${(totalNum - ref).toFixed(0)} over $${ref} ${budgetMax ? 'max' : 'target'} budget`;
+  }
+  budgetBar.className = `budget-bar ${cls}`;
+  budgetBar.innerHTML = msg + (cls === 'budget-over' ? ` <button class="btn-link" style="margin-left:10px;font-size:11px" onclick="suggestCheaperSwaps()">suggest cheaper swaps →</button>` : '');
+  budgetBar.style.display = 'block';
 }
 
 function checkPriceSpikes(groups) {
@@ -2309,39 +2333,19 @@ function runSanityCheck(groups, mealOrder, url) {
   });
 
   const cartUrlBox = document.getElementById('cartUrlBox');
+  if (url && cartUrlBox) cartUrlBox.style.display = 'flex';
+
   if (!issues.length) {
-    // All clear — show Walmart button immediately
     sanityBox.style.display = 'none';
-    if (url && cartUrlBox) cartUrlBox.style.display = 'flex';
     return;
   }
 
-  // Show sanity check; hold Walmart button until approved
-  if (cartUrlBox) cartUrlBox.style.display = 'none';
+  // Show issues as informational — Walmart button is still available
   sanityBox.style.display = 'block';
-  sanityBox.innerHTML = `<strong>Cart review — ${issues.length} thing${issues.length > 1 ? 's' : ''} to check:</strong>
-    ${issues.join('<br>')}
-    <div class="sanity-actions">
-      <button class="btn primary" onclick="approveSanityCheck()">looks good →</button>
-      <span class="sanity-ok" id="sanityOkMsg" style="display:none">✓ approved</span>
-    </div>`;
-  // Store url for when user approves
-  sanityBox.dataset.cartUrl = url || '';
+  sanityBox.innerHTML = `<strong>Heads up — ${issues.length} thing${issues.length > 1 ? 's' : ''} to review:</strong>
+    ${issues.join('<br>')}`;
 }
 
-function approveSanityCheck() {
-  const sanityBox = document.getElementById('sanityBox');
-  const cartUrlBox = document.getElementById('cartUrlBox');
-  const url = sanityBox?.dataset.cartUrl;
-  if (cartUrlBox) cartUrlBox.style.display = 'flex';
-  if (url) {
-    document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
-  }
-  const msg = document.getElementById('sanityOkMsg');
-  if (msg) { msg.style.display = 'inline'; }
-  const approveBtn = sanityBox?.querySelector('.btn.primary');
-  if (approveBtn) approveBtn.style.display = 'none';
-}
 
 function flagIngredientReuse(groups, mealOrder) {
   const STOP = new Set(['great','value','brand','fresh','count','pack','ounce','fluid','large','small','organic','natural','original','classic','premium','select','whole','ready','quick','easy','family','serving','style','grade','extra','light','dark','lean','boneless','skinless','sliced','diced','chopped','shredded','grated','cooked','added','free','each','with','from','your','the','and','for','box','bag','jar','can','bottle','gallon','quart','pint','liter','walmart','best','choice']);
@@ -2393,33 +2397,7 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
   _renderCartList(groups, mealOrder);
 
   document.getElementById('cartTotal').textContent = total;
-
-  // Budget indicator
-  const budgetBar = document.getElementById('budgetBar');
-  if (budgetBar) {
-    const totalNum  = parseFloat(total.replace('$', '')) || 0;
-    const target    = prefs.household?.budgetTarget;
-    const budgetMax = prefs.household?.budgetMax;
-    if (target) {
-      let cls, msg;
-      if (totalNum <= target) {
-        cls = 'budget-ok';
-        msg = `✓ within budget — $${(target - totalNum).toFixed(0)} under $${target} target`;
-      } else if (budgetMax && totalNum <= budgetMax) {
-        cls = 'budget-warn';
-        msg = `↑ $${(totalNum - target).toFixed(0)} over $${target} target — $${(budgetMax - totalNum).toFixed(0)} left before $${budgetMax} max`;
-      } else {
-        cls = 'budget-over';
-        const ref = budgetMax || target;
-        msg = `⚠ $${(totalNum - ref).toFixed(0)} over $${ref} ${budgetMax ? 'max' : 'target'} budget`;
-      }
-      budgetBar.className = `budget-bar ${cls}`;
-      budgetBar.innerHTML = msg + (cls === 'budget-over' ? ` <button class="btn-link" style="margin-left:10px;font-size:11px" onclick="suggestCheaperSwaps()">suggest cheaper swaps →</button>` : '');
-      budgetBar.style.display = 'block';
-    } else {
-      budgetBar.style.display = 'none';
-    }
-  }
+  _updateBudgetBar(parseFloat(total.replace('$', '')) || 0);
 
   // Not-found items
   const notFoundBox = document.getElementById('notFoundBox');
@@ -2457,19 +2435,26 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
     }
   }
 
-  // Sanity check — gates the "open in Walmart" button on first build
-  if (skipSanity || !url) {
-    if (url) {
-      document.getElementById('cartUrlBox').style.display = 'flex';
-      document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
-    }
-  } else {
-    const sanityBoxEl = document.getElementById('sanityBox');
-    if (sanityBoxEl) sanityBoxEl.style.display = 'none';
-    document.getElementById('cartUrlBox').style.display = 'none';
-    document.getElementById('openCartBtn').onclick = () => window.open(url, '_blank');
-    runSanityCheck(groups, mealOrder, url);
-  }
+  // Cart review (informational only — never blocks the Walmart button)
+  document.getElementById('openCartBtn').onclick = () => window.open(buildFilteredCartUrl(), '_blank');
+  if (url) document.getElementById('cartUrlBox').style.display = 'flex';
+  if (!skipSanity && url) runSanityCheck(groups, mealOrder, url);
+}
+
+function buildFilteredCartUrl() {
+  if (!_cartData?.url) return '#';
+  const parts = [];
+  _cartData.mealOrder.forEach(src => {
+    (_cartData.groups[src] || []).forEach((item, origIdx) => {
+      if (!_cartDeselected.has(`${src}-${origIdx}`) && item.itemId) {
+        parts.push(`${item.itemId}|${item.qty || 1}`);
+      }
+    });
+  });
+  if (!parts.length) return _cartData.url;
+  const base = 'https://affil.walmart.com/cart/addToCart?items=' + parts.join(',');
+  const publisherId = _cartData.url.match(/affiliateId=([^&]+)/)?.[1];
+  return publisherId ? base + '&affiliateId=' + publisherId : base;
 }
 
 function confirmOrder() {
@@ -2549,10 +2534,10 @@ async function swapCartItem(source, itemIdx, origName) {
       });
       const product = await resp.json();
       if (!resp.ok || product.error) { goBtn.textContent = 'not found'; goBtn.disabled = false; return; }
-      _cartData.groups[source][itemIdx] = { name: product.name, price: product.price };
-      const newTotal = Object.values(_cartData.groups).flat().reduce((s, i) => s + parseFloat(i.price.replace('$', '')), 0);
-      _cartData.total = `$${newTotal.toFixed(2)}`;
-      renderCart(_cartData.groups, _cartData.mealOrder, _cartData.total, _cartData.url, [], true);
+      _cartData.groups[source][itemIdx] = { name: product.name, price: product.price, itemId: product.itemId, qty: _cartData.groups[source][itemIdx]?.qty || 1 };
+      row.remove();
+      _renderCartList(_cartData.groups, _cartData.mealOrder);
+      _updateCartTotal();
     } catch(e) {
       goBtn.textContent = 'error'; goBtn.disabled = false;
     }
