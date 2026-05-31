@@ -750,10 +750,15 @@ def build_cart():
             holiday_label = f"{holiday['type']} for {holiday.get('guests', 8)} people"
             job_sources = job_sources + [(holiday_label, 'holiday')]
 
+        # Build recipe lookup so cart ingredients match the recipe card
+        recipes_by_name = {r['name'].lower(): r for r in _load_recipes()}
+
         claude_jobs = {}
         with ThreadPoolExecutor(max_workers=min(len(job_sources) + 1, 14)) as ex:
             for name, source_label in job_sources:
-                claude_jobs[ex.submit(get_search_queries_for_meal, name, servings)] = source_label
+                recipe      = recipes_by_name.get(name.lower())
+                ingredients = (recipe.get('ingredients') or []) if recipe else []
+                claude_jobs[ex.submit(get_search_queries_for_meal, name, servings, ingredients or None)] = source_label
             staple_fut = ex.submit(get_staple_queries)
             claude_jobs[staple_fut] = 'staples'
 
@@ -1054,21 +1059,49 @@ def _merge_seed_recipes() -> None:
 
 
 
-def get_search_queries_for_meal(meal_name: str, servings: int = 4) -> list[dict]:
-    """Ask Claude to generate brand-aware Walmart search queries for a meal."""
+def get_search_queries_for_meal(meal_name: str, servings: int = 4, recipe_ingredients: list = None) -> list[dict]:
+    """Generate Walmart search queries for a meal.
+
+    Uses stored recipe ingredients when provided so the cart matches the
+    recipe card exactly. Falls back to inferring from the meal name alone.
+    """
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY not set")
 
-    client = anthropic.Anthropic(api_key=api_key)
-    msg = client.messages.create(
-        model=MODEL,
-        max_tokens=600,
-        messages=[{
-            "role": "user",
-            "content": f"""Generate Walmart grocery search queries for cooking {meal_name} for {servings} people.
+    if recipe_ingredients:
+        # Build a readable ingredient list from stored recipe data
+        lines = []
+        for ing in recipe_ingredients:
+            if isinstance(ing, dict):
+                name   = ing.get('name', '').strip()
+                amount = ing.get('amount', '').strip()
+                unit   = ing.get('unit', '').strip()
+                parts  = [name]
+                if amount:
+                    parts.append(f'({amount}{" " + unit if unit else ""})')
+                lines.append('- ' + ' '.join(parts))
+            elif isinstance(ing, str) and ing.strip():
+                lines.append('- ' + ing.strip())
+        ingredient_list = '\n'.join(lines)
+        prompt = f"""Convert these recipe ingredients for {meal_name} (serves {servings}) into Walmart search queries.
 
-Return ONLY a JSON array, no markdown, no explanation:
+Ingredients:
+{ingredient_list}
+
+Return ONLY a JSON array, no markdown:
+[{{"search_query": "descriptive Walmart search string", "qty": 1}}, ...]
+
+Rules:
+- One entry per distinct ingredient — use the ingredient list above as the source of truth
+- Convert to good Walmart search terms (e.g. "heavy whipping cream" not "cream")
+- Keep Rao's Marinara and Prego by brand name — they search well
+- qty = 1 unless the recipe clearly needs 2+ packages of the same item
+- Skip salt, pepper, olive oil, water — pantry staples assumed stocked"""
+    else:
+        prompt = f"""Generate Walmart grocery search queries for cooking {meal_name} for {servings} people.
+
+Return ONLY a JSON array, no markdown:
 [{{"search_query": "descriptive product search string", "qty": 1}}, ...]
 
 Rules:
@@ -1077,7 +1110,12 @@ Rules:
 - qty is number of packages to add to cart (almost always 1)
 - Skip salt, pepper, olive oil — assume those are stocked
 - 6-10 ingredients max"""
-        }]
+
+    client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=600,
+        messages=[{"role": "user", "content": prompt}]
     )
     text = msg.content[0].text.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(text)
