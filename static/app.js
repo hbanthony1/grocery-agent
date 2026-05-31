@@ -55,6 +55,10 @@ let prefs = {};
 const pendingRatings = {};
 let _pendingGeneratedRecipe = null;
 let calendarEvents = null;
+let calendarWeek = (() => {
+  const day = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
+  return (day === 0 || day >= 5) ? 'next' : 'current';
+})();
 let weekBreakfasts = [];
 let weekLunches    = [];
 let weekDessert    = '';
@@ -490,12 +494,18 @@ async function loadCalendarStatus() {
 
 async function loadCalendarEvents() {
   try {
-    const resp = await fetch('/calendar/week');
+    const resp = await fetch(`/calendar/week?week=${calendarWeek}`);
     if (resp.ok) {
       calendarEvents = await resp.json();
       applyCalendarComplexity();
     }
   } catch(e) {}
+}
+
+async function setCalendarWeek(week) {
+  calendarWeek = week;
+  renderCalBanner({ connected: true, setup: true });
+  await loadCalendarEvents();
 }
 
 function applyCalendarComplexity() {
@@ -518,6 +528,10 @@ function renderCalBanner(status) {
     el.innerHTML = `<div class="cal-connected-bar">
       <span class="cal-status-dot active"></span>
       <span class="cal-status-text">Google Calendar connected</span>
+      <div class="cal-week-toggle">
+        <button class="cal-week-btn${calendarWeek === 'current' ? ' active' : ''}" onclick="setCalendarWeek('current')">This week</button>
+        <button class="cal-week-btn${calendarWeek === 'next' ? ' active' : ''}" onclick="setCalendarWeek('next')">Next week</button>
+      </div>
       <button class="cal-disconnect-btn" onclick="disconnectCalendar()">disconnect</button>
     </div>`;
   } else {

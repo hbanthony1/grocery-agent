@@ -333,6 +333,10 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .cal-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
 .cal-status-dot.active { background: var(--approval); }
 .cal-status-text { flex: 1; }
+.cal-week-toggle { display: flex; border: 1px solid var(--approval); border-radius: 20px; overflow: hidden; flex-shrink: 0; }
+.cal-week-btn { background: transparent; border: none; font-size: 11px; color: var(--approval-dark); cursor: pointer; padding: 3px 8px; line-height: 1; }
+.cal-week-btn.active { background: var(--approval); color: #fff; }
+.cal-week-btn:not(.active):hover { background: var(--approval-light); filter: brightness(0.95); }
 .cal-disconnect-btn { background: none; border: none; font-size: 11px; color: var(--approval-dark); cursor: pointer; text-decoration: underline; padding: 0; }
 .cal-disconnect-btn:hover { color: var(--text); }
 

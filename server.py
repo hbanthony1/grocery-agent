@@ -925,8 +925,12 @@ def calendar_week():
     except Exception:
         tz = ZoneInfo('America/Denver')
 
+    week_param = request.args.get('week', 'current')
+
     today  = datetime.now(tz)
     monday = today - timedelta(days=today.weekday())
+    if week_param == 'next':
+        monday += timedelta(weeks=1)
     sunday = monday + timedelta(days=6)
     time_min = monday.replace(hour=0,  minute=0,  second=0,  microsecond=0).isoformat()
     time_max = sunday.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
