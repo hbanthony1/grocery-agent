@@ -12,13 +12,23 @@ load_dotenv()
 SEARCH_URL = "https://developer.api.walmart.com/api-proxy/service/affil/product/v2/search"
 
 
+def _load_private_key():
+    # Prefer inline env var (for hosted deployments), fall back to file path
+    key_contents = os.getenv("WALMART_PRIVATE_KEY_CONTENTS")
+    if key_contents:
+        return RSA.import_key(key_contents.encode())
+    key_path = os.getenv("WALMART_PRIVATE_KEY_PATH")
+    if key_path:
+        return RSA.import_key(open(key_path).read())
+    raise ValueError("No Walmart private key configured — set WALMART_PRIVATE_KEY_CONTENTS or WALMART_PRIVATE_KEY_PATH")
+
+
 def _auth_headers() -> dict:
     consumer_id = os.getenv("WALMART_CONSUMER_ID")
-    key_path = os.getenv("WALMART_PRIVATE_KEY_PATH")
     key_version = os.getenv("WALMART_PRIVATE_KEY_VERSION", "1")
     timestamp = str(int(time.time() * 1000))
     message = f"{consumer_id}\n{timestamp}\n{key_version}\n"
-    key = RSA.import_key(open(key_path).read())
+    key = _load_private_key()
     signature = base64.b64encode(
         pkcs1_15.new(key).sign(SHA256.new(message.encode()))
     ).decode()
