@@ -14,6 +14,13 @@ data/prefs.json
 data/recipes.json
 data/pantry.json
 data/google_token.json
+data/staples.json
+data/spend_history.json
+data/meal_schedule.json
+
+# Multi-user beta: all runtime data lives here
+data/users/
+data/users.json
 
 # OS
 .DS_Store

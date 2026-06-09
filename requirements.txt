@@ -4,3 +4,5 @@ requests
 pycryptodome
 python-dotenv
 anthropic
+gunicorn
+werkzeug

@@ -21,8 +21,12 @@
   <div class="top-nav-actions">
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
+    <button class="btn-nav" id="navStaples" onclick="toggleStaplesPanel()">staples</button>
     <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">holiday</button>
+    <button class="btn-nav" id="navTheme" onclick="cycleTheme()" aria-label="Toggle color theme">auto</button>
+    <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
     <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">preferences</button>
+    <button class="btn-nav" id="navLogout" onclick="doLogout()" title="Sign out">sign out</button>
   </div>
 </nav>
 
@@ -33,29 +37,53 @@
     <div class="hero-step-card todo" id="heroStep0" onclick="goToStep(0)">
       <div class="hero-step-num">1</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Your Week</div>
-        <div class="hero-step-desc">Schedule &amp; calendar</div>
+        <div class="hero-step-label">Recap</div>
+        <div class="hero-step-desc">Last week's meals</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
-    <div class="hero-step-card todo" id="heroStep1">
+    <div class="hero-step-card todo" id="heroStep1" onclick="goToStep(1)">
       <div class="hero-step-num">2</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Meal Plan</div>
-        <div class="hero-step-desc">7 dinners, AI-matched</div>
+        <div class="hero-step-label">Your Week</div>
+        <div class="hero-step-desc">Schedule &amp; calendar</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
     <div class="hero-step-card todo" id="heroStep2">
       <div class="hero-step-num">3</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Household</div>
-        <div class="hero-step-desc">Items to add</div>
+        <div class="hero-step-label">Meal Plan</div>
+        <div class="hero-step-desc">7 dinners, AI-matched</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
     <div class="hero-step-card todo" id="heroStep3">
       <div class="hero-step-num">4</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Household</div>
+        <div class="hero-step-desc">Items to add</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep4" onclick="goToStep(4)">
+      <div class="hero-step-num">5</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Staples</div>
+        <div class="hero-step-desc">Weekly essentials</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep5">
+      <div class="hero-step-num">6</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Review</div>
+        <div class="hero-step-desc">Ingredients &amp; overlaps</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep6">
+      <div class="hero-step-num">7</div>
       <div class="hero-step-info">
         <div class="hero-step-label">Cart</div>
         <div class="hero-step-desc">Build &amp; check out</div>
@@ -63,16 +91,10 @@
     </div>
   </div>
 
-  <!-- STEP 0: Your Week -->
+  <!-- STEP 0: Last Week's Recap -->
   <div id="step0">
 
-    <!-- HOLIDAY SUMMARY CARD (shown when a holiday is planned) -->
-    <div id="holidayCard" class="card" style="display:none">
-      <div class="card-label">🎄 holiday meal</div>
-      <div id="holidaySection"></div>
-    </div>
-
-    <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
+    <!-- WEEKLY RECAP CARD -->
     <div id="recapCard" class="card recap-card" style="display:none">
 
       <!-- Collapsed state (shown after saving) -->
@@ -87,6 +109,8 @@
           <span class="card-label" style="margin-bottom:0">last week's recap</span>
           <button class="btn-link" onclick="dismissRecap()">skip →</button>
         </div>
+
+        <div id="spendHistoryRow" style="display:none" class="recap-spend-row"></div>
 
         <div class="recap-section">
           <button class="recap-sec-hdr" onclick="toggleRecapSection('order')">
@@ -145,66 +169,83 @@
       </div>
     </div>
 
-    <div class="step0-grid">
-      <!-- Left: Calendar + Schedule -->
-      <div class="step0-col">
-        <div id="calSection"></div>
-        <div class="card">
-          <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
-          <div class="schedule-grid" id="scheduleGrid"></div>
-          <div class="schedule-legend">
-            <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
-            <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
-            <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
-          </div>
-        </div>
-      </div>
-      <!-- Right: Breakfast + Lunch picks -->
-      <div class="step0-col">
-        <div class="card">
-          <div class="card-label">breakfast this week</div>
-          <div id="breakfastSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">lunch this week</div>
-          <div id="lunchSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">dessert this week</div>
-          <div id="dessertSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">snacks this week</div>
-          <div id="snacksSection"><span class="hh-loading">loading...</span></div>
+  <div class="actions">
+    <button class="btn mustard" onclick="goToStep(1)">Continue to Your Week →</button>
+  </div>
+</div>
+
+<!-- STEP 1: Your Week -->
+<div id="step1" style="display:none">
+
+  <!-- HOLIDAY SUMMARY CARD (shown when a holiday is planned) -->
+  <div id="holidayCard" class="card" style="display:none">
+    <div class="card-label">🎄 holiday meal</div>
+    <div id="holidaySection"></div>
+  </div>
+
+  <div class="step0-grid">
+    <!-- Left: Calendar + Schedule -->
+    <div class="step0-col">
+      <div id="calSection"></div>
+      <div class="card">
+        <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
+        <div class="schedule-grid" id="scheduleGrid"></div>
+        <div class="schedule-legend">
+          <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
+          <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
+          <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
         </div>
       </div>
     </div>
-    <div class="actions step0-actions">
-      <div class="step0-toggles">
-        <div class="new-meal-toggle">
-          <input type="checkbox" id="includeNew" checked />
-          <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
-        </div>
-        <div class="new-meal-toggle" id="pantryToggleRow" style="display:none">
-          <input type="checkbox" id="usePantry" checked />
-          <label for="usePantry">Use pantry items where possible</label>
-        </div>
-        <div class="serving-size-row">
-          <span class="serving-size-label">cooking for</span>
-          <div class="serving-stepper">
-            <button class="stepper-btn" onclick="updateServingSize(servingSize - 1)" aria-label="Fewer servings">−</button>
-            <strong id="servingSizeVal">4</strong>
-            <button class="stepper-btn" onclick="updateServingSize(servingSize + 1)" aria-label="More servings">+</button>
-          </div>
-          <span class="serving-size-hint">dinner servings</span>
-        </div>
+    <!-- Right: Breakfast + Lunch picks -->
+    <div class="step0-col">
+      <div class="card">
+        <div class="card-label">breakfast this week</div>
+        <div id="breakfastSection"><span class="hh-loading">loading...</span></div>
       </div>
+      <div class="card">
+        <div class="card-label">lunch this week</div>
+        <div id="lunchSection"><span class="hh-loading">loading...</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">dessert this week</div>
+        <div id="dessertSection"><span class="hh-loading">loading...</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">snacks this week</div>
+        <div id="snacksSection"><span class="hh-loading">loading...</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="actions step0-actions">
+    <div class="step0-toggles">
+      <div class="new-meal-toggle">
+        <input type="checkbox" id="includeNew" checked />
+        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+      </div>
+      <div class="new-meal-toggle" id="pantryToggleRow" style="display:none">
+        <input type="checkbox" id="usePantry" checked />
+        <label for="usePantry">Use pantry items where possible</label>
+      </div>
+      <div class="serving-size-row">
+        <span class="serving-size-label">cooking for</span>
+        <div class="serving-stepper">
+          <button class="stepper-btn" onclick="updateServingSize(servingSize - 1)" aria-label="Fewer servings">−</button>
+          <strong id="servingSizeVal">4</strong>
+          <button class="stepper-btn" onclick="updateServingSize(servingSize + 1)" aria-label="More servings">+</button>
+        </div>
+        <span class="serving-size-hint">dinner servings</span>
+      </div>
+    </div>
+    <div class="step1-nav">
+      <button class="btn" onclick="goToStep(0)">← recap</button>
       <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
     </div>
   </div>
+</div>
 
-  <!-- STEP 1: Meal Plan -->
-  <div id="step1" style="display:none">
+<!-- STEP 2: Meal Plan -->
+<div id="step2" style="display:none">
     <div id="loadingBar" class="loading-spinner" style="display:none">
       <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="loadingMsg" aria-live="polite">Thinking up something delicious...</div>
@@ -223,14 +264,14 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" onclick="goToStep(0)">← back</button>
+      <button class="btn" onclick="goToStep(1)">← back</button>
       <button class="btn" id="regenerateBtn" onclick="runMealPlan()" style="display:none">↺ regenerate</button>
       <button class="btn mustard" id="approveBtn" onclick="approveMealPlan()" style="display:none">Approve & continue →</button>
     </div>
   </div>
 
-  <!-- STEP 2: Household Items -->
-  <div id="step2" style="display:none">
+  <!-- STEP 3: Household Items -->
+  <div id="step3" style="display:none">
     <div class="card">
       <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
       <div class="hh-grid" id="hhGrid"><span class="hh-loading">loading...</span></div>
@@ -241,10 +282,6 @@
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
-    <div class="card" id="fsCard" style="display:none">
-      <div class="card-label hh-label">frequent staples — <span id="fsCount">0 of 0</span></div>
-      <div class="hh-grid" id="fsGrid"></div>
-    </div>
     <div class="card hh-extras-card">
       <div class="card-label">anything else needed this week?</div>
       <div id="hhExtrasList"></div>
@@ -254,13 +291,68 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" onclick="goToStep(1)">← back</button>
-      <button class="btn mustard" onclick="navigateAndBuildCart()">Build cart →</button>
+      <button class="btn" onclick="goToStep(2)">← back</button>
+      <button class="btn mustard" onclick="navigateAndBuildCart()">Continue to Staples →</button>
     </div>
   </div>
 
-  <!-- STEP 3: Cart -->
-  <div id="step3" style="display:none">
+  <!-- STEP 4: Staples -->
+  <div id="step4" style="display:none">
+    <div class="card">
+      <div class="card-label">weekly staples — confirm what you need this week</div>
+      <div id="staplesStepList"><span class="hh-loading">loading staples...</span></div>
+    </div>
+    <div class="card" id="fsCard" style="display:none">
+      <div class="card-label hh-label">frequent staples — <span id="fsCount">0 of 0</span></div>
+      <div class="hh-grid" id="fsGrid"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">anything extra this week? <span class="card-label-hint">(one-time, not saved)</span></div>
+      <div id="staplesOneTimeList"></div>
+      <div class="hh-extra-input-row">
+        <input class="schedule-note" id="staplesOneTimeInput" placeholder="add a one-time item..." onkeydown="if(event.key==='Enter')addOneTimeStaple()" />
+        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addOneTimeStaple()">add</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(3)">← back</button>
+      <button class="btn mustard" onclick="proceedToReview()">Continue to Review →</button>
+    </div>
+  </div>
+
+  <!-- STEP 5: Ingredient Review -->
+  <div id="step5" style="display:none">
+    <div id="reviewLoadingBar" class="loading-spinner" style="display:none">
+      <div class="loading-spinner-circle"></div>
+      <div class="cart-loader-msg" id="reviewLoadingMsg" aria-live="polite">Loading ingredients from recipe book...</div>
+    </div>
+    <div id="reviewError" class="error-box" style="display:none"></div>
+    <div id="reviewCard" class="card" style="display:none">
+      <div class="cart-card-header">
+        <span class="card-label" style="margin-bottom:0">ingredient review</span>
+        <div class="cart-view-pills" role="group" aria-label="Review view">
+          <button class="cart-view-pill active" id="reviewViewRecipe"   onclick="setReviewView('recipe')">by recipe</button>
+          <button class="cart-view-pill"         id="reviewViewCategory" onclick="setReviewView('category')">by category</button>
+        </div>
+      </div>
+      <p class="review-hint">Uncheck anything you don't need, mark items already in pantry, or switch to <strong>by category</strong> to spot overlaps across meals and combine them.</p>
+      <div class="review-summary-row">
+        <span class="review-summary" id="reviewSummary"></span>
+        <div style="display:flex;gap:6px">
+          <button class="btn" onclick="copyShoppingList()" style="font-size:12px;padding:2px 10px;height:26px">copy list</button>
+          <button class="btn" onclick="exportShoppingList()" style="font-size:12px;padding:2px 10px;height:26px">export list</button>
+        </div>
+      </div>
+      <div id="reviewList"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(4)">← back</button>
+      <button class="btn mustard" id="buildCartFromReviewBtn" onclick="buildCartFromReview()" style="display:none">Build cart →</button>
+    </div>
+  </div>
+
+  <!-- STEP 6: Cart -->
+  <div id="step6" style="display:none">
     <div id="cartLoadingBar" class="loading-spinner" style="display:none">
       <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="cartLoadingMsg" aria-live="polite">Building your Walmart cart...</div>
@@ -290,21 +382,40 @@
       <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
       <div id="reuseBox" class="cart-info-box note" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>
-      <div id="sanityBox" class="sanity-box" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
     </div>
+    <!-- PREP GUIDE CARD (shown after cart is built) -->
+    <div id="prepGuideCard" class="card" style="display:none;margin-top:12px">
+      <div class="card-label">sunday prep guide</div>
+      <div id="prepGuideBody">
+        <p class="review-hint" style="margin-bottom:12px">Get a personalized checklist of what to prep tonight so weeknight dinners go smoothly.</p>
+        <button class="btn primary" id="prepGuideGenBtn" onclick="generatePrepGuide()">generate prep guide →</button>
+      </div>
+    </div>
+
     <div class="actions">
-      <button class="btn" onclick="goToStep(2)">← back</button>
+      <button class="btn" onclick="goToStep(4)">← back</button>
       <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()" style="display:none">retry →</button>
       <button class="btn mustard" id="doneBtn" onclick="confirmOrder()" style="display:none">I checked out →</button>
     </div>
   </div>
 
+  <!-- PICKER CONFIRM MODAL -->
+  <div id="pickerConfirmBackdrop" class="recipe-modal-backdrop" style="display:none" onclick="document.getElementById('pickerConfirmBackdrop').style.display='none'">
+    <div class="recipe-modal-card" onclick="event.stopPropagation()" style="max-width:360px" role="dialog" aria-modal="true" aria-labelledby="pickerConfirmTitle">
+      <div class="recipe-modal-header">
+        <span class="recipe-modal-name" id="pickerConfirmTitle"></span>
+        <button class="btn-icon" onclick="document.getElementById('pickerConfirmBackdrop').style.display='none'" aria-label="Close">×</button>
+      </div>
+      <div id="pickerConfirmBody" style="padding:16px 0 4px"></div>
+    </div>
+  </div>
+
   <!-- RECIPE MODAL -->
   <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
-    <div class="recipe-modal-card" onclick="event.stopPropagation()">
+    <div class="recipe-modal-card" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="recipeModalName">
       <div class="recipe-modal-header">
         <span class="recipe-modal-name" id="recipeModalName"></span>
         <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'" aria-label="Close recipe">×</button>
@@ -334,14 +445,13 @@
       <button class="btn mustard" id="prefsSaveBtn" onclick="savePrefsPage()">save →</button>
     </div>
     <div class="prefs-page-tabs">
-      <button class="prefs-tab active" id="prefTab-household" onclick="switchPrefsTab('household')">Household</button>
-      <button class="prefs-tab" id="prefTab-mealplan" onclick="switchPrefsTab('mealplan')">Meal Plan</button>
-      <button class="prefs-tab" id="prefTab-staples" onclick="switchPrefsTab('staples')">Staples</button>
-      <button class="prefs-tab" id="prefTab-brands" onclick="switchPrefsTab('brands')">Brands</button>
+      <button class="prefs-tab active" id="prefTab-family" onclick="switchPrefsTab('family')">Family</button>
+      <button class="prefs-tab" id="prefTab-food" onclick="switchPrefsTab('food')">Food</button>
+      <button class="prefs-tab" id="prefTab-history" onclick="switchPrefsTab('history')">History</button>
     </div>
     <div class="prefs-page-body">
-      <!-- TAB: Household -->
-      <div class="prefs-tab-content" id="prefContent-household">
+      <!-- TAB: Family -->
+      <div class="prefs-tab-content" id="prefContent-family">
         <div class="card">
           <div class="card-label">household</div>
           <div class="prefs-household-grid">
@@ -356,13 +466,13 @@
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-label">household items</div>
-          <p class="prefs-sublabel" style="margin-bottom:10px">Items you buy most weeks — set category to fix cart grouping, brand to remember preferences.</p>
+          <p class="prefs-sublabel" style="margin-bottom:10px">Items you buy most weeks — set category to fix cart grouping, brand to remember preferences. Set <strong>days</strong> for a reorder reminder (e.g. 30 = monthly, 42 = every 6 weeks).</p>
           <div id="pf-hhItemsList" class="prefs-hh-items"></div>
           <button class="btn prefs-add-btn" onclick="addHhItemPref()">+ add item</button>
         </div>
       </div>
-      <!-- TAB: Meal Plan -->
-      <div class="prefs-tab-content" id="prefContent-mealplan" style="display:none">
+      <!-- TAB: Food -->
+      <div class="prefs-tab-content" id="prefContent-food" style="display:none">
         <div class="card">
           <div class="card-label">diet &amp; preferences</div>
           <div id="pf-dietList" class="prefs-list"></div>
@@ -383,23 +493,7 @@
             <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
           </div>
         </div>
-      </div>
-      <!-- TAB: Staples -->
-      <div class="prefs-tab-content" id="prefContent-staples" style="display:none">
-        <div class="card">
-          <div class="card-label">weekly staples — ordered every week</div>
-          <div id="pf-weeklyList" class="prefs-list"></div>
-          <button class="btn prefs-add-btn" onclick="addPrefItem('weekly')">+ add staple</button>
-        </div>
-        <div class="card">
-          <div class="card-label">frequent staples — ordered most weeks</div>
-          <div id="pf-frequentList" class="prefs-list"></div>
-          <button class="btn prefs-add-btn" onclick="addPrefItem('frequent')">+ add staple</button>
-        </div>
-      </div>
-      <!-- TAB: Brands -->
-      <div class="prefs-tab-content" id="prefContent-brands" style="display:none">
-        <div class="card">
+        <div class="card" style="margin-top:14px">
           <div class="card-label">brand rules</div>
           <div id="pf-brandList" class="prefs-brand-list"></div>
           <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
@@ -408,6 +502,36 @@
             <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
           </div>
         </div>
+      </div>
+      <!-- TAB: History -->
+      <div class="prefs-tab-content" id="prefContent-history" style="display:none">
+        <div class="card">
+          <div class="card-label">meal planning history</div>
+          <div id="mealHistoryCard"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STAPLES PANEL (full-screen) -->
+  <div id="staplesPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeStaplesPage()">← back</button>
+      <span class="prefs-page-title">staples</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" onclick="clearStapleCache()" id="clearCacheBtn">clear cache</button>
+        <button class="btn" onclick="addStapleFromPanel()">+ add weekly</button>
+      </div>
+    </div>
+    <div class="recipes-page-body">
+      <p class="prefs-sublabel" style="margin:16px 0 4px"><strong>Weekly staples</strong> — items you buy every week without exception.</p>
+      <div id="staplesPanelList"></div>
+      <div style="margin-top:28px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <p class="prefs-sublabel"><strong>Frequent staples</strong> — items you buy most (but not every) week. You'll confirm which ones to include each session.</p>
+          <button class="btn" onclick="addFreqStapleFromPanel()" style="flex-shrink:0;margin-left:12px">+ add frequent</button>
+        </div>
+        <div id="staplesFreqList"></div>
       </div>
     </div>
   </div>
@@ -468,6 +592,17 @@
     </div>
   </div>
 
+  <!-- SPEND HISTORY PAGE (full-screen) -->
+  <div id="historyPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeHistoryPage()">← back</button>
+      <span class="prefs-page-title">spend history</span>
+    </div>
+    <div class="recipes-page-body">
+      <div id="historyDashboard"><span class="hh-loading">loading...</span></div>
+    </div>
+  </div>
+
   <!-- RECIPE BOOK PAGE (full-screen) -->
   <div id="recipesPage" class="prefs-page" style="display:none">
     <div class="prefs-page-header">
@@ -478,7 +613,7 @@
         <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
         <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
         <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
-        <button class="btn" id="recipesBackfillBtn" onclick="backfillRecipes()">fill missing</button>
+        <button class="btn" id="recipesBackfillBtn" onclick="rebuildAllRecipes()">rebuild all</button>
       </div>
     </div>
     <div class="recipes-page-body">

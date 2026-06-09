@@ -1,17 +1,49 @@
+// ===== THEME =====
+const THEME_CYCLE = ['auto', 'dark', 'light'];
+const LS_THEME = 'grocery_theme';
+
+function _applyTheme(theme) {
+  const html = document.documentElement;
+  if (theme === 'auto') html.removeAttribute('data-theme');
+  else html.setAttribute('data-theme', theme);
+  const btn = document.getElementById('navTheme');
+  if (btn) btn.textContent = theme;
+}
+
+function initTheme() {
+  _applyTheme(localStorage.getItem(LS_THEME) || 'auto');
+}
+
+function cycleTheme() {
+  const current = localStorage.getItem(LS_THEME) || 'auto';
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+  localStorage.setItem(LS_THEME, next);
+  _applyTheme(next);
+}
+
+async function doLogout() {
+  await fetch('/logout', { method: 'POST' }).catch(() => {});
+  window.location.href = '/login';
+}
+
+initTheme();
+
 // ===== TOAST SYSTEM =====
 function showToast(message, opts = {}) {
-  const { type = 'success', duration = 2500, undoFn = null } = opts;
-  const toastType     = undoFn ? 'undo' : type;
-  const toastDuration = undoFn ? 4000 : duration;
+  const { type = 'success', duration = 2500, undoFn = null, actionFn = null, actionLabel = null } = opts;
+  const hasAction     = undoFn || actionFn;
+  const toastType     = hasAction ? 'undo' : type;
+  const toastDuration = hasAction ? (opts.duration || 6000) : duration;
   const stack = document.getElementById('toastStack');
   if (!stack) return;
   const toast = document.createElement('div');
   toast.className = `toast ${toastType}`;
+  const btnLabel = undoFn ? 'Undo' : (actionLabel || 'OK');
   toast.innerHTML = `<span class="toast-msg">${message}</span>` +
-    (undoFn ? `<button class="toast-undo">Undo</button>` : '');
-  if (undoFn) {
+    (hasAction ? `<button class="toast-undo">${btnLabel}</button>` : '');
+  if (hasAction) {
     toast.querySelector('.toast-undo').addEventListener('click', () => {
-      undoFn();
+      (undoFn || actionFn)();
       _dismissToast(toast);
     });
   }
@@ -75,6 +107,33 @@ let _prefsTrap = null;           // focus trap cleanup fns
 let _recipesTrap = null;
 let _pantryTrap = null;
 
+const normName = n => n.toLowerCase().replace(/\d+(\.\d+)?(\s*(oz|lb|ct|pk|g|ml|qt|pt|gal))?\b/gi, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+// Strips quantities, units, AND common food adjectives — used only for overlap comparison, never for display
+const INGREDIENT_STOP_WORDS = new Set([
+  'yellow','green','red','white','black','brown','purple','orange','pink','dark','light',
+  'fresh','frozen','dried','canned','cooked','raw','steamed','steamable','pickled','roasted',
+  'diced','chopped','sliced','minced','grated','shredded','crushed','peeled','julienned',
+  'large','small','medium','extra','whole','halved','quartered','thin','thick','bite','sized',
+  'boneless','skinless','lean','ground','organic','baby','mini','wild','farm',
+  'hot','mild','sweet','spicy','smoked','grilled','baked','sauteed','stir','fried',
+  'low','sodium','fat','free','reduced','plain','original','style','unsalted','salted',
+]);
+
+function normIngredient(name) {
+  return name.toLowerCase()
+    .replace(/\d+(\.\d+)?(\s*(oz|lb|ct|pk|g|ml|qt|pt|gal|cup|cups|tbsp|tsp|clove|cloves|can|cans|pound|pounds|ounce|ounces))?\b/gi, '')
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !INGREDIENT_STOP_WORDS.has(w))
+    .join(' ')
+    .trim();
+}
+
+// ===== INGREDIENT REVIEW STATE =====
+let _reviewItems = [];      // [{ key, mealSrc, name, amount, unit, status, combinedInto }]
+let _reviewView = 'recipe'; // 'recipe' | 'category'
+
 const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes', 'Oatmeal', 'Yogurt & granola', 'Bagels & cream cheese'];
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
@@ -122,8 +181,25 @@ function _hhCategory(name) {
 }
 
 function _normalizeHhItem(item) {
-  if (typeof item === 'string') return { name: item, category: _hhCategory(item), brand: '' };
-  return { name: item.name || '', category: item.category || _hhCategory(item.name || ''), brand: item.brand || '' };
+  if (typeof item === 'string') return { name: item, category: _hhCategory(item), brand: '', cadenceDays: 0, lastOrderedOn: '' };
+  return {
+    name:          item.name     || '',
+    category:      item.category || _hhCategory(item.name || ''),
+    brand:         item.brand    || '',
+    cadenceDays:   parseInt(item.cadenceDays)  || 0,
+    lastOrderedOn: item.lastOrderedOn || '',
+  };
+}
+
+function _hhCadenceBadge(item) {
+  if (!item.cadenceDays || !item.lastOrderedOn) return '';
+  const today   = new Date(); today.setHours(0, 0, 0, 0);
+  const last    = new Date(item.lastOrderedOn + 'T00:00:00');
+  const elapsed = Math.round((today - last) / 86400000);
+  const overdue = elapsed - item.cadenceDays;
+  if (overdue < 0) return '';
+  const label   = overdue === 0 ? 'due today' : `overdue ${overdue}d`;
+  return `<span class="hh-cadence-badge">${label}</span>`;
 }
 
 // ===== CART LOADER =====
@@ -173,7 +249,7 @@ const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu',
 
 // ===== NAVIGATION =====
 function goToStep(n, fromHistory = false) {
-  [0,1,2,3].forEach(i => {
+  [0,1,2,3,4,5,6].forEach(i => {
     const step = document.getElementById('step'+i);
     if (step) step.style.display = i===n ? 'block' : 'none';
     const hero = document.getElementById('heroStep'+i);
@@ -183,7 +259,7 @@ function goToStep(n, fromHistory = false) {
       else            hero.className = 'hero-step-card todo';
     }
   });
-  document.getElementById('mainApp')?.classList.toggle('step0-active', n === 0);
+  document.getElementById('mainApp')?.classList.toggle('step0-active', n === 1);
   currentStep = n;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (!fromHistory) history.pushState({ step: n, overlay: null }, '');
@@ -197,17 +273,23 @@ window.addEventListener('popstate', e => {
   const prefsOpen   = document.getElementById('prefsPage')?.style.display    !== 'none';
   const recipesOpen = document.getElementById('recipesPage')?.style.display   !== 'none';
   const pantryOpen  = document.getElementById('pantryPanel')?.style.display   !== 'none';
+  const staplesOpen = document.getElementById('staplesPage')?.style.display   !== 'none';
   const holidayOpen = document.getElementById('holidayPage')?.style.display   !== 'none';
+  const historyOpen = document.getElementById('historyPage')?.style.display   !== 'none';
   if (holidayOpen) closeHolidayPlanner(true);
   if (prefsOpen)   closePrefsPage(true);
   if (recipesOpen) closeRecipesPage(true);
   if (pantryOpen)  closePantryPage(true);
+  if (staplesOpen) closeStaplesPage(true);
+  if (historyOpen) closeHistoryPage(true);
 
   // Re-open overlay from state (e.g. user pressed forward)
   if      (state.overlay === 'prefs')   openPrefsPage(true);
   else if (state.overlay === 'recipes') openRecipesPage(true);
   else if (state.overlay === 'pantry')  openPantryPage(true);
+  else if (state.overlay === 'staples') openStaplesPage(true);
   else if (state.overlay === 'holiday') openHolidayPlanner(true);
+  else if (state.overlay === 'history') openHistoryPage(true);
 
   // Navigate to the correct step
   if (typeof state.step === 'number' && state.step !== currentStep) {
@@ -233,20 +315,23 @@ function renderHousehold() {
   normalItems.forEach(item => {
     const cat = item.category || _hhCategory(item.name);
     if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(item.name);
+    groups[cat].push(item);
   });
 
   let html = '';
   for (const cat of HH_CATEGORY_ORDER) {
     if (!groups[cat]) continue;
-    const itemsHtml = groups[cat].map(name => {
-      const checked = householdChecked.has(name);
-      const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      const display = _hhDisplayName(name);
+    const itemsHtml = groups[cat].map(item => {
+      const { name } = item;
+      const checked  = householdChecked.has(name);
+      const esc      = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const display  = _hhDisplayName(name);
+      const badge    = _hhCadenceBadge(item);
       return `<div class="hh-item-row">
         <label class="hh-item">
           <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHousehold('${esc}', this.checked)">
           <span class="hh-item-name">${display}</span>
+          ${badge}
         </label>
         <button class="hh-item-delete" onclick="removeHouseholdItem('${esc}')" aria-label="Remove ${display}">×</button>
       </div>`;
@@ -321,6 +406,13 @@ async function loadHouseholdItems() {
 // ===== FREQUENT STAPLES =====
 const LS_FREQUENT_SKIP_KEY = 'grocery_frequent_skip'; // names the user has explicitly unchecked
 let frequentSkipped = new Set(JSON.parse(localStorage.getItem(LS_FREQUENT_SKIP_KEY) || '[]'));
+
+// ===== STAPLES STATE =====
+let staples = [];  // [{id, name, qty, unit, notes}] — loaded from /staples
+const LS_STAPLES_SKIP = 'grocery_staples_skip';
+let staplesSkipped = new Set(JSON.parse(localStorage.getItem(LS_STAPLES_SKIP) || '[]'));
+let staplesOneTime = [];  // [{name, qty}] for this week only, cleared on reset
+let _staplesTrap = null;
 
 function renderFrequentStaples() {
   const staples = prefs.frequentStaples || [];
@@ -476,7 +568,7 @@ function renderSchedule() {
     return `
       <div class="schedule-col">
         <div class="schedule-day">${d.short}</div>
-        <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')">${COMPLEXITY_LABEL[complexity]}</button>
+        <button class="complexity-btn ${complexity}" onclick="cycleComplexity('${d.key}')" aria-label="${d.key} dinner complexity: ${COMPLEXITY_LABEL[complexity]}. Click to change.">${COMPLEXITY_LABEL[complexity]}</button>
         ${eventsHtml}
       </div>`;
   }).join('');
@@ -572,6 +664,7 @@ function buildSchedulePrompt() {
 function resetApp() {
   meals = [];
   swappingIndex = -1;
+  staplesOneTime = [];
   ['loadingBar','mealPlanCard','approveBtn','regenerateBtn',
    'cartCard','budgetBar','cartUrlBox','cartLoadingBar',
    'cartError','serverNotice','doneBtn','ratingPanel'].forEach(id => {
@@ -655,12 +748,16 @@ function setStar(rating, pickerId) {
 
 // Recipe page (full-screen)
 function _syncPanelOpen() {
-  const prefsOpen   = document.getElementById('prefsPage').style.display   !== 'none';
-  const recipesOpen = document.getElementById('recipesPage').style.display  !== 'none';
-  const pantryOpen  = document.getElementById('pantryPanel').style.display  !== 'none';
+  const prefsOpen   = document.getElementById('prefsPage').style.display    !== 'none';
+  const recipesOpen = document.getElementById('recipesPage').style.display   !== 'none';
+  const pantryOpen  = document.getElementById('pantryPanel').style.display   !== 'none';
+  const staplesOpen = document.getElementById('staplesPage').style.display   !== 'none';
+  const historyOpen = document.getElementById('historyPage')?.style.display  !== 'none';
   document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
   document.getElementById('navRecipes').classList.toggle('active', recipesOpen);
   document.getElementById('navPantry').classList.toggle('active', pantryOpen);
+  document.getElementById('navStaples').classList.toggle('active', staplesOpen);
+  document.getElementById('navHistory')?.classList.toggle('active', historyOpen);
 }
 
 function openRecipesPage(fromHistory = false) {
@@ -684,17 +781,46 @@ function toggleRecipesPanel() {
   if (page.style.display !== 'none') { closeRecipesPage(); } else { openRecipesPage(); }
 }
 
-async function backfillRecipes() {
+async function rebuildAllRecipes() {
+  const count = recipes.length;
+  if (!count) { showToast('No recipes to rebuild'); return; }
+  if (!window.confirm(`Rebuild all ${count} recipe${count !== 1 ? 's' : ''} with updated US units? This overwrites existing ingredients.`)) return;
   const btn = document.getElementById('recipesBackfillBtn');
-  if (btn) { btn.textContent = 'filling...'; btn.disabled = true; }
+  const orig = btn ? btn.textContent : 'rebuild all';
+  if (btn) { btn.textContent = 'rebuilding...'; btn.disabled = true; }
   try {
-    const res = await fetch('/recipes/backfill', { method: 'POST' });
+    const res = await fetch('/recipes/backfill', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({force: true})
+    });
     const data = await res.json();
     await loadRecipes();
     renderRecipesPanel();
-    if (btn) { btn.textContent = `filled ${data.filled}`; setTimeout(() => { btn.textContent = 'fill missing'; btn.disabled = false; }, 3000); }
+    showToast(`Rebuilt ${data.filled} recipe${data.filled !== 1 ? 's' : ''} with updated units`);
   } catch (e) {
-    if (btn) { btn.textContent = 'error'; setTimeout(() => { btn.textContent = 'fill missing'; btn.disabled = false; }, 3000); }
+    showToast('Rebuild failed — check the server console');
+  } finally {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
+}
+
+async function regenerateRecipe(id) {
+  const btn = document.getElementById(`regen-btn-${id}`);
+  if (btn) { btn.textContent = 'regenerating...'; btn.disabled = true; }
+  try {
+    const res = await fetch(`/recipes/${id}/regenerate`, {method: 'POST'});
+    if (!res.ok) throw new Error(res.status);
+    const updated = await res.json();
+    const recipe = recipes.find(r => r.id === id);
+    if (recipe) {
+      recipe.ingredients = updated.ingredients;
+      recipe.steps = updated.steps;
+    }
+    editRecipeInline(id);
+  } catch (e) {
+    showToast('Regenerate failed — check the server console');
+    if (btn) { btn.textContent = '↺ regen'; btn.disabled = false; }
   }
 }
 
@@ -730,8 +856,8 @@ function recipeCardHtml(r) {
         </div>
       </div>
       <div class="recipe-actions">
-        <button class="btn-icon" onclick="triggerPhotoUpload('${r.id}')">${r.photo ? '📷' : '+ photo'}</button>
-        <button class="btn-icon" id="rd-btn-${r.id}" onclick="toggleRecipeDetail('${r.id}')">view ▾</button>
+        <button class="btn-icon" onclick="triggerPhotoUpload('${r.id}')" aria-label="${r.photo ? 'Change photo for ' + r.name : 'Add photo for ' + r.name}">${r.photo ? '📷' : '+ photo'}</button>
+        <button class="btn-icon" id="rd-btn-${r.id}" onclick="toggleRecipeDetail('${r.id}')" aria-label="View details for ${r.name}">view ▾</button>
         <button class="btn-icon" onclick="editRecipeInline('${r.id}')">edit</button>
         <button class="btn-icon danger" onclick="removeRecipe('${r.id}')" aria-label="Remove ${r.name} from recipe book">×</button>
       </div>
@@ -797,6 +923,7 @@ function editRecipeInline(id) {
     <div class="prefs-list" id="re-steps-${id}">${steps.map(v => prefItemHtml(v)).join('')}</div>
     <button class="btn prefs-add-btn" onclick="addRecipeListItem('re-steps-${id}')">+ add step</button>
     <div class="recipe-edit-actions">
+      <button class="btn" id="regen-btn-${id}" onclick="regenerateRecipe('${id}')">↺ regen</button>
       <button class="btn" onclick="renderRecipesPanel()">cancel</button>
       <button class="btn primary" onclick="commitRecipeEdit('${id}')">save</button>
     </div>
@@ -963,6 +1090,305 @@ function togglePantryPanel() {
   if (page.style.display !== 'none') { closePantryPage(); } else { openPantryPage(); }
 }
 
+// ===== STAPLES PANEL =====
+
+async function loadStaples() {
+  try {
+    const r = await fetch('/staples');
+    const d = await r.json();
+    staples = d.items || [];
+  } catch(e) { staples = []; }
+}
+
+function openStaplesPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'staples' }, '');
+  document.getElementById('staplesPage').style.display = 'flex';
+  _syncPanelOpen();
+  renderStaplesPanel();
+  _staplesTrap = _trapFocus(document.getElementById('staplesPage'));
+}
+
+function closeStaplesPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
+  document.getElementById('staplesPage').style.display = 'none';
+  _syncPanelOpen();
+  _staplesTrap?.(); _staplesTrap = null;
+}
+
+function toggleStaplesPanel() {
+  const page = document.getElementById('staplesPage');
+  if (page.style.display !== 'none') { closeStaplesPage(); } else { openStaplesPage(); }
+}
+
+function renderFrequentStaplesInPanel() {
+  const el = document.getElementById('staplesFreqList');
+  if (!el) return;
+  const items = prefs.frequentStaples || [];
+  if (!items.length) {
+    el.innerHTML = '<div class="hh-loading" style="margin-top:8px">no frequent staples yet — click + add frequent to get started</div>';
+    return;
+  }
+  el.innerHTML = items.map((name, idx) =>
+    `<div class="staple-panel-row" style="align-items:center">
+      <input class="staple-panel-name" value="${name.replace(/"/g,'&quot;')}"
+        onblur="updateFreqStapleInPanel(${idx},this.value)"
+        onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.value=this.defaultValue" />
+      <button class="hh-item-delete" onclick="removeFreqStapleFromPanel(${idx})" title="remove" style="margin-left:auto">×</button>
+    </div>`
+  ).join('');
+}
+
+async function addFreqStapleFromPanel() {
+  const name = prompt('Frequent staple name (e.g. "Greek yogurt"):');
+  if (!name?.trim()) return;
+  prefs.frequentStaples = [...(prefs.frequentStaples || []), name.trim()];
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+  renderFrequentStaplesInPanel();
+  renderFrequentStaples();
+}
+
+async function updateFreqStapleInPanel(idx, newName) {
+  const trimmed = newName.trim();
+  if (!trimmed) return removeFreqStapleFromPanel(idx);
+  const arr = [...(prefs.frequentStaples || [])];
+  arr[idx] = trimmed;
+  prefs.frequentStaples = arr;
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+  renderFrequentStaplesInPanel();
+  renderFrequentStaples();
+}
+
+async function removeFreqStapleFromPanel(idx) {
+  const arr = [...(prefs.frequentStaples || [])];
+  arr.splice(idx, 1);
+  prefs.frequentStaples = arr;
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+  } catch(e) {}
+  renderFrequentStaplesInPanel();
+  renderFrequentStaples();
+}
+
+function renderStaplesPanel() {
+  const el = document.getElementById('staplesPanelList');
+  if (!el) return;
+  renderFrequentStaplesInPanel();
+  if (!staples.length) {
+    el.innerHTML = '<div class="hh-loading">no staples yet — click + add to get started</div>';
+    return;
+  }
+  el.innerHTML = staples.map((s, idx) => {
+    const esc      = s.id.replace(/'/g, '&#39;');
+    const cachedDot = s.itemId
+      ? `<span class="staple-cached-dot" title="Walmart product cached: ${(s.productName||'').replace(/"/g,'&quot;')}">●</span>`
+      : '';
+    return `<div class="staple-panel-row" id="spr-${s.id}">
+      <div class="staple-panel-main">
+        <div style="display:flex;align-items:center;gap:4px">
+          <input class="staple-panel-name" value="${(s.name||'').replace(/"/g,'&quot;')}" placeholder="name"
+            onblur="patchStaple('${esc}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+          ${cachedDot}
+        </div>
+        <div class="staple-panel-meta">
+          <input class="staple-panel-qty" type="number" min="1" value="${s.qty || 1}"
+            onblur="patchStaple('${esc}','qty',+this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+          <input class="staple-panel-unit" value="${(s.unit||'').replace(/"/g,'&quot;')}" placeholder="unit (gallon, bunch…)"
+            onblur="patchStaple('${esc}','unit',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+        </div>
+        <input class="staple-panel-notes" value="${(s.notes||'').replace(/"/g,'&quot;')}" placeholder="brand notes (optional)"
+          onblur="patchStaple('${esc}','notes',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
+      </div>
+      <div class="staple-panel-actions">
+        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',-1)" ${idx===0?'disabled':''} title="move up">↑</button>
+        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',1)" ${idx===staples.length-1?'disabled':''} title="move down">↓</button>
+        <button class="hh-item-delete" onclick="deleteStaplePanel('${esc}')" title="remove">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addStapleFromPanel() {
+  const list = document.getElementById('staplesPanelList');
+  if (document.getElementById('staple-add-form')) return;
+  const form = document.createElement('div');
+  form.className = 'staple-panel-row';
+  form.id = 'staple-add-form';
+  form.innerHTML = `
+    <div class="staple-panel-main">
+      <input class="staple-panel-name" id="saf-name" placeholder="name (e.g. Whole milk)"
+        onkeydown="if(event.key==='Enter')_submitNewStaple();if(event.key==='Escape')document.getElementById('staple-add-form').remove()" />
+      <div class="staple-panel-meta">
+        <input class="staple-panel-qty" type="number" min="1" value="1" id="saf-qty"
+          onkeydown="if(event.key==='Enter')_submitNewStaple();if(event.key==='Escape')document.getElementById('staple-add-form').remove()" />
+        <input class="staple-panel-unit" id="saf-unit" placeholder="unit (gallon, bunch…)"
+          onkeydown="if(event.key==='Enter')_submitNewStaple();if(event.key==='Escape')document.getElementById('staple-add-form').remove()" />
+      </div>
+      <input class="staple-panel-notes" id="saf-notes" placeholder="brand notes (optional)"
+        onkeydown="if(event.key==='Enter')_submitNewStaple();if(event.key==='Escape')document.getElementById('staple-add-form').remove()" />
+    </div>
+    <div class="staple-panel-actions">
+      <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="_submitNewStaple()">add</button>
+      <button class="btn" style="height:30px;padding:0 10px;font-size:12px" onclick="document.getElementById('staple-add-form').remove()">cancel</button>
+    </div>`;
+  list.prepend(form);
+  document.getElementById('saf-name').focus();
+}
+
+async function _submitNewStaple() {
+  const name  = (document.getElementById('saf-name')?.value  || '').trim();
+  if (!name) return;
+  const qty   = parseInt(document.getElementById('saf-qty')?.value)   || 1;
+  const unit  = (document.getElementById('saf-unit')?.value  || '').trim();
+  const notes = (document.getElementById('saf-notes')?.value || '').trim();
+  document.getElementById('staple-add-form')?.remove();
+  try {
+    const r = await fetch('/staples', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, qty, unit, notes}),
+    });
+    const item = await r.json();
+    staples.push(item);
+    renderStaplesPanel();
+    renderStaplesStep();
+  } catch(e) { showToast('Could not add staple', {type:'error'}); }
+}
+
+async function patchStaple(id, field, value) {
+  try {
+    await fetch(`/staples/${id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({[field]: value}),
+    });
+    const s = staples.find(x => x.id === id);
+    if (s) s[field] = value;
+    renderStaplesStep();
+  } catch(e) {}
+}
+
+async function deleteStaplePanel(id) {
+  const item = staples.find(s => s.id === id);
+  if (!item) return;
+  staples = staples.filter(s => s.id !== id);
+  renderStaplesPanel();
+  renderStaplesStep();
+  try {
+    await fetch(`/staples/${id}`, {method: 'DELETE'});
+  } catch(e) {}
+  showToast(`${item.name} removed`, {
+    undoFn: async () => {
+      try {
+        const r = await fetch('/staples', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name: item.name, qty: item.qty, unit: item.unit, notes: item.notes}),
+        });
+        const newItem = await r.json();
+        staples.push(newItem);
+        renderStaplesPanel();
+        renderStaplesStep();
+      } catch(e) {}
+    },
+  });
+}
+
+async function moveStaple(id, dir) {
+  const idx = staples.findIndex(s => s.id === id);
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= staples.length) return;
+  [staples[idx], staples[newIdx]] = [staples[newIdx], staples[idx]];
+  renderStaplesPanel();
+  try {
+    await fetch('/staples/reorder', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ids: staples.map(s => s.id)}),
+    });
+  } catch(e) {}
+}
+
+// ===== STAPLES STEP (Step 4) =====
+
+function renderStaplesStep() {
+  const el = document.getElementById('staplesStepList');
+  if (!el) return;
+  if (!staples.length) {
+    el.innerHTML = '<div class="hh-loading">no staples configured — <button class="btn-link" onclick="toggleStaplesPanel()">open staples panel</button> to add some</div>';
+    return;
+  }
+  // Clean up skipped IDs that no longer exist
+  const validIds = new Set(staples.map(s => s.id));
+  for (const id of staplesSkipped) { if (!validIds.has(id)) staplesSkipped.delete(id); }
+  localStorage.setItem(LS_STAPLES_SKIP, JSON.stringify([...staplesSkipped]));
+
+  el.innerHTML = staples.map(s => {
+    const checked = !staplesSkipped.has(s.id);
+    const esc = s.id.replace(/'/g, '&#39;');
+    const meta = [s.qty, s.unit].filter(Boolean).join(' ');
+    return `<div class="hh-item-row staple-step-row">
+      <label class="hh-item" style="flex:1">
+        <input type="checkbox" ${checked?'checked':''} onchange="toggleStapleSkip('${esc}',this.checked)">
+        <span class="hh-item-name">${s.name}</span>
+        ${meta ? `<span class="staple-step-meta">${meta}</span>` : ''}
+      </label>
+      <input class="staple-step-qty" type="number" min="1" value="${s.qty || 1}" title="qty for this week"
+        onchange="updateStapleQtyLocal('${esc}',+this.value)" style="${checked?'':'opacity:0.35;pointer-events:none'}" />
+    </div>`;
+  }).join('');
+  _renderOneTimeList();
+}
+
+function _renderOneTimeList() {
+  const el = document.getElementById('staplesOneTimeList');
+  if (!el) return;
+  el.innerHTML = staplesOneTime.map((o, i) =>
+    `<div class="hh-item-row">
+      <span class="hh-item-name" style="flex:1">${o.name}${o.qty > 1 ? ` ×${o.qty}` : ''}</span>
+      <button class="hh-item-delete" style="opacity:1" onclick="removeOneTimeStaple(${i})">×</button>
+    </div>`
+  ).join('');
+}
+
+function toggleStapleSkip(id, checked) {
+  if (checked) staplesSkipped.delete(id);
+  else         staplesSkipped.add(id);
+  localStorage.setItem(LS_STAPLES_SKIP, JSON.stringify([...staplesSkipped]));
+  renderStaplesStep();
+}
+
+function updateStapleQtyLocal(id, qty) {
+  const s = staples.find(x => x.id === id);
+  if (s) s.qty = qty;
+}
+
+function addOneTimeStaple() {
+  const input = document.getElementById('staplesOneTimeInput');
+  const val = (input?.value || '').trim();
+  if (!val) return;
+  staplesOneTime.push({name: val, qty: 1});
+  if (input) input.value = '';
+  _renderOneTimeList();
+}
+
+function removeOneTimeStaple(idx) {
+  staplesOneTime.splice(idx, 1);
+  _renderOneTimeList();
+}
+
+function proceedToReview() {
+  goToStep(5);
+  startIngredientReview();
+}
+
+function navigateToStaples() {
+  goToStep(4);
+  renderStaplesStep();
+}
+
 function renderPantryPanel() {
   const query = (document.getElementById('pantrySearch')?.value || '').toLowerCase();
   let filtered = query
@@ -1079,6 +1505,7 @@ function buildPantryPrompt() {
       const amt = [i.amount, i.unit].filter(Boolean).join(' ');
       lines.push(`  - ${i.name}${amt ? ' ('+amt+')' : ''} — ${pantryExpiryLabel(i.expiresOn)}`);
     });
+    lines.push('SUGGESTED: plan at least 1 dinner this week that uses one of the above items.');
   }
   if (onHand.length) {
     lines.push('PANTRY — already stocked (avoid buying duplicates):');
@@ -1105,6 +1532,31 @@ function renderRecapCard() {
   card.style.display = 'block';
   renderRecapMeals();
   renderRecapRating();
+  _loadAndRenderSpendHistory();
+}
+
+async function _loadAndRenderSpendHistory() {
+  const row = document.getElementById('spendHistoryRow');
+  if (!row) return;
+  try {
+    const resp = await fetch('/spend-history');
+    if (!resp.ok) return;
+    const history = await resp.json();
+    if (!history.length) { row.style.display = 'none'; return; }
+    const recent = history.slice(-6);
+    const budgetTarget = prefs.household?.budgetTarget || 175;
+    const budgetMax    = prefs.household?.budgetMax    || 225;
+    const items = recent.map(w => {
+      const d     = new Date(w.date + 'T12:00:00');
+      const label = d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+      const color = w.total <= budgetTarget ? 'var(--success, #4caf50)'
+                  : w.total <= budgetMax    ? 'var(--warn, #ff9800)'
+                  : 'var(--danger, #e53935)';
+      return `<span class="spend-chip" style="color:${color}" title="${w.mealCount} meals">${label}: $${w.total.toFixed(0)}</span>`;
+    }).join('<span class="spend-sep">·</span>');
+    row.innerHTML = `<span class="spend-label">spend history</span>${items}<button class="btn-link" onclick="openHistoryPage()" style="margin-left:auto;font-size:11px;white-space:nowrap">view all →</button>`;
+    row.style.display = 'flex';
+  } catch(e) { row.style.display = 'none'; }
 }
 
 function toggleRecapSection(name) {
@@ -1124,12 +1576,17 @@ function renderRecapRating() {
   const lastMeals = prefs.lastWeekMeals || [];
   if (!lastMeals.length) { list.innerHTML = '<div class="hh-loading">no meals from last week</div>'; return; }
   lastMeals.forEach(m => { if (!(m.meal in pendingRatings)) pendingRatings[m.meal] = 0; });
+  const blocked = new Set(prefs.neverSuggest || []);
   list.innerHTML = lastMeals.map(m => {
-    const pid = 'rate-' + m.meal.replace(/[^a-z0-9]/gi, '-');
+    const pid    = 'rate-' + m.meal.replace(/[^a-z0-9]/gi, '-');
     const rating = pendingRatings[m.meal] || 0;
+    const nsHtml = blocked.has(m.meal)
+      ? `<button class="btn never-suggest-btn" disabled>✓ blocked</button>`
+      : '';
     return `<div class="rating-row">
       <span class="rating-meal-name">${m.meal}</span>
       <div class="star-picker" id="${pid}" data-rating="${rating}">${starPickerHtml(pid, rating, 'setRatingStar')}</div>
+      ${nsHtml}
     </div>`;
   }).join('');
 }
@@ -1358,7 +1815,7 @@ async function dismissRecap() {
   try {
     await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
   } catch(e) {}
-  document.getElementById('recapCard').style.display = 'none';
+  goToStep(1);
 }
 
 // ===== BREAKFAST / LUNCH / DESSERT PICKS =====
@@ -1432,10 +1889,8 @@ function addCustomMealPick(type) {
   const input = document.getElementById(`${type}Custom`);
   const val   = (input?.value || '').trim();
   if (!val) return;
-  const arr = type === 'breakfast' ? weekBreakfasts : weekLunches;
-  if (!arr.includes(val) && arr.length < 3) arr.push(val);
   if (input) input.value = '';
-  renderMealPicks(type);
+  _showPickerConfirm(type, val);
 }
 
 function renderDessertPick() {
@@ -1486,7 +1941,8 @@ function addCustomDessert() {
   const input = document.getElementById('dessertCustom');
   const val   = (input?.value || '').trim();
   if (!val) return;
-  setDessert(val);
+  if (input) input.value = '';
+  _showPickerConfirm('dessert', val);
 }
 
 function renderSnackPick() {
@@ -1542,9 +1998,72 @@ function addCustomSnack() {
   const input = document.getElementById('snacksCustom');
   const val   = (input?.value || '').trim();
   if (!val) return;
-  if (!weekSnacks.includes(val) && weekSnacks.length < 3) weekSnacks.push(val);
   if (input) input.value = '';
-  renderSnackPick();
+  _showPickerConfirm('snack', val);
+}
+
+// ===== PICKER CONFIRM MODAL =====
+
+function _commitPickerItem(type, name) {
+  if (type === 'breakfast' || type === 'lunch') {
+    const arr = type === 'breakfast' ? weekBreakfasts : weekLunches;
+    if (!arr.includes(name) && arr.length < 3) arr.push(name);
+    renderMealPicks(type);
+  } else if (type === 'dessert') {
+    setDessert(name);
+  } else if (type === 'snack') {
+    if (!weekSnacks.includes(name) && weekSnacks.length < 3) weekSnacks.push(name);
+    renderSnackPick();
+  }
+}
+
+function _resolvePickerConfirm(type, rawName, resolvedName) {
+  document.getElementById('pickerConfirmBackdrop').style.display = 'none';
+  // When user picked a clarifying option (not "add as raw"), combine: "Frozen pre-made smoothie"
+  const finalName = resolvedName !== rawName
+    ? `${resolvedName} ${rawName.toLowerCase()}`
+    : rawName;
+  _commitPickerItem(type, finalName);
+}
+
+async function _showPickerConfirm(type, rawName) {
+  const backdrop = document.getElementById('pickerConfirmBackdrop');
+  const title    = document.getElementById('pickerConfirmTitle');
+  const body     = document.getElementById('pickerConfirmBody');
+  title.textContent = rawName;
+  body.innerHTML = '<span class="hh-loading">thinking...</span>';
+  backdrop.style.display = 'flex';
+
+  try {
+    const resp = await fetch('/picker-clarify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, name: rawName }),
+    });
+    const data = await resp.json();
+
+    if (!data.question || !data.options?.length) {
+      backdrop.style.display = 'none';
+      _commitPickerItem(type, rawName);
+      return;
+    }
+
+    const escRaw = rawName.replace(/'/g, '&#39;');
+    const chipsHtml = data.options.map(opt => {
+      const escOpt = opt.replace(/'/g, '&#39;');
+      return `<button class="meal-pick-chip" onclick="_resolvePickerConfirm('${type}','${escRaw}','${escOpt}')">${opt}</button>`;
+    }).join('');
+
+    body.innerHTML = `
+      <p class="picker-confirm-q">${data.question}</p>
+      <div class="meal-pick-grid" style="margin-top:10px">${chipsHtml}</div>
+      <div style="text-align:right;margin-top:12px">
+        <button class="btn-link" onclick="_resolvePickerConfirm('${type}','${escRaw}','${escRaw}')">add as &ldquo;${rawName}&rdquo; →</button>
+      </div>`;
+  } catch(e) {
+    backdrop.style.display = 'none';
+    _commitPickerItem(type, rawName);
+  }
 }
 
 // ===== HOLIDAY PLANNER =====
@@ -1736,11 +2255,30 @@ function setRatingStar(rating, pickerId) {
   ];
   const mealName = allNames.find(name => 'rate-' + name.replace(/[^a-z0-9]/gi, '-') === pickerId) || '';
   if (mealName) pendingRatings[mealName] = rating;
+
+  // Show "never suggest" option when 1 star is chosen
+  const row = el.closest('.rating-row');
+  if (!row || !mealName) return;
+  let nsBtn = row.querySelector('.never-suggest-btn');
+  const alreadyBlocked = (prefs.neverSuggest || []).includes(mealName);
+  if (rating === 1 && !alreadyBlocked) {
+    if (!nsBtn) {
+      nsBtn = document.createElement('button');
+      nsBtn.className = 'btn never-suggest-btn';
+      nsBtn.onclick = () => addNeverSuggest(mealName);
+      row.appendChild(nsBtn);
+    }
+    nsBtn.textContent = 'never suggest →';
+    nsBtn.disabled = false;
+  } else if (nsBtn && !alreadyBlocked) {
+    nsBtn.remove();
+  }
 }
 
-async function _finalizeWeek() {
-  if (!meals.length) return;
-  prefs.doNotRepeat = meals.map(m => m.meal.replace(' [NEW]', '').trim());
+async function addNeverSuggest(mealName) {
+  if (!prefs.neverSuggest) prefs.neverSuggest = [];
+  if (prefs.neverSuggest.includes(mealName)) return;
+  prefs.neverSuggest.push(mealName);
   try {
     await fetch('/prefs', {
       method: 'POST',
@@ -1748,6 +2286,78 @@ async function _finalizeWeek() {
       body: JSON.stringify(prefs),
     });
   } catch(e) {}
+  showToast(`"${mealName}" won't be suggested again`);
+  const pid = 'rate-' + mealName.replace(/[^a-z0-9]/gi, '-');
+  const btn = document.getElementById(pid)?.closest('.rating-row')?.querySelector('.never-suggest-btn');
+  if (btn) { btn.textContent = '✓ blocked'; btn.disabled = true; }
+}
+
+async function _finalizeWeek() {
+  if (!meals.length) return;
+  const mealNames = meals.map(m => m.meal.replace(' [NEW]', '').trim());
+  const today     = new Date().toISOString().split('T')[0];
+
+  // Rolling 4-week meal history
+  prefs.doNotRepeat = mealNames;
+  if (!Array.isArray(prefs.mealHistory)) prefs.mealHistory = [];
+  prefs.mealHistory.push({ week: today, meals: mealNames });
+  if (prefs.mealHistory.length > 4) prefs.mealHistory = prefs.mealHistory.slice(-4);
+
+  // Stamp lastOrderedOn on checked household items with a cadence
+  if (householdChecked.size > 0) {
+    (prefs.householdItems || []).forEach(item => {
+      if (typeof item === 'object' && item.cadenceDays && householdChecked.has(item.name)) {
+        item.lastOrderedOn = today;
+      }
+    });
+  }
+
+  // Schedule next session reminder
+  prefs.nextSessionDue = _nextSunday();
+
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+
+  // Save weekday dinner schedule for email reminders (Mon–Fri only)
+  const fullDates = getUpcomingWeekFullDates();
+  const weekdays  = new Set(['Monday','Tuesday','Wednesday','Thursday','Friday']);
+  const schedule  = meals
+    .filter(m => !m.isOut && weekdays.has(m.day))
+    .map(m => ({
+      date:     fullDates[m.day] || '',
+      day:      m.day,
+      meal:     m.meal.replace(' [NEW]', '').trim(),
+      reminded: false,
+    }));
+  if (schedule.length) {
+    fetch('/save-meal-schedule', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ schedule }),
+    }).catch(() => {});
+  }
+
+  // Save weekly spend (fire and forget)
+  const totalNum = parseFloat((_cartData?.total || '').replace('$', '')) || 0;
+  if (totalNum > 0) {
+    fetch('/spend-history', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date: today, total: totalNum, mealCount: meals.filter(m => !m.isOut).length}),
+    }).catch(() => {});
+  }
+}
+
+function _nextSunday() {
+  const d   = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? 7 : 7 - day));
+  return d.toISOString().split('T')[0];
 }
 
 async function saveRatings() {
@@ -1769,10 +2379,17 @@ async function saveRatings() {
 }
 
 // ===== SERVING SIZE =====
+const LS_SERVING_SIZE = 'grocery_serving_size';
+
 function initServingSize() {
-  const adults = parseInt(prefs.household?.adults) || 2;
-  const kids   = parseInt(prefs.household?.kids)   || 0;
-  servingSize  = Math.min(12, Math.max(1, adults + kids)) || 4;
+  const stored = parseInt(localStorage.getItem(LS_SERVING_SIZE));
+  if (stored >= 1 && stored <= 12) {
+    servingSize = stored;
+  } else {
+    const adults = parseInt(prefs.household?.adults) || 2;
+    const kids   = parseInt(prefs.household?.kids)   || 0;
+    servingSize  = Math.min(12, Math.max(1, adults + kids)) || 4;
+  }
   const val = document.getElementById('servingSizeVal');
   if (val) val.textContent = servingSize;
   _updateStepperButtons();
@@ -1780,6 +2397,7 @@ function initServingSize() {
 
 function updateServingSize(v) {
   servingSize = Math.max(1, Math.min(12, parseInt(v) || 1));
+  localStorage.setItem(LS_SERVING_SIZE, servingSize);
   const val = document.getElementById('servingSizeVal');
   if (val) val.textContent = servingSize;
   _updateStepperButtons();
@@ -1794,7 +2412,7 @@ function _updateStepperButtons() {
 
 // ===== MEAL PLAN =====
 async function runMealPlan() {
-  goToStep(1);
+  goToStep(2);
   document.getElementById('loadingBar').style.display = 'flex';
   startMicrocopy(MEAL_PLAN_MSGS, 'loadingMsg');
   document.getElementById('mealPlanCard').style.display = 'none';
@@ -1912,6 +2530,19 @@ function getUpcomingWeekDates() {
   ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach((d,i) => {
     const dt = new Date(mon); dt.setDate(mon.getDate()+i);
     result[d] = dt.getDate();
+  });
+  return result;
+}
+
+function getUpcomingWeekFullDates() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dow = today.getDay();
+  const toMon = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
+  const mon = new Date(today); mon.setDate(today.getDate() + toMon);
+  const result = {};
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach((d,i) => {
+    const dt = new Date(mon); dt.setDate(mon.getDate()+i);
+    result[d] = dt.toISOString().split('T')[0];
   });
   return result;
 }
@@ -2057,6 +2688,401 @@ function cancelSwap() {
   renderMeals();
 }
 
+// ===== INGREDIENT REVIEW =====
+
+function setReviewView(view) {
+  _reviewView = view;
+  document.getElementById('reviewViewRecipe').classList.toggle('active', view === 'recipe');
+  document.getElementById('reviewViewCategory').classList.toggle('active', view === 'category');
+  _renderReviewList();
+}
+
+function toggleReviewItem(key) {
+  const item = _reviewItems.find(i => i.key === key);
+  if (!item) return;
+  item.status = (item.status === 'include') ? 'removed' : 'include';
+  _renderReviewList();
+}
+
+function markReviewPantry(key) {
+  const item = _reviewItems.find(i => i.key === key);
+  if (!item) return;
+  item.status = (item.status === 'pantry') ? 'include' : 'pantry';
+  _renderReviewList();
+}
+
+function combineReviewItems(keepKey, removeKey) {
+  const keep   = _reviewItems.find(i => i.key === keepKey);
+  const remove = _reviewItems.find(i => i.key === removeKey);
+  if (!keep || !remove) return;
+  const sum = (parseFloat(keep.amount) || 1) + (parseFloat(remove.amount) || 1);
+  keep.amount = String(Number.isInteger(sum) ? sum : sum.toFixed(1));
+  remove.combinedInto = keepKey;
+  remove.status = 'removed';
+  _renderReviewList();
+}
+
+function openReviewRecipe(mealName) {
+  const recipe = recipes.find(r => r.name.toLowerCase() === mealName.toLowerCase());
+  if (recipe) openRecipeModal(recipe);
+  else showToast(`No saved recipe for "${mealName}"`, { type: 'error' });
+}
+
+function _renderReviewList() {
+  const list = document.getElementById('reviewList');
+  if (!list) return;
+
+  const activeCount  = _reviewItems.filter(i => i.status === 'include' && !i.combinedInto).length;
+  const pantryCount  = _reviewItems.filter(i => i.status === 'pantry').length;
+  const summaryEl    = document.getElementById('reviewSummary');
+  if (summaryEl) summaryEl.textContent = `${activeCount} items to order${pantryCount ? ` · ${pantryCount} already in pantry` : ''}`;
+
+  const safeKey = k => k.replace(/'/g, "\\'");
+
+  // Build cross-meal overlap map using normIngredient — only flag items that appear in 2+ different meals
+  const overlapMap = {}; // norm → [{key, mealSrc, name}]
+  _reviewItems.filter(i => !i.combinedInto && i.status !== 'removed').forEach(item => {
+    const norm = normIngredient(item.name);
+    if (norm.length < 3) return;
+    if (!overlapMap[norm]) overlapMap[norm] = [];
+    overlapMap[norm].push(item);
+  });
+  // Only keep norms where items come from more than one distinct meal
+  const crossMealNorms = new Set(
+    Object.keys(overlapMap).filter(n => {
+      const meals = new Set(overlapMap[n].map(i => i.mealSrc));
+      return meals.size > 1;
+    })
+  );
+  // Map key → which other meals it overlaps with (for recipe view badges)
+  const itemOverlapMeals = {};
+  crossMealNorms.forEach(norm => {
+    const items = overlapMap[norm];
+    items.forEach(item => {
+      const others = [...new Set(items.filter(i => i.mealSrc !== item.mealSrc).map(i => i.mealSrc))];
+      itemOverlapMeals[item.key] = { norm, others, firstKey: items[0].key };
+    });
+  });
+
+  if (_reviewView === 'recipe') {
+    const byMeal = {};
+    _reviewItems.forEach(item => { (byMeal[item.mealSrc] = byMeal[item.mealSrc] || []).push(item); });
+
+    list.innerHTML = Object.entries(byMeal).map(([mealName, items]) => {
+      const recipe = recipes.find(r => r.name.toLowerCase() === mealName.toLowerCase());
+      const fromBook = !!(recipe?.ingredients?.length);
+      return `<div class="review-group">
+        <button class="review-group-header" onclick="openReviewRecipe('${mealName.replace(/'/g,"\\'")}')">
+          <span class="review-group-name">${mealName}</span>
+          <span class="review-src-badge${fromBook ? '' : ' generated'}">${fromBook ? 'recipe book' : 'ai generated'}</span>
+          <span class="review-recipe-link">view recipe →</span>
+        </button>
+        <div class="review-group-items">
+          ${items.map(item => {
+            const isRemoved  = item.status === 'removed' || !!item.combinedInto;
+            const isInPantry = item.status === 'pantry';
+            const overlap    = itemOverlapMeals[item.key];
+            const isFirst    = overlap && overlap.firstKey === item.key;
+            const isLater    = overlap && !isFirst;
+            const keepKey    = isLater ? overlap.firstKey : null;
+            const cls = isRemoved ? ' review-item--removed' : isInPantry ? ' review-item--pantry' : overlap ? ' review-item--dupe' : '';
+            const qty = [item.amount, item.unit].filter(Boolean).join(' ');
+            const overlapBadge = isFirst
+              ? ` <span class="review-dupe-badge">↕ also in ${overlap.others.join(', ')}</span>`
+              : isLater
+                ? ` <span class="review-dupe-badge secondary">↕ also in ${overlap.others.join(', ')}</span>`
+                : '';
+            return `<div class="review-item${cls}">
+              <input type="checkbox" class="review-item-check" ${(isRemoved || isInPantry) ? '' : 'checked'} onchange="toggleReviewItem('${safeKey(item.key)}')">
+              <span class="review-item-name">${item.name}${item.combinedInto ? ' <span class="review-combined-label">combined ↑</span>' : ''}${overlapBadge}</span>
+              ${qty ? `<span class="review-item-qty">${qty}</span>` : ''}
+              <button class="review-pantry-btn${isInPantry ? ' active' : ''}" onclick="markReviewPantry('${safeKey(item.key)}')">${isInPantry ? '✓ in pantry' : 'in pantry'}</button>
+              ${isLater && !isRemoved ? `<button class="review-combine-btn" onclick="combineReviewItems('${safeKey(keepKey)}','${safeKey(item.key)}')">combine ↑</button>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+  } else {
+    // Category view — flatten active items, group by category, detect duplicates
+    const active = _reviewItems.filter(i => !i.combinedInto);
+    const catGroups = {};
+    active.forEach(item => { const c = _hhCategory(item.name); (catGroups[c] = catGroups[c] || []).push(item); });
+
+    // Use normIngredient (adjective-aware) for dupe detection in category view
+    const normGroups = {};
+    active.forEach(item => {
+      const norm = normIngredient(item.name);
+      if (norm.length >= 3) (normGroups[norm] = normGroups[norm] || []).push(item);
+    });
+    const dupeNorms = new Set(Object.keys(normGroups).filter(n => normGroups[n].length > 1));
+
+    list.innerHTML = HH_CATEGORY_ORDER.filter(c => catGroups[c]).map(cat => {
+      const items = catGroups[cat];
+      return `<div class="review-group">
+        <div class="review-cat-header">${HH_CATEGORY_LABELS[cat] || cat}</div>
+        ${items.map(item => {
+          const norm       = normIngredient(item.name);
+          const isDupe     = dupeNorms.has(norm);
+          const dupeGroup  = isDupe ? normGroups[norm] : [];
+          const isFirst    = isDupe && dupeGroup[0]?.key === item.key;
+          const isLater    = isDupe && !isFirst;
+          const keepKey    = isLater ? dupeGroup[0].key : null;
+          const isRemoved  = item.status === 'removed';
+          const isInPantry = item.status === 'pantry';
+          const cls = isRemoved ? ' review-item--removed' : isInPantry ? ' review-item--pantry' : isDupe ? ' review-item--dupe' : '';
+          const qty = [item.amount, item.unit].filter(Boolean).join(' ');
+          return `<div class="review-item${cls}">
+            <input type="checkbox" class="review-item-check" ${(isRemoved || isInPantry) ? '' : 'checked'} onchange="toggleReviewItem('${safeKey(item.key)}')">
+            <span class="review-item-name">${item.name} <span class="review-meal-tag">${item.mealSrc}</span>${isFirst ? ' <span class="review-dupe-badge">↕ overlap</span>' : ''}</span>
+            ${qty ? `<span class="review-item-qty">${qty}</span>` : ''}
+            <button class="review-pantry-btn${isInPantry ? ' active' : ''}" onclick="markReviewPantry('${safeKey(item.key)}')">${isInPantry ? '✓ in pantry' : 'in pantry'}</button>
+            ${isLater && !isRemoved ? `<button class="review-combine-btn" onclick="combineReviewItems('${safeKey(keepKey)}','${safeKey(item.key)}')">combine ↑</button>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  }
+}
+
+async function startIngredientReview() {
+  document.getElementById('reviewLoadingBar').style.display = 'flex';
+  document.getElementById('reviewCard').style.display    = 'none';
+  document.getElementById('reviewError').style.display   = 'none';
+  document.getElementById('buildCartFromReviewBtn').style.display = 'none';
+
+  const mealData  = meals.filter(m => !m.isOut).map(m => ({
+    name:     m.meal.replace(' [NEW]', '').trim(),
+    easyMode: !!m.easyMode,
+  }));
+  const mealNames = mealData.map(m => m.name);
+
+  try {
+    const resp = await fetch('/generate-ingredients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meals: mealData, servings: servingSize }),
+    });
+    if (resp.status === 404 || !(resp.headers.get('content-type') || '').includes('json')) {
+      throw new Error('Server needs to be restarted — open Terminal and run: python server.py');
+    }
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Failed to load ingredients');
+
+    _reviewItems = [];
+    mealNames.forEach(mealName => {
+      const ings = (data.ingredients || {})[mealName] || [];
+      ings.forEach((ing, idx) => {
+        _reviewItems.push({
+          key:          `${mealName}-${idx}`,
+          mealSrc:      mealName,
+          name:         typeof ing === 'string' ? ing : (ing.name || ''),
+          amount:       typeof ing === 'string' ? '' : String(ing.amount || ''),
+          unit:         typeof ing === 'string' ? '' : (ing.unit || ''),
+          status:       'include',
+          combinedInto: null,
+        });
+      });
+    });
+
+    // Auto-mark items already in the pantry
+    if (pantry.length) {
+      const pantryNorms = pantry.map(p => normName(p.name)).filter(n => n.length >= 3);
+      _reviewItems.forEach(item => {
+        const ingNorm = normName(item.name);
+        if (ingNorm.length >= 3) {
+          const hit = pantryNorms.some(pn =>
+            ingNorm === pn ||
+            (ingNorm.length > 4 && ingNorm.includes(pn)) ||
+            (pn.length > 4 && pn.includes(ingNorm))
+          );
+          if (hit) item.status = 'pantry';
+        }
+      });
+    }
+
+    _reviewView = 'recipe';
+    document.getElementById('reviewViewRecipe').classList.add('active');
+    document.getElementById('reviewViewCategory').classList.remove('active');
+    document.getElementById('reviewLoadingBar').style.display  = 'none';
+    document.getElementById('reviewCard').style.display        = 'block';
+    document.getElementById('buildCartFromReviewBtn').style.display = 'inline-flex';
+    _renderReviewList();
+
+  } catch(e) {
+    document.getElementById('reviewLoadingBar').style.display = 'none';
+    const errBox = document.getElementById('reviewError');
+    errBox.style.display  = 'block';
+    errBox.textContent    = `Failed to load ingredients: ${e.message}`;
+  }
+}
+
+async function buildCartFromReview() {
+  const precomputed = {};
+  _reviewItems.forEach(item => {
+    if (item.status === 'include' && !item.combinedInto) {
+      (precomputed[item.mealSrc] = precomputed[item.mealSrc] || []).push({
+        name: item.name, amount: item.amount, unit: item.unit,
+      });
+    }
+  });
+  goToStep(6);
+  startCartBuild(precomputed);
+}
+
+function exportShoppingList() {
+  if (!_reviewItems.length) { showToast('No ingredients to export yet', {type: 'error'}); return; }
+  const today = new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+  const byMeal = {};
+  _reviewItems
+    .filter(i => i.status === 'include' && !i.combinedInto)
+    .forEach(i => { (byMeal[i.mealSrc] = byMeal[i.mealSrc] || []).push(i); });
+
+  const lines = [`SHOPPING LIST — week of ${today}`, ''];
+  Object.entries(byMeal).forEach(([meal, items]) => {
+    lines.push(meal);
+    items.forEach(i => {
+      const qty = [i.amount, i.unit].filter(Boolean).join(' ');
+      lines.push(`  • ${qty ? qty + ' ' : ''}${i.name}`);
+    });
+    lines.push('');
+  });
+
+  // Append confirmed staples
+  const activeStaples = staples.filter(s => !staplesSkipped.has(s.id));
+  if (activeStaples.length || staplesOneTime.length) {
+    lines.push('Weekly Staples');
+    activeStaples.forEach(s => {
+      const meta = [s.qty > 1 ? s.qty : '', s.unit].filter(Boolean).join(' ');
+      lines.push(`  • ${meta ? meta + ' ' : ''}${s.name}`);
+    });
+    staplesOneTime.forEach(o => lines.push(`  • ${o.qty > 1 ? o.qty + ' ' : ''}${o.name}`));
+  }
+
+  const blob = new Blob([lines.join('\n')], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `shopping-list-${new Date().toISOString().split('T')[0]}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function copyShoppingList() {
+  if (!_reviewItems.length) { showToast('No ingredients to copy yet', {type: 'error'}); return; }
+  const today = new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+  const byMeal = {};
+  _reviewItems
+    .filter(i => i.status === 'include' && !i.combinedInto)
+    .forEach(i => { (byMeal[i.mealSrc] = byMeal[i.mealSrc] || []).push(i); });
+
+  const lines = [`Shopping list — week of ${today}`, ''];
+  Object.entries(byMeal).forEach(([meal, items]) => {
+    lines.push(meal);
+    items.forEach(i => {
+      const qty = [i.amount, i.unit].filter(Boolean).join(' ');
+      lines.push(`  • ${qty ? qty + ' ' : ''}${i.name}`);
+    });
+    lines.push('');
+  });
+
+  const activeStaples = staples.filter(s => !staplesSkipped.has(s.id));
+  if (activeStaples.length || staplesOneTime.length) {
+    lines.push('Weekly Staples');
+    activeStaples.forEach(s => {
+      const meta = [s.qty > 1 ? s.qty : '', s.unit].filter(Boolean).join(' ');
+      lines.push(`  • ${meta ? meta + ' ' : ''}${s.name}`);
+    });
+    staplesOneTime.forEach(o => lines.push(`  • ${o.qty > 1 ? o.qty + ' ' : ''}${o.name}`));
+  }
+
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast('List copied to clipboard'))
+    .catch(() => showToast('Copy failed — try export instead', {type: 'error'}));
+}
+
+// ===== PREP GUIDE =====
+let _prepGuideSections = [];
+
+async function generatePrepGuide() {
+  const btn  = document.getElementById('prepGuideGenBtn');
+  const body = document.getElementById('prepGuideBody');
+  if (btn) { btn.disabled = true; btn.textContent = 'generating...'; }
+
+  const mealData = meals.filter(m => !m.isOut).map(m => ({
+    day:        m.day,
+    meal:       m.meal.replace(' [NEW]', '').trim(),
+    complexity: schedule[m.day]?.complexity || 'normal',
+    isOut:      false,
+  }));
+
+  try {
+    const resp = await fetch('/generate-prep-list', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ meals: mealData, pantry }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Failed');
+    _prepGuideSections = data.sections || [];
+    _renderPrepGuide();
+  } catch(e) {
+    if (body) body.innerHTML = `<p class="recap-hint" style="color:var(--error)">Couldn't generate guide — check Terminal.</p>`;
+    if (btn)  { btn.disabled = false; btn.textContent = 'try again'; }
+  }
+}
+
+function _renderPrepGuide() {
+  const body = document.getElementById('prepGuideBody');
+  if (!body || !_prepGuideSections.length) return;
+
+  const sectionsHtml = _prepGuideSections.map(sec => `
+    <div style="margin-bottom:14px">
+      <div class="card-label" style="margin-bottom:6px;font-size:11px">${sec.title}</div>
+      <ul style="margin:0;padding-left:18px">
+        ${(sec.tasks || []).map(t => `<li class="recap-hint" style="margin-bottom:4px">${t}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+
+  body.innerHTML = sectionsHtml + `
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn primary" onclick="emailPrepGuide()">email me this →</button>
+      <button class="btn" onclick="copyPrepGuide()">copy</button>
+    </div>`;
+}
+
+async function emailPrepGuide() {
+  const btn = document.querySelector('#prepGuideBody .btn.primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'sending...'; }
+  try {
+    const resp = await fetch('/email-prep-guide', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ sections: _prepGuideSections }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    showToast('Prep guide sent to your inbox');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ sent'; }
+  } catch(e) {
+    showToast(e.message.includes('GMAIL_APP_PASSWORD') ? 'Add GMAIL_APP_PASSWORD to .env to enable email' : 'Email failed — check Terminal', {type:'error'});
+    if (btn) { btn.disabled = false; btn.textContent = 'email me this →'; }
+  }
+}
+
+function copyPrepGuide() {
+  if (!_prepGuideSections.length) return;
+  const lines = ['Sunday Prep Guide', ''];
+  _prepGuideSections.forEach(sec => {
+    lines.push(sec.title);
+    (sec.tasks || []).forEach(t => lines.push(`  • ${t}`));
+    lines.push('');
+  });
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast('Prep guide copied'))
+    .catch(() => showToast('Copy failed', {type:'error'}));
+}
+
 // ===== CART =====
 async function approveMealPlan() {
   document.getElementById('buildCartBtn').style.display = 'none';
@@ -2077,11 +3103,10 @@ async function approveMealPlan() {
 
   hhExtras = [];
   renderHhExtras();
-  goToStep(2); // → Household step
+  goToStep(3); // → Household step
 }
 
 async function navigateAndBuildCart() {
-  // Save any extras the user flagged "save to my list"
   const toSave = hhExtras.filter(e => e.save).map(e => e.name);
   if (toSave.length) {
     if (!prefs.householdItems) prefs.householdItems = [];
@@ -2093,14 +3118,21 @@ async function navigateAndBuildCart() {
       await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
     } catch(e) {}
   }
-  goToStep(3);
-  startCartBuild();
+  navigateToStaples();
 }
 
-async function startCartBuild() {
+async function startCartBuild(precomputedIngredients = null) {
   document.getElementById('buildCartBtn').style.display = 'none';
   document.getElementById('cartLoadingBar').style.display = 'flex';
   document.getElementById('cartCard').style.display = 'none';
+  // Reset prep guide
+  _prepGuideSections = [];
+  const pgCard = document.getElementById('prepGuideCard');
+  if (pgCard) {
+    pgCard.style.display = 'none';
+    const pgBody = document.getElementById('prepGuideBody');
+    if (pgBody) pgBody.innerHTML = `<p class="review-hint" style="margin-bottom:12px">Get a personalized checklist of what to prep tonight so weeknight dinners go smoothly.</p><button class="btn primary" id="prepGuideGenBtn" onclick="generatePrepGuide()">generate prep guide →</button>`;
+  }
   document.getElementById('cartError').style.display = 'none';
   document.getElementById('serverNotice').style.display = 'none';
   document.getElementById('doneBtn').style.display = 'none';
@@ -2108,7 +3140,6 @@ async function startCartBuild() {
   const nfb = document.getElementById('notFoundBox');    if (nfb) nfb.style.display = 'none';
   const spb = document.getElementById('spikeBox');       if (spb) spb.style.display = 'none';
   const reb = document.getElementById('reuseBox');       if (reb) reb.style.display = 'none';
-  const snb = document.getElementById('sanityBox');      if (snb) snb.style.display = 'none';
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
   const mealNames = meals.filter(m => !m.isOut).map(m => m.meal.replace(' [NEW]','').trim());
@@ -2116,10 +3147,19 @@ async function startCartBuild() {
   try {
     const controller = new AbortController();
     const _timeout = setTimeout(() => controller.abort(), 90000);
+    const confirmedStaples = staples
+      .filter(s => !staplesSkipped.has(s.id))
+      .map(s => ({
+        id: s.id, name: s.name, qty: s.qty, unit: s.unit,
+        ...(s.itemId ? {itemId: s.itemId, productName: s.productName, lastPrice: s.lastPrice} : {}),
+      }))
+      .concat(staplesOneTime.map(o => ({name: o.name, qty: o.qty || 1, unit: ''})));
+    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047' };
+    if (precomputedIngredients) body.ingredients = precomputedIngredients;
     const resp = await fetch('/build-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), servings: servingSize, zip: prefs.household?.zip || '59047' }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     }).finally(() => clearTimeout(_timeout));
 
@@ -2130,6 +3170,7 @@ async function startCartBuild() {
     setTimeout(() => {
       document.getElementById('cartLoadingBar').style.display = 'none';
       renderCart(data.groups || {}, data.mealOrder || [], data.total, data.cartUrl, data.notFound || []);
+      _cacheResolvedStaples(data.resolvedStaples);
     }, 500);
 
   } catch(e) {
@@ -2144,6 +3185,44 @@ async function startCartBuild() {
       errBox.textContent = `Cart build error:\n${e.message}\n\nCheck your Terminal for the full error log.`;
     }
   }
+}
+
+async function _cacheResolvedStaples(resolved) {
+  if (!resolved?.length) return;
+  for (const r of resolved) {
+    const s = staples.find(x => x.id === r.stapleId);
+    if (!s) continue;
+    s.itemId      = r.itemId;
+    s.productName = r.productName;
+    s.lastPrice   = r.lastPrice;
+    try {
+      await fetch(`/staples/${r.stapleId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({itemId: r.itemId, productName: r.productName, lastPrice: r.lastPrice}),
+      });
+    } catch(e) {}
+  }
+  renderStaplesPanel();
+}
+
+async function clearStapleCache() {
+  const cached = staples.filter(s => s.itemId);
+  if (!cached.length) { showToast('No cached products to clear', {type: 'error'}); return; }
+  for (const s of cached) {
+    s.itemId      = null;
+    s.productName = null;
+    s.lastPrice   = null;
+    try {
+      await fetch(`/staples/${s.id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({itemId: null, productName: null, lastPrice: null}),
+      });
+    } catch(e) {}
+  }
+  renderStaplesPanel();
+  showToast(`Cleared Walmart cache for ${cached.length} staple${cached.length !== 1 ? 's' : ''}`);
 }
 
 function setCartView(view) {
@@ -2184,11 +3263,11 @@ function _renderCartList(groups, mealOrder) {
           const desel = _cartDeselected.has(key);
           const esc = item.name.replace(/'/g, '&#39;');
           return `<div class="cart-item${desel ? ' deselected' : ''}" data-swap-key="${key}">
-            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')">
+            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')" aria-label="${esc}">
             <span class="cart-item-name">${item.name}</span>
             <span class="cart-item-right">
               <span class="cart-item-price">${item.price}</span>
-              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${item._src}',${item._idx},'${esc}')">↕</button>
+              <button class="cart-item-swap" title="find alternative" aria-label="Find alternative for ${esc}" onclick="swapCartItem('${item._src}',${item._idx},'${esc}')">↕</button>
             </span>
           </div>`;
         }).join('')}
@@ -2198,8 +3277,8 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.some(i => _match(i.name)));
     list.innerHTML = sourcesPresent.map(source => {
       const items = (groups[source] || []).filter(i => _match(i.name));
-      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday'].includes(source);
-      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source;
+      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday', '_found'].includes(source);
+      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source === '_found' ? 'Manually Added' : source;
       const groupTotal = items.reduce((sum, i) => { const k=`${source}-${(groups[source]||[]).indexOf(i)}`; return _cartDeselected.has(k) ? sum : sum + parseFloat(i.price.replace('$','')); }, 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
@@ -2212,11 +3291,11 @@ function _renderCartList(groups, mealOrder) {
           const desel = _cartDeselected.has(key);
           const esc = item.name.replace(/'/g, '&#39;');
           return `<div class="cart-item${desel ? ' deselected' : ''}" data-swap-key="${key}">
-            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')">
+            <input type="checkbox" class="cart-item-check" ${desel ? '' : 'checked'} onchange="toggleCartItem('${key}')" aria-label="${esc}">
             <span class="cart-item-name">${item.name}</span>
             <span class="cart-item-right">
               <span class="cart-item-price">${item.price}</span>
-              <button class="cart-item-swap" title="find alternative" onclick="swapCartItem('${source}',${origIdx},'${esc}')">↕</button>
+              <button class="cart-item-swap" title="find alternative" aria-label="Find alternative for ${esc}" onclick="swapCartItem('${source}',${origIdx},'${esc}')">↕</button>
             </span>
           </div>`;
         }).join('')}
@@ -2226,10 +3305,42 @@ function _renderCartList(groups, mealOrder) {
 }
 
 function toggleCartItem(key) {
-  if (_cartDeselected.has(key)) _cartDeselected.delete(key);
-  else _cartDeselected.add(key);
+  const wasDeselected = _cartDeselected.has(key);
+  if (wasDeselected) {
+    _cartDeselected.delete(key);
+  } else {
+    _cartDeselected.add(key);
+    // Offer pantry add when the user unchecks an item (they may already have it)
+    const lastDash = key.lastIndexOf('-');
+    const src      = key.slice(0, lastDash);
+    const idx      = parseInt(key.slice(lastDash + 1));
+    const item     = _cartData?.groups[src]?.[idx];
+    if (item?.name) _offerAddToPantry(item.name);
+  }
   _renderCartList(_cartData.groups, _cartData.mealOrder);
   _updateCartTotal();
+}
+
+async function _offerAddToPantry(productName) {
+  // Truncate long Walmart product names to a readable label
+  const label = productName.replace(/,?\s*\d+(\.\d+)?\s*(oz|lb|ct|pk|fl oz|gallon|gal|count)\b.*/i, '').trim() || productName;
+  showToast(`Already have ${label}?`, {
+    actionLabel: 'Add to pantry',
+    actionFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      try {
+        await fetch('/pantry', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name: label, addedOn: today}),
+        });
+        await loadPantry();
+        showToast(`${label} added to pantry`);
+      } catch(e) {
+        showToast('Could not add to pantry', {type: 'error'});
+      }
+    },
+  });
 }
 
 function _updateCartTotal() {
@@ -2289,62 +3400,6 @@ function checkPriceSpikes(groups) {
   return spikes;
 }
 
-function runSanityCheck(groups, mealOrder, url) {
-  const sanityBox = document.getElementById('sanityBox');
-  if (!sanityBox) return;
-
-  const issues = [];
-
-  // 1. Duplicates — items with the same normalized name across any two groups
-  const normName = n => n.toLowerCase().replace(/\d+(\.\d+)?(\s*(oz|lb|ct|pk|g|ml|qt|pt|gal))?\b/gi, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const seen = {}; // normName → first source
-  mealOrder.forEach(src => {
-    (groups[src] || []).forEach(item => {
-      const norm = normName(item.name);
-      if (norm.length < 4) return;
-      if (seen[norm] && seen[norm] !== src) {
-        issues.push(`<span class="sanity-item">• <strong>Possible duplicate:</strong> "${item.name}" appears in both <em>${seen[norm]}</em> and <em>${src}</em></span>`);
-      } else {
-        seen[norm] = src;
-      }
-    });
-  });
-
-  // 2. Pantry overlap — cart items that overlap with items already in pantry
-  const pantryNames = (pantry || []).map(p => (p.name || p).toLowerCase());
-  const allCartItems = mealOrder.flatMap(src => (groups[src] || []).map(i => i.name));
-  allCartItems.forEach(name => {
-    const lower = name.toLowerCase();
-    const match = pantryNames.find(p => p.length > 3 && (lower.includes(p) || p.includes(lower.split(' ')[0])));
-    if (match) {
-      issues.push(`<span class="sanity-item">• <strong>Already in pantry:</strong> "${name}" — you may have <em>${match}</em></span>`);
-    }
-  });
-
-  // 3. Expected staples missing — frequentStaples not found in cart
-  const cartLower = allCartItems.map(n => n.toLowerCase());
-  const expectedStaples = (prefs.frequentStaples || []).slice(0, 8); // check top 8 only
-  expectedStaples.forEach(staple => {
-    const stapleLower = staple.toLowerCase();
-    const inCart = cartLower.some(n => n.includes(stapleLower) || stapleLower.includes(n.split(' ')[0]));
-    if (!inCart) {
-      issues.push(`<span class="sanity-item">• <strong>Expected staple not found:</strong> <em>${staple}</em></span>`);
-    }
-  });
-
-  const cartUrlBox = document.getElementById('cartUrlBox');
-  if (url && cartUrlBox) cartUrlBox.style.display = 'flex';
-
-  if (!issues.length) {
-    sanityBox.style.display = 'none';
-    return;
-  }
-
-  // Show issues as informational — Walmart button is still available
-  sanityBox.style.display = 'block';
-  sanityBox.innerHTML = `<strong>Heads up — ${issues.length} thing${issues.length > 1 ? 's' : ''} to review:</strong>
-    ${issues.join('<br>')}`;
-}
 
 
 function flagIngredientReuse(groups, mealOrder) {
@@ -2381,8 +3436,51 @@ function flagIngredientReuse(groups, mealOrder) {
   return results.slice(0, 5);
 }
 
+function _renderNotFoundBox() {
+  const notFoundBox = document.getElementById('notFoundBox');
+  if (!notFoundBox) return;
+  if (!_cartData.notFound?.length) { notFoundBox.style.display = 'none'; return; }
+  notFoundBox.style.display = 'block';
+  notFoundBox.innerHTML = `<strong>⚠ Couldn't find at your Walmart — try a different search:</strong>` +
+    _cartData.notFound.map((item, idx) => `
+      <div class="not-found-row" id="nf-row-${idx}">
+        <span class="not-found-name">${item}</span>
+        <input class="not-found-input" id="nf-input-${idx}" value="${item.replace(/"/g, '&quot;')}" placeholder="try a different name...">
+        <button class="btn not-found-btn" onclick="retryNotFound(${idx})">search →</button>
+      </div>`).join('');
+}
+
+async function retryNotFound(idx) {
+  const input = document.getElementById(`nf-input-${idx}`);
+  if (!input) return;
+  const btn = input.nextElementSibling;
+  const query = input.value.trim();
+  if (!query) return;
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/swap-item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    const product = await resp.json();
+    if (!resp.ok || product.error) { btn.textContent = 'not found'; btn.disabled = false; return; }
+    if (!_cartData.groups._found) {
+      _cartData.groups._found = [];
+      _cartData.mealOrder.push('_found');
+    }
+    _cartData.groups._found.push({ name: product.name, price: product.price, itemId: product.itemId, qty: 1 });
+    _cartData.notFound.splice(idx, 1);
+    _renderCartList(_cartData.groups, _cartData.mealOrder);
+    _updateCartTotal();
+    _renderNotFoundBox();
+    showToast(`Added ${product.name}`);
+  } catch(e) { btn.textContent = 'error'; btn.disabled = false; }
+}
+
 function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false) {
-  _cartData = { groups, mealOrder, total, url };
+  _cartData = { groups, mealOrder, total, url, notFound: notFound ? [...notFound] : [] };
   _cartView = 'meal';
   _cartFilter = '';
   _cartDeselected = new Set();
@@ -2399,16 +3497,8 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
   document.getElementById('cartTotal').textContent = total;
   _updateBudgetBar(parseFloat(total.replace('$', '')) || 0);
 
-  // Not-found items
-  const notFoundBox = document.getElementById('notFoundBox');
-  if (notFoundBox) {
-    if (notFound?.length) {
-      notFoundBox.style.display = 'block';
-      notFoundBox.textContent = `⚠ Couldn't find at your Walmart: ${notFound.join(', ')}`;
-    } else {
-      notFoundBox.style.display = 'none';
-    }
-  }
+  // Not-found items — interactive retry rows
+  _renderNotFoundBox();
 
   // Ingredient reuse flag
   const reuseBox = document.getElementById('reuseBox');
@@ -2435,10 +3525,12 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
     }
   }
 
-  // Cart review (informational only — never blocks the Walmart button)
-  document.getElementById('openCartBtn').onclick = () => window.open(buildFilteredCartUrl(), '_blank');
+  document.getElementById('openCartBtn').onclick = () => window.open(buildFilteredCartUrl(), '_blank', 'noopener,noreferrer');
   if (url) document.getElementById('cartUrlBox').style.display = 'flex';
-  if (!skipSanity && url) runSanityCheck(groups, mealOrder, url);
+
+  // Show prep guide card
+  const pgCard = document.getElementById('prepGuideCard');
+  if (pgCard) pgCard.style.display = 'block';
 }
 
 function buildFilteredCartUrl() {
@@ -2569,9 +3661,12 @@ function buildPreferencesPrompt() {
     lines.push('\nDIETARY NOTES:');
     prefs.dietaryNotes.forEach(n => lines.push(`- ${n}`));
   }
-  if (prefs.weeklyStaples?.length) {
+  if (staples.length) {
     lines.push('\nWEEKLY STAPLES (include every order):');
-    prefs.weeklyStaples.forEach(s => lines.push(`- ${s}`));
+    staples.forEach(s => {
+      const meta = [s.qty > 1 ? s.qty : '', s.unit].filter(Boolean).join(' ');
+      lines.push(`- ${s.name}${meta ? ' (' + meta + ')' : ''}`);
+    });
   }
   if (prefs.frequentStaples?.length) {
     lines.push('\nFREQUENT STAPLES (include most weeks — skip only if already stocked):');
@@ -2582,7 +3677,16 @@ function buildPreferencesPrompt() {
     prefs.brandRules.forEach(r => lines.push(`- ${r.item}: ${r.brand}`));
   }
   if (prefs.storeOk) lines.push(`\nSTORE BRAND / GREAT VALUE OK: ${prefs.storeOk}`);
-  if (prefs.doNotRepeat?.length) lines.push(`\nDO NOT INCLUDE this week: ${prefs.doNotRepeat.join(', ')}`);
+
+  // 4-week history takes priority over single-week doNotRepeat
+  if (prefs.mealHistory?.length) {
+    const recentMeals = [...new Set(prefs.mealHistory.flatMap(w => w.meals || []))];
+    if (recentMeals.length) lines.push(`\nDO NOT REPEAT (last ${prefs.mealHistory.length} weeks): ${recentMeals.join(', ')}`);
+  } else if (prefs.doNotRepeat?.length) {
+    lines.push(`\nDO NOT INCLUDE this week: ${prefs.doNotRepeat.join(', ')}`);
+  }
+
+  if (prefs.neverSuggest?.length) lines.push(`\nNEVER SUGGEST (user blocked permanently): ${prefs.neverSuggest.join(', ')}`);
   if (prefs.notes) lines.push(`\nNOTES: ${prefs.notes}`);
   return lines.join('\n');
 }
@@ -2616,7 +3720,7 @@ function closePrefsPage(fromHistory = false) {
 }
 
 function switchPrefsTab(tab) {
-  ['household', 'mealplan', 'staples', 'brands'].forEach(t => {
+  ['family', 'food', 'history'].forEach(t => {
     document.getElementById(`prefTab-${t}`).classList.toggle('active', t === tab);
     document.getElementById(`prefContent-${t}`).style.display = t === tab ? '' : 'none';
   });
@@ -2635,8 +3739,6 @@ async function savePrefsPage() {
     budgetMax:    parseInt(document.getElementById('pf-budgetMax').value) || 225,
   };
   prefs.dietaryNotes    = readPrefsList('pf-dietList');
-  prefs.weeklyStaples   = readPrefsList('pf-weeklyList');
-  prefs.frequentStaples = readPrefsList('pf-frequentList');
   prefs.brandRules      = readBrandRules();
   prefs.householdItems  = readHhItemsPrefs();
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
@@ -2687,14 +3789,94 @@ function renderPrefsPage() {
   document.getElementById('pf-nutritionFocus').value = prefs.nutritionFocus || '';
   document.getElementById('pf-storeOk').value        = prefs.storeOk || '';
 
-  renderPrefsList('pf-dietList',     prefs.dietaryNotes    || []);
-  renderPrefsList('pf-weeklyList',   prefs.weeklyStaples   || []);
-  renderPrefsList('pf-frequentList', prefs.frequentStaples || []);
-  renderBrandList(prefs.brandRules   || []);
+  renderPrefsList('pf-dietList', prefs.dietaryNotes || []);
+  renderBrandList(prefs.brandRules || []);
   renderHhItemsPrefs((prefs.householdItems || []).map(_normalizeHhItem));
+  renderMealHistoryCard();
+  switchPrefsTab('family');
 
   const btn = document.getElementById('prefsSaveBtn');
   if (btn) { btn.textContent = 'save →'; btn.disabled = false; }
+}
+
+function renderMealHistoryCard() {
+  const el = document.getElementById('mealHistoryCard');
+  if (!el) return;
+
+  const history     = prefs.mealHistory || [];
+  const neverSuggest = prefs.neverSuggest || [];
+  const doNotRepeat  = prefs.doNotRepeat  || [];
+
+  let html = '';
+
+  // Rotation history (mealHistory + doNotRepeat)
+  const historyWeeks = history.length;
+  const recentMeals  = [...new Set([...history.flatMap(w => w.meals || []), ...doNotRepeat])];
+  html += `<div class="meal-history-row">
+    <div>
+      <div class="meal-history-label">rotation history</div>
+      <div class="meal-history-detail">${historyWeeks ? `${historyWeeks} week${historyWeeks !== 1 ? 's' : ''} stored` : 'none stored'}${recentMeals.length ? ` — ${recentMeals.join(', ')}` : ''}</div>
+    </div>
+    <button class="btn" onclick="clearMealHistory()" ${!recentMeals.length ? 'disabled' : ''}>clear</button>
+  </div>`;
+
+  // Never-suggest list
+  html += `<div class="meal-history-row" style="margin-top:10px;align-items:flex-start">
+    <div style="flex:1;min-width:0">
+      <div class="meal-history-label">permanently blocked meals</div>
+      ${neverSuggest.length
+        ? `<div class="never-suggest-list">${neverSuggest.map((name, i) =>
+            `<span class="never-suggest-chip">${name}<button class="never-suggest-remove" onclick="removeNeverSuggest(${i})" title="unblock">×</button></span>`
+          ).join('')}</div>`
+        : '<div class="meal-history-detail">none blocked</div>'
+      }
+    </div>
+    ${neverSuggest.length ? `<button class="btn" onclick="clearNeverSuggest()" style="flex-shrink:0">clear all</button>` : ''}
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+async function clearMealHistory() {
+  prefs.mealHistory  = [];
+  prefs.doNotRepeat  = [];
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+  renderMealHistoryCard();
+  showToast('Rotation history cleared — all meals are fair game again');
+}
+
+async function removeNeverSuggest(idx) {
+  if (!prefs.neverSuggest?.[idx]) return;
+  const name = prefs.neverSuggest[idx];
+  prefs.neverSuggest.splice(idx, 1);
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+  renderMealHistoryCard();
+  showToast(`"${name}" unblocked`);
+}
+
+async function clearNeverSuggest() {
+  prefs.neverSuggest = [];
+  try {
+    await fetch('/prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(prefs),
+    });
+  } catch(e) {}
+  renderMealHistoryCard();
+  showToast('All blocked meals unblocked');
 }
 
 function renderPrefsList(containerId, items) {
@@ -2717,7 +3899,7 @@ function addRecipeListItem(containerId) {
 }
 
 function addPrefItem(key) {
-  const map = { diet:'pf-dietList', weekly:'pf-weeklyList', frequent:'pf-frequentList' };
+  const map = { diet:'pf-dietList', frequent:'pf-frequentList' };
   const el = document.getElementById(map[key]);
   if (!el) return;
   el.insertAdjacentHTML('beforeend', prefItemHtml(''));
@@ -2742,17 +3924,18 @@ function addBrandRule() {
   document.querySelector('#pf-brandList .prefs-brand-row:last-child .prefs-brand-item').focus();
 }
 
-function hhItemPrefHtml(name = '', category = '', brand = '') {
+function hhItemPrefHtml(name = '', category = '', brand = '', cadenceDays = 0, lastOrderedOn = '') {
   const nameEsc  = (name  || '').replace(/"/g, '&quot;');
   const brandEsc = (brand || '').replace(/"/g, '&quot;');
-  const cat = category || _hhCategory(name);
+  const cat  = category || _hhCategory(name);
   const opts = HH_CATEGORY_ORDER.map(c =>
     `<option value="${c}"${c === cat ? ' selected' : ''}>${HH_CATEGORY_LABELS[c]}</option>`
   ).join('');
-  return `<div class="prefs-hh-row">
+  return `<div class="prefs-hh-row" data-last-ordered-on="${lastOrderedOn}">
     <input class="prefs-hh-name" type="text" value="${nameEsc}" placeholder="item name" />
     <select class="prefs-hh-cat">${opts}</select>
     <input class="prefs-hh-brand" type="text" value="${brandEsc}" placeholder="brand (opt.)" />
+    <input class="prefs-hh-cadence" type="number" min="0" value="${cadenceDays || ''}" placeholder="days" title="reorder every N days (leave blank for no reminder)" />
     <button class="prefs-remove-btn" onclick="this.parentElement.remove()" title="remove">×</button>
   </div>`;
 }
@@ -2760,7 +3943,7 @@ function hhItemPrefHtml(name = '', category = '', brand = '') {
 function renderHhItemsPrefs(items) {
   const el = document.getElementById('pf-hhItemsList');
   if (!el) return;
-  el.innerHTML = items.map(i => hhItemPrefHtml(i.name, i.category, i.brand)).join('');
+  el.innerHTML = items.map(i => hhItemPrefHtml(i.name, i.category, i.brand, i.cadenceDays, i.lastOrderedOn)).join('');
 }
 
 function addHhItemPref() {
@@ -2773,9 +3956,11 @@ function addHhItemPref() {
 function readHhItemsPrefs() {
   return [...document.querySelectorAll('#pf-hhItemsList .prefs-hh-row')]
     .map(row => ({
-      name:     row.querySelector('.prefs-hh-name').value.trim(),
-      category: row.querySelector('.prefs-hh-cat').value,
-      brand:    row.querySelector('.prefs-hh-brand').value.trim(),
+      name:          row.querySelector('.prefs-hh-name').value.trim(),
+      category:      row.querySelector('.prefs-hh-cat').value,
+      brand:         row.querySelector('.prefs-hh-brand').value.trim(),
+      cadenceDays:   parseInt(row.querySelector('.prefs-hh-cadence').value) || 0,
+      lastOrderedOn: row.dataset.lastOrderedOn || '',
     }))
     .filter(i => i.name);
 }
@@ -2808,29 +3993,34 @@ async function handlePhotoUpload(input) {
 }
 
 // ===== RECIPE MODAL =====
+function openRecipeModal(r) {
+  document.getElementById('recipeModalName').textContent = r.name;
+  const body = document.getElementById('recipeModalBody');
+  const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
+  body.innerHTML = `
+    ${r.photo ? `<img class="recipe-modal-hero" src="${r.photo}" alt="">` : ''}
+    <div class="recipe-modal-meta">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${starsHtml(r.rating)}
+        ${r.timesPlanned ? `<span class="recipe-times">${r.timesPlanned}× planned</span>` : ''}
+      </div>
+      ${tags ? `<div class="recipe-tags" style="margin-top:5px">${tags}</div>` : ''}
+      ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
+    </div>
+    ${recipeDetailHtml(r)}`;
+  document.getElementById('recipeModal').style.display = 'flex';
+}
+
 async function openMealRecipe(i) {
   const mealObj = meals[i];
   if (!mealObj) return;
   const name = mealObj.meal.replace(' [NEW]', '').trim();
   const r = recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
 
-  document.getElementById('recipeModalName').textContent = name;
-  const body = document.getElementById('recipeModalBody');
   document.getElementById('recipeModal').style.display = 'flex';
 
   if (r) {
-    const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
-    body.innerHTML = `
-      ${r.photo ? `<img class="recipe-modal-hero" src="${r.photo}" alt="">` : ''}
-      <div class="recipe-modal-meta">
-        <div style="display:flex;align-items:center;gap:10px">
-          ${starsHtml(r.rating)}
-          ${r.timesPlanned ? `<span class="recipe-times">${r.timesPlanned}× planned</span>` : ''}
-        </div>
-        ${tags ? `<div class="recipe-tags" style="margin-top:5px">${tags}</div>` : ''}
-        ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
-      </div>
-      ${recipeDetailHtml(r)}`;
+    openRecipeModal(r);
     return;
   }
 
@@ -2880,7 +4070,7 @@ async function saveGeneratedRecipe() {
     steps:        _pendingGeneratedRecipe.steps,
   });
   _pendingGeneratedRecipe = null;
-  if (btn) { btn.textContent = '✓ saved to recipe book'; btn.disabled = true; }
+  document.getElementById('recipeModal').style.display = 'none';
 }
 
 function closeRecipeModal(e) {
@@ -3054,12 +4244,114 @@ async function wizardFinish() {
   loadHouseholdItems();
 }
 
+// ===== SPEND HISTORY DASHBOARD =====
+let _historyTrap = null;
+
+function openHistoryPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'history' }, '');
+  document.getElementById('historyPage').style.display = 'flex';
+  _syncPanelOpen();
+  renderHistoryDashboard();
+  _historyTrap = _trapFocus(document.getElementById('historyPage'));
+}
+
+function closeHistoryPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
+  document.getElementById('historyPage').style.display = 'none';
+  _syncPanelOpen();
+  _historyTrap?.(); _historyTrap = null;
+}
+
+async function renderHistoryDashboard() {
+  const el = document.getElementById('historyDashboard');
+  if (!el) return;
+  el.innerHTML = '<span class="hh-loading">loading...</span>';
+  try {
+    const resp = await fetch('/spend-history');
+    if (!resp.ok) throw new Error('no data');
+    const history = await resp.json();
+    if (!history.length) {
+      el.innerHTML = '<div class="hh-loading">no spend history yet — complete a weekly session to start tracking</div>';
+      return;
+    }
+
+    const budgetTarget = prefs.household?.budgetTarget || 175;
+    const budgetMax    = prefs.household?.budgetMax    || 225;
+    const recent       = history.slice(-16);
+    const totals       = recent.map(w => w.total);
+    const avg          = totals.reduce((a, b) => a + b, 0) / totals.length;
+    const underTarget  = recent.filter(w => w.total <= budgetTarget).length;
+    const overTarget   = recent.filter(w => w.total > budgetTarget && w.total <= budgetMax).length;
+    const overMax      = recent.filter(w => w.total > budgetMax).length;
+    const chartMax     = Math.max(...totals, budgetMax) * 1.15;
+
+    const bars = recent.slice(-12).map(w => {
+      const d     = new Date(w.date + 'T12:00:00');
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const pct   = Math.round((w.total / chartMax) * 100);
+      const tPct  = Math.round((budgetTarget / chartMax) * 100);
+      const mPct  = Math.round((budgetMax    / chartMax) * 100);
+      const color = w.total <= budgetTarget ? 'var(--approval)' : w.total <= budgetMax ? 'var(--accent)' : 'var(--urgent-red-text)';
+      return `<div class="spend-bar-row">
+        <span class="spend-bar-label">${label}</span>
+        <div class="spend-bar-track">
+          <div class="spend-bar-fill" style="width:${Math.min(pct,100)}%;background:${color}"></div>
+          <div class="spend-bar-ref-line spend-bar-target-line" style="left:${tPct}%" title="target $${budgetTarget}"></div>
+          <div class="spend-bar-ref-line spend-bar-max-line"    style="left:${mPct}%" title="max $${budgetMax}"></div>
+        </div>
+        <span class="spend-bar-val" style="color:${color}">$${w.total.toFixed(0)}</span>
+      </div>`;
+    }).join('');
+
+    const mealHistoryHtml = (prefs.mealHistory || []).slice(-4).reverse().map(w => {
+      const d     = new Date(w.week + 'T12:00:00');
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `<div class="spend-meal-week">
+        <span class="spend-meal-week-label">${label}</span>
+        <span class="spend-meal-list">${(w.meals || []).join(' · ')}</span>
+      </div>`;
+    }).join('') || '<div class="hh-loading">no meal history yet</div>';
+
+    el.innerHTML = `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-label">summary · last ${recent.length} weeks</div>
+        <div class="spend-stats-row">
+          <div class="spend-stat"><span class="spend-stat-val">$${avg.toFixed(0)}</span><span class="spend-stat-label">avg / week</span></div>
+          <div class="spend-stat"><span class="spend-stat-val" style="color:var(--approval)">${underTarget}</span><span class="spend-stat-label">under target</span></div>
+          <div class="spend-stat"><span class="spend-stat-val" style="color:var(--accent)">${overTarget}</span><span class="spend-stat-label">over target</span></div>
+          <div class="spend-stat"><span class="spend-stat-val" style="color:var(--urgent-red-text)">${overMax}</span><span class="spend-stat-label">over max</span></div>
+        </div>
+        <div class="spend-budget-ref">target $${budgetTarget} · max $${budgetMax}</div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-label">weekly spend</div>
+        <div class="spend-bar-legend">
+          <span class="spend-bar-legend-item"><span class="spend-bar-legend-dot" style="background:var(--approval)"></span>under $${budgetTarget}</span>
+          <span class="spend-bar-legend-item"><span class="spend-bar-legend-dot" style="background:var(--accent)"></span>over target</span>
+          <span class="spend-bar-legend-item"><span class="spend-bar-legend-dot" style="background:var(--urgent-red-text)"></span>over max</span>
+        </div>
+        <div class="spend-bars">${bars}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">recent meal plans</div>
+        <div class="spend-meal-history">${mealHistoryHtml}</div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = '<div class="hh-loading">could not load history — make sure the server is running</div>';
+  }
+}
+
 // ===== INIT =====
 history.replaceState({ step: 0, overlay: null }, '');
 goToStep(0, true); // true = don't push another history entry on top of the replaceState above
 renderSchedule();
-loadPrefs().then(() => { renderStep0Extras(); initServingSize(); renderRecapCard(); renderFrequentStaples(); checkOnboarding(); });
+loadPrefs().then(() => {
+  renderStep0Extras(); initServingSize(); renderRecapCard(); renderFrequentStaples(); checkOnboarding();
+  // Auto-advance to Your Week when there's no recap data
+  if (!prefs.lastWeekMeals?.length) goToStep(1, true);
+});
 loadHouseholdItems();
 loadRecipes();
 loadPantry().then(() => renderPantryToggle());
+loadStaples().then(() => renderStaplesStep());
 loadCalendarStatus();
