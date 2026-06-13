@@ -3720,10 +3720,70 @@ function closePrefsPage(fromHistory = false) {
 }
 
 function switchPrefsTab(tab) {
-  ['family', 'food', 'history'].forEach(t => {
+  ['family', 'food', 'history', 'account'].forEach(t => {
     document.getElementById(`prefTab-${t}`).classList.toggle('active', t === tab);
     document.getElementById(`prefContent-${t}`).style.display = t === tab ? '' : 'none';
   });
+  if (tab === 'account') _populateAccountTab();
+}
+
+async function _populateAccountTab() {
+  const el = document.getElementById('acct-username');
+  if (!el || el.value) return;
+  try {
+    const r = await fetch('/me');
+    const d = await r.json();
+    el.value = d.username || '';
+  } catch (_) {}
+}
+
+async function changePassword() {
+  const current = document.getElementById('acct-current-pw').value;
+  const newPw   = document.getElementById('acct-new-pw').value;
+  const confirm = document.getElementById('acct-confirm-pw').value;
+  const msg     = document.getElementById('acct-pw-msg');
+
+  msg.style.color = 'var(--text3)';
+  msg.textContent = '';
+
+  if (!current || !newPw || !confirm) {
+    msg.style.color = 'var(--urgent-red-text)';
+    msg.textContent = 'All three fields are required.';
+    return;
+  }
+  if (newPw !== confirm) {
+    msg.style.color = 'var(--urgent-red-text)';
+    msg.textContent = 'New passwords don\'t match.';
+    return;
+  }
+  if (newPw.length < 6) {
+    msg.style.color = 'var(--urgent-red-text)';
+    msg.textContent = 'New password must be at least 6 characters.';
+    return;
+  }
+
+  msg.textContent = 'Saving…';
+  try {
+    const r = await fetch('/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: current, newPassword: newPw }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msg.style.color = 'var(--approval)';
+      msg.textContent = 'Password updated.';
+      document.getElementById('acct-current-pw').value = '';
+      document.getElementById('acct-new-pw').value     = '';
+      document.getElementById('acct-confirm-pw').value = '';
+    } else {
+      msg.style.color = 'var(--urgent-red-text)';
+      msg.textContent = d.error || 'Update failed.';
+    }
+  } catch (_) {
+    msg.style.color = 'var(--urgent-red-text)';
+    msg.textContent = 'Network error.';
+  }
 }
 
 async function savePrefsPage() {

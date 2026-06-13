@@ -448,6 +448,7 @@
       <button class="prefs-tab active" id="prefTab-family" onclick="switchPrefsTab('family')">Family</button>
       <button class="prefs-tab" id="prefTab-food" onclick="switchPrefsTab('food')">Food</button>
       <button class="prefs-tab" id="prefTab-history" onclick="switchPrefsTab('history')">History</button>
+      <button class="prefs-tab" id="prefTab-account" onclick="switchPrefsTab('account')">Account</button>
     </div>
     <div class="prefs-page-body">
       <!-- TAB: Family -->
@@ -508,6 +509,33 @@
         <div class="card">
           <div class="card-label">meal planning history</div>
           <div id="mealHistoryCard"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Account -->
+      <div class="prefs-tab-content" id="prefContent-account" style="display:none">
+        <div class="card">
+          <div class="card-label">change password</div>
+          <div class="prefs-field prefs-field-wide" style="margin-bottom:10px">
+            <label>signed in as</label>
+            <input type="text" id="acct-username" readonly style="opacity:.6;cursor:default">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>current password</label>
+            <input type="password" id="acct-current-pw" autocomplete="current-password">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>new password</label>
+            <input type="password" id="acct-new-pw" autocomplete="new-password">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>confirm new password</label>
+            <input type="password" id="acct-confirm-pw" autocomplete="new-password">
+          </div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+            <button class="btn primary" onclick="changePassword()">update password</button>
+            <span id="acct-pw-msg" style="font-size:12px"></span>
+          </div>
         </div>
       </div>
     </div>
