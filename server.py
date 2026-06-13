@@ -37,13 +37,37 @@ _DATA_ROOT  = os.path.join(_BASE_DIR, 'data')
 _USERS_PATH = os.path.join(_DATA_ROOT, 'users.json')
 _STATIC_DIR = os.path.join(_BASE_DIR, 'static')
 
+# Per-test path overrides — set via monkeypatch; None = use per-user routing
+RECIPES_PATH       = None
+PANTRY_PATH        = None
+PREFS_PATH         = None
+STAPLES_PATH       = None
+SPEND_HISTORY_PATH = None
+GOOGLE_TOKEN_PATH  = None
+_DATA_DIR_OVERRIDE = None
+
 
 def _data_dir() -> str:
+    if _DATA_DIR_OVERRIDE is not None:
+        return _DATA_DIR_OVERRIDE
     username = session.get('username', '')
     return os.path.join(_DATA_ROOT, 'users', username) if username else os.path.join(_DATA_ROOT, 'default')
 
 
 def _dpath(filename: str) -> str:
+    _overrides = {
+        'recipes.json':       lambda: RECIPES_PATH,
+        'pantry.json':        lambda: PANTRY_PATH,
+        'prefs.json':         lambda: PREFS_PATH,
+        'staples.json':       lambda: STAPLES_PATH,
+        'spend_history.json': lambda: SPEND_HISTORY_PATH,
+        'google_token.json':  lambda: GOOGLE_TOKEN_PATH,
+    }
+    getter = _overrides.get(filename)
+    if getter:
+        override = getter()
+        if override is not None:
+            return override
     return os.path.join(_data_dir(), filename)
 
 
@@ -105,6 +129,44 @@ _SEED_RECIPES = [
     # ── Breakfast for dinner ────────────────────────────────────────────────
     {"name": "Breakfast for Dinner",           "rating": 4, "tags": ["quick","kid-friendly"],             "notes": "scrambled eggs + bacon + Kodiak pancakes — big family hit, zero complaints"},
 ]
+
+
+def _migrate_staples_from_prefs() -> None:
+    prefs_path   = _dpath('prefs.json')
+    staples_path = _dpath('staples.json')
+    if os.path.exists(staples_path) or not os.path.exists(prefs_path):
+        return
+    try:
+        with open(prefs_path, encoding='utf-8') as f:
+            p = json.load(f)
+        raw = p.get('weeklyStaples', [])
+        if not raw:
+            return
+        base_ms  = int(time.time() * 1000)
+        migrated = [
+            {'id': str(base_ms + i), 'name': (item if isinstance(item, str) else item.get('name', str(item))),
+             'qty': 1, 'unit': '', 'notes': ''}
+            for i, item in enumerate(raw)
+        ]
+        with open(staples_path, 'w', encoding='utf-8') as f:
+            json.dump(migrated, f, indent=2)
+        p['weeklyStaples'] = []
+        with open(prefs_path, 'w', encoding='utf-8') as f:
+            json.dump(p, f, indent=2)
+    except Exception:
+        pass
+
+
+def _check_session_reminder() -> None:
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return
+    from datetime import date as _date
+    due = prefs.get('nextSessionDue', '')
+    if due and _date.fromisoformat(due) <= _date.today():
+        print(f'[Grocery Agent] Planning session due — next session was due {due}.')
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -190,7 +252,7 @@ def _init_user_data(username: str) -> None:
             pass
 
 
-_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/manifest.json', '/service-worker.js'}
+_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/me', '/manifest.json', '/service-worker.js'}
 
 
 @app.before_request
@@ -249,9 +311,35 @@ def login():
     return jsonify({'error': 'Invalid username or password'}), 401
 
 
+@app.route('/me', methods=['GET'])
+def me():
+    return jsonify({'username': session.get('username', '')})
+
+
 @app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
+    return jsonify({'ok': True})
+
+
+@app.route('/change-password', methods=['POST'])
+def change_password():
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'not authenticated'}), 401
+    data       = request.json or {}
+    current_pw = data.get('currentPassword', '')
+    new_pw     = data.get('newPassword', '')
+    if not current_pw or not new_pw:
+        return jsonify({'error': 'currentPassword and newPassword required'}), 400
+    if len(new_pw) < 6:
+        return jsonify({'error': 'New password must be at least 6 characters'}), 400
+    users_data = _load_users()
+    user       = users_data['users'].get(username)
+    if not user or not check_password_hash(user.get('password', ''), current_pw):
+        return jsonify({'error': 'Current password is incorrect'}), 401
+    users_data['users'][username]['password'] = generate_password_hash(new_pw)
+    _save_users(users_data)
     return jsonify({'ok': True})
 
 

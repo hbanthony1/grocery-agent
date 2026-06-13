@@ -314,6 +314,25 @@ def generate_recipe():
     })
 
 
+# --- Ingredient Review ---
+
+_DEMO_INGREDIENTS_PER_MEAL = [
+    {"name": "boneless chicken thighs", "amount": "2",   "unit": "lb"},
+    {"name": "chicken broth",           "amount": "2",   "unit": "cups"},
+    {"name": "diced tomatoes",          "amount": "1",   "unit": "can"},
+    {"name": "shredded cheese",         "amount": "1",   "unit": "cup"},
+    {"name": "flour tortillas",         "amount": "8",   "unit": "count"},
+    {"name": "sour cream",              "amount": "0.5", "unit": "cup"},
+]
+
+@app.route('/generate-ingredients', methods=['POST'])
+def generate_ingredients():
+    data       = request.json or {}
+    meal_names = data.get('meals', [])
+    result  = {meal: list(_DEMO_INGREDIENTS_PER_MEAL) for meal in meal_names}
+    sources = {meal: 'generated' for meal in meal_names}
+    return jsonify({'ingredients': result, 'sources': sources})
+
 # --- Cart ---
 
 @app.route('/build-cart', methods=['POST'])
