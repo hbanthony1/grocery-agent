@@ -20,9 +20,28 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
-SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
-SCHEDULE_PATH  = os.path.join(SCRIPT_DIR, 'data', 'meal_schedule.json')
-RECIPES_PATH   = os.path.join(SCRIPT_DIR, 'data', 'recipes.json')
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _user_data_dir():
+    """Return the data directory for the first registered user, falling back to data/."""
+    users_path = os.path.join(SCRIPT_DIR, 'data', 'users.json')
+    try:
+        with open(users_path, encoding='utf-8') as f:
+            users = json.load(f).get('users', {})
+        if users:
+            first_user = next(iter(users))
+            user_dir = os.path.join(SCRIPT_DIR, 'data', 'users', first_user)
+            if os.path.isdir(user_dir):
+                return user_dir
+    except Exception:
+        pass
+    return os.path.join(SCRIPT_DIR, 'data')
+
+
+_DATA_DIR     = _user_data_dir()
+SCHEDULE_PATH = os.path.join(_DATA_DIR, 'meal_schedule.json')
+RECIPES_PATH  = os.path.join(_DATA_DIR, 'recipes.json')
 
 load_dotenv(os.path.join(SCRIPT_DIR, '.env'))
 
@@ -35,52 +54,107 @@ def _load_json(path):
         return None
 
 
-def _get_prep_hint(meal_name: str) -> str:
-    """Pull 1-2 useful prep steps from the recipe book."""
+def _get_recipe(meal_name: str):
+    """Return the recipe dict for meal_name, or None."""
     recipes = _load_json(RECIPES_PATH) or []
-    recipe  = next(
+    return next(
         (r for r in recipes if r.get('name', '').lower() == meal_name.lower()),
         None
     )
-    if not recipe:
-        return ''
-    steps = recipe.get('steps') or []
-    # Surface the first step that mentions defrost, preheat, marinate, or thaw
-    keywords = ('defrost', 'thaw', 'preheat', 'marinate', 'soak', 'boil', 'cook rice')
-    prep_steps = [s for s in steps if any(k in s.lower() for k in keywords)]
-    if prep_steps:
-        return f"Prep tip: {prep_steps[0]}"
-    # Fall back to cook time from notes
-    notes = recipe.get('notes', '')
+
+
+def _ing_text(i) -> str:
+    """Return readable string from either a plain string or {name, amount} dict."""
+    if isinstance(i, dict):
+        return ' '.join(p for p in [i.get('name', ''), i.get('amount', '')] if p)
+    return str(i)
+
+
+def _build_email(meal_name: str, today_name: str, recipe) -> tuple[str, str]:
+    """Return (plain_text, html) for the reminder email."""
+    raw_ingredients = recipe.get('ingredients', []) if recipe else []
+    ingredients = [_ing_text(i) for i in raw_ingredients]
+    steps       = recipe.get('steps', [])       if recipe else []
+    notes       = recipe.get('notes', '')        if recipe else ''
+
+    # --- plain text ---
+    lines = [
+        f"Hi! Heads up — dinner is at 5:30pm.",
+        f"",
+        f"Tonight ({today_name}): {meal_name}",
+    ]
     if notes:
-        return f"Recipe note: {notes[:120]}"
-    return ''
+        lines += [f"Note: {notes}", ""]
+    if ingredients:
+        lines += ["INGREDIENTS", "----------"] + [f"  • {i}" for i in ingredients] + [""]
+    if steps:
+        lines += ["STEPS", "-----"] + [f"  {n+1}. {s}" for n, s in enumerate(steps)] + [""]
+    lines += ["You've got 2 hours. Start prepping now!", "", "— Grocery Agent"]
+    plain = "\n".join(lines)
+
+    # --- html ---
+    def esc(s): return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+
+    ingr_html = "".join(f"<li>{esc(i)}</li>" for i in ingredients)
+    steps_html = "".join(f"<li>{esc(s)}</li>" for s in steps)
+    notes_html = f'<p style="color:#666;font-style:italic">{esc(notes)}</p>' if notes else ''
+
+    recipe_section = ""
+    if ingredients or steps:
+        recipe_section = f"""
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0">
+        <h2 style="font-size:16px;color:#333;margin:0 0 12px">Recipe</h2>
+        {notes_html}
+        {'<h3 style="font-size:14px;color:#555;margin:16px 0 8px">Ingredients</h3><ul style="margin:0;padding-left:20px;line-height:1.8">' + ingr_html + '</ul>' if ingredients else ''}
+        {'<h3 style="font-size:14px;color:#555;margin:16px 0 8px">Steps</h3><ol style="margin:0;padding-left:20px;line-height:1.9">' + steps_html + '</ol>' if steps else ''}
+        """
+
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#222">
+  <p style="margin:0 0 4px;color:#888;font-size:13px">{esc(today_name)}</p>
+  <h1 style="font-size:22px;margin:0 0 8px">Dinner tonight: {esc(meal_name)}</h1>
+  <p style="margin:0 0 20px;color:#555">Dinner is at 5:30 pm — you've got 2 hours. Start prepping now!</p>
+  {recipe_section}
+  <p style="margin:32px 0 0;font-size:12px;color:#aaa">— Grocery Agent</p>
+</body></html>"""
+
+    return plain, html
+
+
+def _resolve_recipients() -> list[str]:
+    prefs_path = os.path.join(_DATA_DIR, 'prefs.json')
+    try:
+        with open(prefs_path, encoding='utf-8') as f:
+            p = json.load(f)
+        emails = p.get('emails') or []
+        if not emails and p.get('email'):
+            emails = [p['email']]
+    except Exception:
+        emails = []
+    if not emails:
+        env_val = os.getenv('GMAIL_TO', 'hbanthony1@gmail.com')
+        emails = [e.strip() for e in env_val.split(',') if e.strip()]
+    return emails
 
 
 def send_reminder(meal_name: str) -> None:
-    to_email   = os.getenv('GMAIL_TO', 'hbanthony1@gmail.com')
-    from_email = os.getenv('GMAIL_FROM', to_email)
+    recipients = _resolve_recipients()
+    from_email = os.getenv('GMAIL_FROM', recipients[0])
     app_pw     = os.getenv('GMAIL_APP_PASSWORD', '')
     if not app_pw:
         raise ValueError('GMAIL_APP_PASSWORD not set in .env')
 
-    prep_hint = _get_prep_hint(meal_name)
     today_name = datetime.date.today().strftime('%A, %B %-d') if os.name != 'nt' else \
                  datetime.date.today().strftime('%A, %B %d').replace(' 0', ' ')
+    recipe     = _get_recipe(meal_name)
+    plain, html = _build_email(meal_name, today_name, recipe)
 
-    body = f"""Hi! Heads up — dinner is at 5:30pm.
-
-Tonight ({today_name}): {meal_name}
-{(prep_hint + chr(10)) if prep_hint else ''}
-You've got 2 hours. Start prepping now!
-
-— Grocery Agent"""
-
-    msg             = MIMEMultipart()
+    msg             = MIMEMultipart('alternative')
     msg['From']     = from_email
-    msg['To']       = to_email
+    msg['To']       = ', '.join(recipients)
     msg['Subject']  = f"Dinner tonight: {meal_name}"
-    msg.attach(MIMEText(body.strip(), 'plain'))
+    msg.attach(MIMEText(plain, 'plain'))
+    msg.attach(MIMEText(html,  'html'))
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
         server.login(from_email, app_pw)

@@ -291,6 +291,274 @@ def ping():
     return jsonify({"ok": True})
 
 
+@app.route('/week-glance')
+def week_glance():
+    """Aggregated data for the week-at-a-glance dashboard."""
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs_data = json.load(f)
+    except Exception:
+        prefs_data = {}
+
+    pantry = _load_pantry()
+    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    # Build meal map from lastWeekMeals: {day_name: {meal, isOut}}
+    last_meals = prefs_data.get('lastWeekMeals', [])
+    meal_map = {m['day']: m for m in last_meals if m.get('day')}
+
+    # Determine Monday of the planned week from mealHistory
+    meal_history = prefs_data.get('mealHistory', [])
+    week_monday_iso = None
+    if meal_history:
+        try:
+            from datetime import date as _date
+            planning_date = _date.fromisoformat(meal_history[-1]['week'])
+            wd = planning_date.weekday()  # 0=Mon, 6=Sun
+            week_monday_iso = (planning_date + timedelta(days=1) if wd == 6
+                               else planning_date - timedelta(days=wd)).isoformat()
+        except Exception:
+            pass
+
+    # Build per-day data list
+    days_data = []
+    for i, day_name in enumerate(day_order):
+        m = meal_map.get(day_name, {})
+        day_entry = {
+            'day': day_name,
+            'dayAbbr': day_name[:3],
+            'date': None,
+            'dayNum': None,
+            'month': None,
+            'meal': m.get('meal', ''),
+            'isOut': m.get('meal', '') == 'Out',
+        }
+        if week_monday_iso:
+            try:
+                from datetime import date as _date
+                d = _date.fromisoformat(week_monday_iso) + timedelta(days=i)
+                day_entry['date'] = d.isoformat()
+                day_entry['dayNum'] = d.day
+                day_entry['month'] = d.strftime('%b')
+            except Exception:
+                pass
+        days_data.append(day_entry)
+
+    # Collect ingredient text from recipes planned this week (for filtering)
+    planned_meal_names = {
+        m.get('meal', '').strip().lower() for m in last_meals
+        if m.get('meal') and m.get('meal') != 'Out'
+    }
+    planned_ingredient_text = []
+    try:
+        with open(_dpath('recipes.json'), encoding='utf-8') as f:
+            all_recipes = json.load(f)
+        for recipe in all_recipes:
+            if recipe.get('name', '').strip().lower() in planned_meal_names:
+                planned_ingredient_text.extend(
+                    ing.lower() for ing in recipe.get('ingredients', [])
+                )
+    except Exception:
+        pass
+
+    def _already_in_plan(item_name: str) -> bool:
+        name_lower = item_name.lower().strip()
+        return any(name_lower in ing for ing in planned_ingredient_text)
+
+    # Expiring pantry items (within 7 days), excluding those already in a planned recipe
+    today_date = datetime.now().date()
+    expiring = []
+    for item in pantry:
+        if item.get('expiresOn'):
+            try:
+                from datetime import date as _date
+                exp = _date.fromisoformat(item['expiresOn'])
+                days_left = (exp - today_date).days
+                if days_left <= 7 and not _already_in_plan(item.get('name', '')):
+                    expiring.append({
+                        'name': item.get('name', ''),
+                        'amount': item.get('amount', ''),
+                        'unit': item.get('unit', ''),
+                        'daysLeft': days_left,
+                    })
+            except Exception:
+                pass
+    expiring.sort(key=lambda x: x['daysLeft'])
+
+    # Calendar events — best effort, silent on any failure
+    calendar_events = None
+    if _GCAL_AVAILABLE:
+        try:
+            creds = _load_google_creds()
+            if creds:
+                if creds.expired and creds.refresh_token:
+                    creds.refresh(GRequest())
+                    _save_google_creds(creds)
+                tz_name = prefs_data.get('timezone') or 'America/Denver'
+                try:
+                    tz = ZoneInfo(tz_name)
+                except Exception:
+                    tz = ZoneInfo('America/Denver')
+                service = gcal_build('calendar', 'v3', credentials=creds)
+                now = datetime.now(tz)
+                monday = now - timedelta(days=now.weekday())
+                sunday = monday + timedelta(days=6)
+                time_min = monday.replace(hour=0,  minute=0,  second=0,  microsecond=0).isoformat()
+                time_max = sunday.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
+                result = service.events().list(
+                    calendarId='primary', timeMin=time_min, timeMax=time_max,
+                    timeZone=tz_name, singleEvents=True, orderBy='startTime', maxResults=50
+                ).execute()
+                calendar_events = {d: [] for d in day_order}
+                for event in result.get('items', []):
+                    start  = event.get('start', {})
+                    dt_str = start.get('dateTime') or start.get('date')
+                    if not dt_str:
+                        continue
+                    try:
+                        if start.get('dateTime'):
+                            dt     = datetime.fromisoformat(dt_str).astimezone(tz)
+                            h, m   = dt.hour, dt.minute
+                            ap     = 'am' if h < 12 else 'pm'
+                            h12    = h % 12 or 12
+                            tstr   = f"{h12}:{m:02d}{ap}" if m else f"{h12}{ap}"
+                        else:
+                            dt   = datetime.fromisoformat(dt_str)
+                            tstr = 'all day'
+                        dn = dt.strftime('%A')
+                        if dn in calendar_events:
+                            calendar_events[dn].append({'time': tstr, 'title': event.get('summary', '')})
+                    except Exception:
+                        continue
+        except Exception:
+            calendar_events = None
+
+    return jsonify({
+        'days': days_data,
+        'weekMonday': week_monday_iso,
+        'calendarEvents': calendar_events,
+        'expiringPantry': expiring,
+        'breakfasts': prefs_data.get('defaultBreakfasts', []),
+        'lunches': prefs_data.get('defaultLunches', []),
+        'dessert': prefs_data.get('defaultDessert', ''),
+    })
+
+
+@app.route('/dashboard/meal', methods=['PATCH'])
+def dashboard_update_meal():
+    """Update a single day's dinner from the dashboard."""
+    body = request.json or {}
+    day  = body.get('day', '').strip()
+    meal = body.get('meal', '').strip()
+    if not day:
+        return jsonify({'error': 'day required'}), 400
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs = json.load(f)
+    except Exception:
+        prefs = {}
+    meals = prefs.get('lastWeekMeals', [])
+    found = False
+    for m in meals:
+        if m.get('day') == day:
+            m['meal'] = meal
+            found = True
+            break
+    if not found:
+        meals.append({'day': day, 'meal': meal, 'isOut': meal == 'Out', 'easyMode': False})
+    prefs['lastWeekMeals'] = meals
+    os.makedirs(_data_dir(), exist_ok=True)
+    with open(_dpath('prefs.json'), 'w', encoding='utf-8') as f:
+        json.dump(prefs, f, indent=2)
+    return jsonify({'ok': True})
+
+
+@app.route('/dashboard/meta', methods=['PATCH'])
+def dashboard_update_meta():
+    """Update breakfast / lunch / dessert for the week from the dashboard."""
+    body = request.json or {}
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs = json.load(f)
+    except Exception:
+        prefs = {}
+    for key in ('defaultBreakfasts', 'defaultLunches', 'defaultDessert'):
+        if key in body:
+            prefs[key] = body[key]
+    os.makedirs(_data_dir(), exist_ok=True)
+    with open(_dpath('prefs.json'), 'w', encoding='utf-8') as f:
+        json.dump(prefs, f, indent=2)
+    return jsonify({'ok': True})
+
+
+@app.route('/dashboard/pantry-ideas', methods=['POST'])
+def dashboard_pantry_ideas():
+    """Return Claude suggestions for how to use an expiring pantry item."""
+    body = request.json or {}
+    item = body.get('item', '').strip()
+    planned = body.get('plannedMeals', [])
+    expires_in = body.get('expiresIn', 7)
+    if not item:
+        return jsonify({'error': 'item required'}), 400
+
+    # Load past feedback to steer Claude's suggestions
+    all_feedback = _load_pantry_feedback()
+    item_feedback = [f for f in all_feedback if f.get('item', '').lower() == item.lower()]
+    liked    = [f['idea'] for f in item_feedback if f.get('rating') == 1]
+    disliked = [f['idea'] for f in item_feedback if f.get('rating') == -1]
+
+    urgency = ('today' if expires_in <= 0
+               else 'tomorrow' if expires_in == 1
+               else f'in {expires_in} days')
+    planned_str = ', '.join(planned) if planned else 'nothing specific yet'
+    feedback_ctx = ''
+    if liked:
+        feedback_ctx += f' Previously well-received ideas: {"; ".join(liked[:3])}.'
+    if disliked:
+        feedback_ctx += f' Avoid ideas similar to these previously rejected ones: {"; ".join(disliked[:3])}.'
+
+    prompt = (
+        f"We have {item} in our pantry that expires {urgency}. "
+        f"This week we're already planning: {planned_str}.{feedback_ctx} "
+        f"Give 3 quick, practical ideas for how to use the {item} this week. "
+        f"Be specific and brief — one sentence each. "
+        f"Plain numbered list, no headers, no preamble."
+    )
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model=MODEL, max_tokens=300,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        return jsonify({
+            'ideas': msg.content[0].text,
+            'feedback': [{'idea': f['idea'], 'rating': f['rating']} for f in item_feedback],
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/dashboard/pantry-feedback', methods=['POST'])
+def dashboard_pantry_feedback():
+    """Save thumbs-up / thumbs-down on a pantry idea."""
+    body   = request.json or {}
+    item   = body.get('item', '').strip()
+    idea   = body.get('idea', '').strip()
+    rating = body.get('rating')  # 1, -1, or 0 (0 = remove)
+    if not item or not idea or rating not in (1, -1, 0):
+        return jsonify({'error': 'item, idea, and rating (1/-1/0) required'}), 400
+    feedback = _load_pantry_feedback()
+    # Remove any prior rating for this exact item+idea pair
+    feedback = [f for f in feedback
+                if not (f.get('item', '').lower() == item.lower() and f.get('idea') == idea)]
+    if rating != 0:
+        feedback.append({'item': item, 'idea': idea, 'rating': rating,
+                         'timestamp': datetime.now().isoformat()})
+    _save_pantry_feedback(feedback)
+    return jsonify({'ok': True})
+
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -909,6 +1177,23 @@ Return ONLY the recipe name — no explanation, no punctuation, just the name.""
         return jsonify({'error': str(e)}), 500
 
 
+# ── iCloud extras queue ───────────────────────────────────────────────────────
+
+_ICLOUD_EXTRAS = os.path.expanduser(r'~/iCloudDrive/grocery_extras.txt')
+
+
+@app.route('/extras-queue', methods=['GET'])
+def get_extras_queue():
+    try:
+        with open(_ICLOUD_EXTRAS, encoding='utf-8-sig') as f:
+            items = [l.strip() for l in f if l.strip()]
+    except FileNotFoundError:
+        items = []
+    if items:
+        open(_ICLOUD_EXTRAS, 'w', encoding='utf-8').close()  # clear after reading
+    return jsonify({'items': items})
+
+
 # ── Staples ───────────────────────────────────────────────────────────────────
 
 @app.route('/staples', methods=['GET'])
@@ -1075,25 +1360,33 @@ Rules:
         return jsonify({'error': str(e)}), 500
 
 
-def _send_email(subject: str, body: str) -> None:
-    # Try user's prefs email first, fall back to env var
+def _resolve_recipients() -> list[str]:
+    """Return recipient emails from prefs (emails array), falling back to GMAIL_TO env var."""
     try:
         with open(_dpath('prefs.json'), encoding='utf-8') as f:
             p = json.load(f)
-        to_email = p.get('email') or ''
+        emails = p.get('emails') or []
+        if not emails and p.get('email'):
+            emails = [p['email']]
     except Exception:
-        to_email = ''
-    if not to_email:
-        to_email = os.getenv('GMAIL_TO', '')
-    if not to_email:
-        raise ValueError('No email configured — set email in Preferences or GMAIL_TO in .env')
-    from_email = os.getenv('GMAIL_FROM', to_email)
+        emails = []
+    if not emails:
+        env_val = os.getenv('GMAIL_TO', '')
+        emails = [e.strip() for e in env_val.split(',') if e.strip()]
+    return emails
+
+
+def _send_email(subject: str, body: str) -> None:
+    recipients = _resolve_recipients()
+    if not recipients:
+        raise ValueError('No email configured — set reminder emails in Preferences or GMAIL_TO in .env')
+    from_email = os.getenv('GMAIL_FROM', recipients[0])
     app_pw     = os.getenv('GMAIL_APP_PASSWORD', '')
     if not app_pw:
         raise ValueError('GMAIL_APP_PASSWORD not set in .env')
     msg = MIMEMultipart()
     msg['From']    = from_email
-    msg['To']      = to_email
+    msg['To']      = ', '.join(recipients)
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
@@ -1425,6 +1718,8 @@ def build_cart():
             all_search_tasks.append({"search_query": dessert, "qty": 1, "source": "dessert"})
         for name in snacks:
             all_search_tasks.append({"search_query": name, "qty": 1, "source": "Snacks"})
+        for name in data.get('trainingItems', []):
+            all_search_tasks.append({"search_query": name, "qty": 1, "source": "training"})
 
         _seen_q = {}
         deduped = []
@@ -1498,7 +1793,7 @@ def build_cart():
                 not_found.append(task['search_query'])
                 print(f"  - No result: {task['search_query']}")
 
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'staples', 'frequentStaples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'training', 'staples', 'frequentStaples', 'household']
         cart_url = build_cart_url(cart_items, staple_items=[])
 
         print(f"\nCart URL: {cart_url}")
@@ -1689,6 +1984,20 @@ def _save_pantry(pantry: list) -> None:
     os.makedirs(_data_dir(), exist_ok=True)
     with open(_dpath('pantry.json'), 'w', encoding='utf-8') as f:
         json.dump(pantry, f, indent=2)
+
+
+def _load_pantry_feedback() -> list:
+    try:
+        with open(_dpath('pantry_idea_feedback.json'), encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_pantry_feedback(feedback: list) -> None:
+    os.makedirs(_data_dir(), exist_ok=True)
+    with open(_dpath('pantry_idea_feedback.json'), 'w', encoding='utf-8') as f:
+        json.dump(feedback, f, indent=2)
 
 
 def _load_recipes() -> list:

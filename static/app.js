@@ -1068,20 +1068,22 @@ function _dashToggleNightOut() {
   renderDashMealSearch();
 }
 
+function _dashRecipeResultHtml(r) {
+  const escaped = r.name.replace(/'/g, "\\'");
+  const stars   = r.rating ? '★'.repeat(r.rating) : '';
+  return `<div class="dash-sheet-result" onclick="_dashPickRecipe('${escaped}')">
+    <span>${r.name}</span>
+    ${stars ? `<span class="dash-sheet-result-meta">${stars}</span>` : ''}
+  </div>`;
+}
+
 function renderDashMealSearch() {
   const q = (document.getElementById('dashMealSheetInput')?.value || '').trim().toLowerCase();
   const resultsEl = document.getElementById('dashMealSheetResults');
   if (!resultsEl) return;
   if (!q || q === 'out') { resultsEl.innerHTML = ''; return; }
   const matches = recipes.filter(r => r.name.toLowerCase().includes(q)).slice(0, 7);
-  resultsEl.innerHTML = matches.map(r => {
-    const escaped = r.name.replace(/'/g, "\\'");
-    const stars   = r.rating ? '★'.repeat(r.rating) : '';
-    return `<div class="dash-sheet-result" onclick="_dashPickRecipe('${escaped}')">
-      <span>${r.name}</span>
-      ${stars ? `<span class="dash-sheet-result-meta">${stars}</span>` : ''}
-    </div>`;
-  }).join('');
+  resultsEl.innerHTML = matches.map(_dashRecipeResultHtml).join('');
 }
 
 function _dashPickRecipe(name) {
@@ -1092,24 +1094,21 @@ function _dashPickRecipe(name) {
 function _dashSuggestMealsFromIngredient(itemName) {
   const q = itemName.toLowerCase();
   const matches = recipes.filter(r =>
-    (r.ingredients || []).some(ing => ing.name && ing.name.toLowerCase().includes(q))
+    (r.ingredients || []).some(ing => {
+      const text = typeof ing === 'string' ? ing : (ing.name || '');
+      return text.toLowerCase().includes(q);
+    })
   ).slice(0, 8);
   const resultsEl = document.getElementById('dashMealSheetResults');
   if (!resultsEl) return;
+  const safeItem = itemName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   if (!matches.length) {
-    resultsEl.innerHTML = `<div class="dash-sheet-result" style="color:var(--text3);font-style:italic;pointer-events:none">No recipes found using ${itemName}</div>`;
+    resultsEl.innerHTML = `<div class="dash-sheet-result" style="color:var(--text3);font-style:italic;pointer-events:none">No recipes found using ${safeItem}</div>`;
     return;
   }
   resultsEl.innerHTML =
-    `<div class="dash-sheet-result" style="color:var(--text3);font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;pointer-events:none;padding-bottom:2px">Recipes using ${itemName}</div>` +
-    matches.map(r => {
-      const escaped = r.name.replace(/'/g, "\\'");
-      const stars   = r.rating ? '★'.repeat(r.rating) : '';
-      return `<div class="dash-sheet-result" onclick="_dashPickRecipe('${escaped}')">
-        <span>${r.name}</span>
-        ${stars ? `<span class="dash-sheet-result-meta">${stars}</span>` : ''}
-      </div>`;
-    }).join('');
+    `<div class="dash-sheet-result" style="color:var(--text3);font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;pointer-events:none;padding-bottom:2px">Recipes using ${safeItem}</div>` +
+    matches.map(_dashRecipeResultHtml).join('');
 }
 
 function dashMealKeydown(e) {
