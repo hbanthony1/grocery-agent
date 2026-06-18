@@ -1313,7 +1313,7 @@ function renderRecipesPanel() {
 function recipeCardHtml(r) {
   const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
   const thumb = r.photo
-    ? `<img class="recipe-thumb" src="${r.photo}" alt="" onclick="triggerPhotoUpload('${r.id}')" title="change photo">`
+    ? `<img class="recipe-thumb" src="${r.photo}" alt="${r.name}" onclick="triggerPhotoUpload('${r.id}')" title="change photo">`
     : '';
   return `<div class="recipe-card" id="rc-${r.id}">
     <div class="recipe-card-main">
@@ -1677,9 +1677,9 @@ function renderStaplesPanel() {
           onblur="patchStaple('${esc}','notes',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
       </div>
       <div class="staple-panel-actions">
-        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',-1)" ${idx===0?'disabled':''} title="move up">↑</button>
-        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',1)" ${idx===staples.length-1?'disabled':''} title="move down">↓</button>
-        <button class="hh-item-delete" onclick="deleteStaplePanel('${esc}')" title="remove">×</button>
+        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',-1)" ${idx===0?'disabled':''} title="move up" aria-label="Move ${s.name} up">↑</button>
+        <button class="staple-reorder-btn" onclick="moveStaple('${esc}',1)" ${idx===staples.length-1?'disabled':''} title="move down" aria-label="Move ${s.name} down">↓</button>
+        <button class="hh-item-delete" onclick="deleteStaplePanel('${esc}')" title="remove" aria-label="Remove ${s.name}">×</button>
       </div>
     </div>`;
   }).join('');
@@ -2351,14 +2351,14 @@ function renderMealPicks(type) {
   const chips = options.map(opt => {
     const sel = selections.includes(opt);
     const esc = opt.replace(/'/g, '&#39;');
-    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleMealPick('${type}','${esc}')">${opt}</button>`;
+    return `<button class="meal-pick-chip${sel ? ' selected' : ''}" onclick="toggleMealPick('${type}','${esc}')" aria-pressed="${sel ? 'true' : 'false'}">${opt}</button>`;
   }).join('');
 
   const customChips = selections
     .filter(s => !options.includes(s))
     .map(s => {
       const esc = s.replace(/'/g, '&#39;');
-      return `<button class="meal-pick-chip selected" onclick="toggleMealPick('${type}','${esc}')">${s} ×</button>`;
+      return `<button class="meal-pick-chip selected" onclick="toggleMealPick('${type}','${esc}')" aria-pressed="true">${s} ×</button>`;
     })
     .join('');
 
@@ -3087,7 +3087,7 @@ function renderMeals() {
     const cxLabel = COMPLEXITY_LABEL[cx] || 'Normal';
     const mealName = m.meal.replace(' [NEW]','');
     const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
-    const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="">` : '';
+    const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="${mealName}">` : '';
     const easyLabel = m.easyLoading ? '...' : (m.easyMode ? '✓ easy' : 'use easy');
     const easyTitle = m.easyMode ? 'Using a store-bought version — click to switch back to homemade' : 'Switch to a store-bought or frozen version';
     return `
@@ -4667,7 +4667,7 @@ function openRecipeModal(r) {
   const body = document.getElementById('recipeModalBody');
   const tags = (r.tags||[]).map(t => `<span class="recipe-tag">${t}</span>`).join('');
   body.innerHTML = `
-    ${r.photo ? `<img class="recipe-modal-hero" src="${r.photo}" alt="">` : ''}
+    ${r.photo ? `<img class="recipe-modal-hero" src="${r.photo}" alt="${r.name}">` : ''}
     <div class="recipe-modal-meta">
       <div style="display:flex;align-items:center;gap:10px">
         ${starsHtml(r.rating)}
