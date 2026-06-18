@@ -1046,7 +1046,7 @@ function openDashMealSheet(day) {
   if (_dashData.expiringPantry?.length) {
     pantryChips.innerHTML = _dashData.expiringPantry.slice(0, 5).map(item => {
       const escaped = item.name.replace(/'/g, "\\'");
-      return `<span class="dash-pantry-chip" onclick="document.getElementById('dashMealSheetInput').value='${escaped}';renderDashMealSearch()">${item.name}</span>`;
+      return `<span class="dash-pantry-chip" onclick="_dashSuggestMealsFromIngredient('${escaped}')">${item.name}</span>`;
     }).join('');
     pantryRow.style.display = 'block';
   } else {
@@ -1087,6 +1087,29 @@ function renderDashMealSearch() {
 function _dashPickRecipe(name) {
   document.getElementById('dashMealSheetInput').value = name;
   document.getElementById('dashMealSheetResults').innerHTML = '';
+}
+
+function _dashSuggestMealsFromIngredient(itemName) {
+  const q = itemName.toLowerCase();
+  const matches = recipes.filter(r =>
+    (r.ingredients || []).some(ing => ing.name && ing.name.toLowerCase().includes(q))
+  ).slice(0, 8);
+  const resultsEl = document.getElementById('dashMealSheetResults');
+  if (!resultsEl) return;
+  if (!matches.length) {
+    resultsEl.innerHTML = `<div class="dash-sheet-result" style="color:var(--text3);font-style:italic;pointer-events:none">No recipes found using ${itemName}</div>`;
+    return;
+  }
+  resultsEl.innerHTML =
+    `<div class="dash-sheet-result" style="color:var(--text3);font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;pointer-events:none;padding-bottom:2px">Recipes using ${itemName}</div>` +
+    matches.map(r => {
+      const escaped = r.name.replace(/'/g, "\\'");
+      const stars   = r.rating ? '★'.repeat(r.rating) : '';
+      return `<div class="dash-sheet-result" onclick="_dashPickRecipe('${escaped}')">
+        <span>${r.name}</span>
+        ${stars ? `<span class="dash-sheet-result-meta">${stars}</span>` : ''}
+      </div>`;
+    }).join('');
 }
 
 function dashMealKeydown(e) {
