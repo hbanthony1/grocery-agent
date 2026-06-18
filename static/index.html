@@ -30,7 +30,57 @@
   </div>
 </nav>
 
-<div class="app" id="mainApp">
+<!-- WEEK AT A GLANCE DASHBOARD -->
+<div id="dashboardView">
+
+  <div class="dash-greeting-row">
+    <div class="dash-greeting-left">
+      <div class="dash-time-of-day" id="dashTimeOfDay"></div>
+      <h1 class="dash-date-headline" id="dashDateHeadline">
+        <span class="dash-day-name" id="dashDayName"></span><span id="dashDateRest"></span>
+      </h1>
+    </div>
+    <button class="btn primary" onclick="startPlanning()">Start planning →</button>
+  </div>
+
+  <!-- Tonight hero -->
+  <div class="dash-tonight-card" id="dashTonightCard">
+    <div class="dash-tonight-eyebrow">
+      <span class="dash-tonight-label" id="dashTonightLabel">Tonight</span>
+      <span class="dash-tonight-date-tag" id="dashTonightDateTag"></span>
+    </div>
+    <div class="dash-tonight-meal" id="dashTonightMeal">Loading…</div>
+    <div id="dashTonightMeta" class="dash-tonight-meta"></div>
+    <div id="dashTonightEvents" class="dash-tonight-events"></div>
+  </div>
+
+  <!-- Week grid -->
+  <div class="dash-week-section">
+    <div class="dash-section-row">
+      <span class="dash-section-label">This week</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div class="dash-week-grid" id="dashWeekGrid"></div>
+  </div>
+
+  <!-- Expiring pantry -->
+  <div class="dash-pantry-section" id="dashPantrySection" style="display:none">
+    <div class="dash-section-row">
+      <span class="dash-section-label">Use this week</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div class="dash-pantry-chips" id="dashPantryChips"></div>
+  </div>
+
+  <!-- Bottom CTA -->
+  <div class="dash-cta-row">
+    <span class="dash-cta-hint" id="dashCtaHint"></span>
+    <button class="btn" onclick="startPlanning()">Go to planning →</button>
+  </div>
+
+</div>
+
+<div class="app" id="mainApp" style="display:none">
 
   <!-- STEP PROGRESS CARDS -->
   <div class="hero-steps">
@@ -61,7 +111,7 @@
     <div class="hero-step-card todo" id="heroStep3">
       <div class="hero-step-num">4</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Household</div>
+        <div class="hero-step-label">Extras</div>
         <div class="hero-step-desc">Items to add</div>
       </div>
     </div>
@@ -263,6 +313,11 @@
         </div>
       </div>
     </div>
+    <div id="athleteItemsCard" class="card" style="display:none;margin-top:10px">
+      <div class="card-label">your training items this week</div>
+      <p class="review-hint" style="margin-bottom:8px">Personal athlete nutrition — added to your cart separately from the family grocery list.</p>
+      <div id="athleteItemsList" class="athlete-items-list"></div>
+    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(1)">← back</button>
       <button class="btn" id="regenerateBtn" onclick="runMealPlan()" style="display:none">↺ regenerate</button>
@@ -402,6 +457,10 @@
     </div>
   </div>
 
+</div><!-- end #mainApp -->
+
+<!-- OVERLAYS — position: fixed, outside #mainApp so they work from the dashboard and planning flow alike -->
+
   <!-- PICKER CONFIRM MODAL -->
   <div id="pickerConfirmBackdrop" class="recipe-modal-backdrop" style="display:none" onclick="document.getElementById('pickerConfirmBackdrop').style.display='none'">
     <div class="recipe-modal-card" onclick="event.stopPropagation()" style="max-width:360px" role="dialog" aria-modal="true" aria-labelledby="pickerConfirmTitle">
@@ -413,16 +472,6 @@
     </div>
   </div>
 
-  <!-- RECIPE MODAL -->
-  <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
-    <div class="recipe-modal-card" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="recipeModalName">
-      <div class="recipe-modal-header">
-        <span class="recipe-modal-name" id="recipeModalName"></span>
-        <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'" aria-label="Close recipe">×</button>
-      </div>
-      <div id="recipeModalBody"></div>
-    </div>
-  </div>
 
   <!-- ONBOARDING WIZARD -->
   <div id="wizardBackdrop" class="wizard-backdrop" style="display:none" onclick="closeWizardBackdrop(event)">
@@ -463,6 +512,7 @@
             <div class="prefs-field"><label>budget target ($)</label><input type="number" id="pf-budgetTarget" /></div>
             <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
             <div class="prefs-field prefs-field-wide"><label>time zone</label><input type="text" id="pf-timezone" placeholder="e.g. America/Denver" /></div>
+            <div class="prefs-field prefs-field-wide"><label>reminder emails</label><input type="text" id="pf-emails" placeholder="e.g. you@gmail.com, spouse@gmail.com" /></div>
           </div>
         </div>
         <div class="card" style="margin-top:14px">
@@ -488,6 +538,60 @@
               <option value="vegetarian">Vegetarian-friendly</option>
               <option value="low-calorie">Low-calorie</option>
             </select>
+          </div>
+          <div style="margin-top:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span class="prefs-sublabel">athlete training</span>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="pf-athleteEnabled" onchange="toggleAthleteTrainingFields()" />
+                <span class="prefs-sublabel" style="margin-bottom:0">active</span>
+              </label>
+            </div>
+            <div id="pf-athleteFields" style="display:none">
+              <div class="prefs-household-grid" style="margin-bottom:10px">
+                <div class="prefs-field prefs-field-wide"><label>race</label><input type="text" id="pf-raceName" placeholder="e.g. Portland Marathon" /></div>
+                <div class="prefs-field prefs-field-wide"><label>race date</label><input type="text" id="pf-raceDate" placeholder="e.g. October 4, 2026" /></div>
+                <div class="prefs-field prefs-field-wide">
+                  <label>training phase</label>
+                  <select id="pf-trainingPhase" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                    <option value="Base Building">Base Building</option>
+                    <option value="Aerobic Development">Aerobic Development</option>
+                    <option value="Peak Mileage">Peak Mileage</option>
+                    <option value="Taper">Taper</option>
+                    <option value="Race Week">Race Week</option>
+                  </select>
+                </div>
+                <div class="prefs-field">
+                  <label>long run day</label>
+                  <select id="pf-longRunDay" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+                </div>
+                <div class="prefs-field"><label>long run this week (mi)</label><input type="number" id="pf-longRunMi" min="1" max="30" placeholder="10" /></div>
+              </div>
+              <div style="margin-bottom:8px">
+                <span class="prefs-sublabel" style="display:block;margin-bottom:6px">run days this week</span>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <label class="athlete-day-pill"><input type="checkbox" value="Monday" class="pf-runDay" /> Mon</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Tuesday" class="pf-runDay" /> Tue</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="pf-runDay" /> Wed</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Thursday" class="pf-runDay" /> Thu</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Friday" class="pf-runDay" /> Fri</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Saturday" class="pf-runDay" /> Sat</label>
+                  <label class="athlete-day-pill"><input type="checkbox" value="Sunday" class="pf-runDay" /> Sun</label>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
+                <input type="checkbox" id="pf-appetiteSensitive" />
+                <span class="prefs-sublabel" style="margin-bottom:0">timing-sensitive appetite (pre-run meals small + easy to digest)</span>
+              </label>
+            </div>
           </div>
           <div style="margin-top:14px">
             <span class="prefs-sublabel">general notes</span>
@@ -650,6 +754,60 @@
     </div>
   </div>
 
+<!-- RECIPE MODAL — lives outside #mainApp so it works from the dashboard too -->
+<div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
+  <div class="recipe-modal-card" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="recipeModalName">
+    <div class="recipe-modal-header">
+      <span class="recipe-modal-name" id="recipeModalName"></span>
+      <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'" aria-label="Close recipe">×</button>
+    </div>
+    <div id="recipeModalBody"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD PANTRY IDEAS SHEET -->
+<div id="dashPantrySheet" class="dash-sheet-backdrop" style="display:none" onclick="_closeDashSheet(event,'dashPantrySheet')">
+  <div class="dash-sheet-card">
+    <div class="dash-sheet-header">
+      <div>
+        <div class="dash-sheet-label">Ideas for using</div>
+        <div class="dash-sheet-day-name" id="dashPantrySheetItem"></div>
+      </div>
+      <button class="btn-icon" onclick="document.getElementById('dashPantrySheet').style.display='none'">×</button>
+    </div>
+    <div id="dashPantrySheetBody" style="padding:4px 20px 8px"></div>
+    <div class="dash-sheet-footer">
+      <button class="btn" onclick="document.getElementById('dashPantrySheet').style.display='none'">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD MEAL EDITOR SHEET -->
+<div id="dashMealSheet" class="dash-sheet-backdrop" style="display:none" onclick="_closeDashSheet(event,'dashMealSheet')">
+  <div class="dash-sheet-card">
+    <div class="dash-sheet-header">
+      <div>
+        <div class="dash-sheet-label">Change dinner</div>
+        <div class="dash-sheet-day-name" id="dashMealSheetDay"></div>
+      </div>
+      <button class="btn-icon" onclick="document.getElementById('dashMealSheet').style.display='none'">×</button>
+    </div>
+    <div class="dash-sheet-quick-row" id="dashMealSheetQuick"></div>
+    <div style="padding:0 20px 4px">
+      <input id="dashMealSheetInput" type="text" class="dash-sheet-input"
+             placeholder="Search recipes or type a meal…"
+             oninput="renderDashMealSearch()" onkeydown="dashMealKeydown(event)" autocomplete="off">
+    </div>
+    <div id="dashMealSheetResults" class="dash-sheet-results"></div>
+    <div id="dashSheetPantryRow" style="display:none">
+      <div class="dash-sheet-pantry-label">Pantry — use this week</div>
+      <div id="dashSheetPantryChips" class="dash-pantry-chips" style="padding:0 20px 8px"></div>
+    </div>
+    <div class="dash-sheet-footer">
+      <button class="btn" onclick="document.getElementById('dashMealSheet').style.display='none'">cancel</button>
+      <button class="btn primary" onclick="saveDashMeal()">save</button>
+    </div>
+  </div>
 </div>
 
 <input type="file" id="photoUploadInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">

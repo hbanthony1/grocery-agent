@@ -80,6 +80,7 @@ function _trapFocus(el) {
 // ===== STATE =====
 let currentStep = 0;
 let meals = [];
+let athleteItems = [];
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
@@ -97,6 +98,8 @@ let weekDessert    = '';
 let weekSnacks     = [];
 let weekHoliday    = null; // null or {type: 'Thanksgiving dinner', guests: 12}
 const _pickerOpen  = { breakfast: false, lunch: false, dessert: false, snacks: false };
+let _dashData      = { days: [], calendarEvents: null, expiringPantry: [], breakfasts: [], lunches: [], dessert: '' };
+let _dashMealSheetDay = null;
 let _prefsDirty    = false;
 let servingSize = 4;
 let _cartView = 'meal';          // 'meal' | 'category'
@@ -412,6 +415,7 @@ let staples = [];  // [{id, name, qty, unit, notes}] — loaded from /staples
 const LS_STAPLES_SKIP = 'grocery_staples_skip';
 let staplesSkipped = new Set(JSON.parse(localStorage.getItem(LS_STAPLES_SKIP) || '[]'));
 let staplesOneTime = [];  // [{name, qty}] for this week only, cleared on reset
+let _extrasQueueLoaded = false;
 let _staplesTrap = null;
 
 function renderFrequentStaples() {
@@ -661,11 +665,481 @@ function buildSchedulePrompt() {
     .join('\n');
 }
 
+// ===== WEEK AT A GLANCE DASHBOARD =====
+
+function _greetingForHour(h) {
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function _expiryLabel(daysLeft) {
+  if (daysLeft < 0)  return 'expired';
+  if (daysLeft === 0) return 'today';
+  if (daysLeft === 1) return 'tomorrow';
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const d = new Date(); d.setDate(d.getDate() + daysLeft);
+  return days[d.getDay()];
+}
+
+async function loadDashboard() {
+  // Populate greeting
+  const now = new Date();
+  const h = now.getHours();
+  const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dayName   = dayNames[now.getDay()];
+  const dateStr   = `${monthNames[now.getMonth()]} ${now.getDate()}`;
+
+  const timeEl = document.getElementById('dashTimeOfDay');
+  const dayEl  = document.getElementById('dashDayName');
+  const restEl = document.getElementById('dashDateRest');
+  if (timeEl) timeEl.textContent = _greetingForHour(h);
+  if (dayEl)  dayEl.textContent  = dayName;
+  if (restEl) restEl.textContent = `, ${dateStr}`;
+
+  // Fetch aggregated data
+  let data = { days: [], calendarEvents: null, expiringPantry: [], breakfasts: [], lunches: [], dessert: '' };
+  try {
+    const r = await fetch('/week-glance');
+    if (r.ok) data = await r.json();
+  } catch(e) {}
+  _dashData = data;
+
+  const todayIso = now.toISOString().split('T')[0];
+  const todayDay = dayName;
+
+  // Find today's entry
+  const todayEntry = data.days.find(d => d.day === todayDay) || data.days.find(d => d.date === todayIso);
+
+  // Render tonight hero card
+  const mealEl  = document.getElementById('dashTonightMeal');
+  const labelEl = document.getElementById('dashTonightLabel');
+  const tagEl   = document.getElementById('dashTonightDateTag');
+  const metaEl  = document.getElementById('dashTonightMeta');
+  const evtEl   = document.getElementById('dashTonightEvents');
+
+  const tonightName = (todayEntry?.meal && !todayEntry.isOut) ? todayEntry.meal : null;
+  if (mealEl) {
+    if (tonightName) {
+      mealEl.innerHTML   = '';
+      mealEl.className   = 'dash-tonight-meal';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = tonightName;
+      nameSpan.className   = 'dash-meal-clickable';
+      nameSpan.onclick     = () => openDashMealRecipe(tonightName);
+      const changeBtn = document.createElement('button');
+      changeBtn.className = 'dash-tonight-change';
+      changeBtn.textContent = '✎ change';
+      changeBtn.onclick = () => openDashMealSheet(todayEntry.day || todayDay);
+      mealEl.appendChild(nameSpan);
+      mealEl.appendChild(changeBtn);
+    } else if (todayEntry?.isOut) {
+      mealEl.innerHTML = 'Night out';
+      mealEl.className = 'dash-tonight-meal';
+      if (todayEntry?.day) {
+        const changeBtn = document.createElement('button');
+        changeBtn.className = 'dash-tonight-change';
+        changeBtn.textContent = '✎ change';
+        changeBtn.onclick = () => openDashMealSheet(todayEntry.day);
+        mealEl.appendChild(changeBtn);
+      }
+    } else {
+      mealEl.innerHTML = '';
+      mealEl.className = 'dash-tonight-meal no-plan';
+      const noplanSpan = document.createElement('span');
+      noplanSpan.textContent = 'No dinner planned yet';
+      mealEl.appendChild(noplanSpan);
+      if (todayDay) {
+        const changeBtn = document.createElement('button');
+        changeBtn.className = 'dash-tonight-change';
+        changeBtn.style.opacity = '1';
+        changeBtn.textContent = '+ add';
+        changeBtn.onclick = () => openDashMealSheet(todayDay);
+        mealEl.appendChild(changeBtn);
+      }
+    }
+  }
+
+  if (labelEl) labelEl.textContent = h >= 17 ? 'Tonight' : 'Dinner tonight';
+  if (tagEl && todayEntry?.date) {
+    const d = new Date(todayEntry.date + 'T12:00:00');
+    tagEl.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  // Breakfast / lunch / dessert — always visible, editable on click
+  if (metaEl) {
+    metaEl.innerHTML = '';
+    metaEl.style.display = 'flex';
+    _renderDashMeta(metaEl, data);
+  }
+
+  // Tonight's calendar events
+  const todayEvents = data.calendarEvents ? (data.calendarEvents[todayDay] || []) : [];
+  if (evtEl) {
+    evtEl.innerHTML = todayEvents.length
+      ? todayEvents.map(e =>
+          `<span class="dash-cal-pill">
+            <span class="dash-cal-pill-time">${e.time}</span>${e.title}
+          </span>`
+        ).join('')
+      : '';
+    evtEl.style.display = todayEvents.length ? 'flex' : 'none';
+  }
+
+  // Render week grid — dinners are clickable
+  const gridEl = document.getElementById('dashWeekGrid');
+  if (gridEl && data.days.length) {
+    gridEl.innerHTML = data.days.map(d => {
+      const isToday   = d.day === todayDay;
+      const isPast    = d.date && d.date < todayIso;
+      const events    = data.calendarEvents ? (data.calendarEvents[d.day] || []) : [];
+      const hasRecipe = d.meal && !d.isOut;
+      const dayClass  = ['dash-day-col',
+        isToday ? 'today' : isPast ? 'past' : '',
+        d.isOut ? 'out' : (!d.meal ? 'empty' : ''),
+        hasRecipe ? 'has-recipe' : '',
+      ].filter(Boolean).join(' ');
+
+      const eventsHtml = events.slice(0, 2).map(e =>
+        `<div class="dash-day-event-dot">${e.title}</div>`
+      ).join('');
+
+      const escapedDay  = d.day.replace(/'/g, "\\'");
+      const mealLabel   = d.isOut ? 'Out' : (d.meal || (d.date ? '—' : ''));
+      const dinnerHtml  = `<span class="dash-day-dinner">${mealLabel}</span>`;
+
+      return `<div class="${dayClass}" onclick="openDashMealSheet('${escapedDay}')" title="Edit ${d.day} dinner">
+        <span class="dash-day-abbr">${d.dayAbbr}</span>
+        <span class="dash-day-num">${d.dayNum ?? ''}</span>
+        ${dinnerHtml}
+        ${eventsHtml ? `<div class="dash-day-events">${eventsHtml}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Expiring pantry — filtered server-side to exclude items already in planned recipes
+  const pantrySection = document.getElementById('dashPantrySection');
+  const chipsEl = document.getElementById('dashPantryChips');
+  if (pantrySection && chipsEl && data.expiringPantry?.length) {
+    chipsEl.innerHTML = data.expiringPantry.map(item => {
+      const chipClass = (item.daysLeft <= 1 ? 'dash-pantry-chip urgent'
+                       : item.daysLeft <= 3 ? 'dash-pantry-chip soon'
+                       : 'dash-pantry-chip') + ' clickable';
+      const label   = _expiryLabel(item.daysLeft);
+      const amt     = item.amount ? ` · ${item.amount}${item.unit ? ' ' + item.unit : ''}` : '';
+      const escaped = item.name.replace(/'/g, "\\'");
+      return `<span class="${chipClass}" onclick="openPantryIdeas('${escaped}', ${item.daysLeft})" title="Get ideas for ${item.name}">` +
+        `${item.name}${amt} <span class="dash-chip-exp">exp ${label}</span></span>`;
+    }).join('');
+    pantrySection.style.display = 'block';
+  } else if (pantrySection) {
+    pantrySection.style.display = 'none';
+  }
+
+  // CTA hint
+  const hintEl = document.getElementById('dashCtaHint');
+  const nextSunday = new Date(now);
+  nextSunday.setDate(now.getDate() + (7 - now.getDay()) % 7 || 7);
+  const nextSundayStr = nextSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (hintEl) hintEl.textContent = `next planning session · ${nextSundayStr}`;
+}
+
+function openDashMealRecipe(name) {
+  if (!name || name === 'Out') return;
+  const modalEl = document.getElementById('recipeModal');
+  if (!modalEl) return;
+  const nameEl = document.getElementById('recipeModalName');
+  const bodyEl = document.getElementById('recipeModalBody');
+  if (!nameEl || !bodyEl) return;
+  nameEl.textContent = name;
+  const r = recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
+  if (r) {
+    openRecipeModal(r);
+  } else {
+    bodyEl.innerHTML = `
+      <div class="recipe-modal-not-found" style="margin-bottom:12px">Not in your recipe book yet.</div>
+      <div class="actions" style="justify-content:flex-start">
+        <button class="btn" onclick="document.getElementById('recipeModal').style.display='none';toggleRecipesPanel()">open recipe book →</button>
+      </div>`;
+    modalEl.style.display = 'flex';
+  }
+}
+
+// ===== DASHBOARD PANTRY IDEAS =====
+async function openPantryIdeas(itemName, expiresIn) {
+  document.getElementById('dashPantrySheetItem').textContent = itemName;
+  document.getElementById('dashPantrySheetBody').innerHTML =
+    '<div class="dash-pantry-ideas-loading">Getting ideas…</div>';
+  document.getElementById('dashPantrySheet').style.display = 'flex';
+
+  const plannedMeals = (_dashData.days || [])
+    .map(d => d.meal).filter(m => m && m !== 'Out');
+
+  const r = await fetch('/dashboard/pantry-ideas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item: itemName, plannedMeals, expiresIn }),
+  }).catch(() => null);
+
+  const bodyEl = document.getElementById('dashPantrySheetBody');
+  if (!bodyEl) return;
+
+  if (!r || !r.ok) {
+    bodyEl.innerHTML = '<div class="dash-pantry-ideas-loading">Could not load ideas.</div>';
+    return;
+  }
+
+  const data = await r.json();
+  const lines = (data.ideas || '').trim().split('\n').filter(l => l.trim());
+  // Build a map of prior ratings keyed on exact idea text
+  const priorRatings = {};
+  (data.feedback || []).forEach(f => { priorRatings[f.idea] = f.rating; });
+
+  bodyEl.innerHTML = lines.map(line => {
+    const text     = line.replace(/^\d+[.)]\s*/, '').trim();
+    const prior    = priorRatings[text] || 0;
+    const safeItem = itemName.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const safeText = text.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return `<div class="dash-pantry-idea">
+      <span class="dash-idea-text">${text}</span>
+      <div class="dash-idea-votes">
+        <button class="dash-idea-vote up${prior === 1 ? ' active' : ''}"
+                data-item="${safeItem}" data-idea="${safeText}"
+                onclick="ratePantryIdea(this,1)" title="Good idea">👍</button>
+        <button class="dash-idea-vote down${prior === -1 ? ' active' : ''}"
+                data-item="${safeItem}" data-idea="${safeText}"
+                onclick="ratePantryIdea(this,-1)" title="Not for us">👎</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function ratePantryIdea(btn, rating) {
+  const item    = btn.dataset.item;
+  const idea    = btn.dataset.idea;
+  const ideaEl  = btn.closest('.dash-pantry-idea');
+  const isActive = btn.classList.contains('active');
+  const send    = isActive ? 0 : rating;
+
+  ideaEl.querySelectorAll('.dash-idea-vote').forEach(b => b.classList.remove('active'));
+  if (!isActive) btn.classList.add('active');
+
+  await fetch('/dashboard/pantry-feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item, idea, rating: send }),
+  }).catch(() => null);
+}
+
+// ===== DASHBOARD META EDIT (breakfast / lunch) =====
+function _renderDashMeta(metaEl, data) {
+  const _empty = `<span class="dash-meta-empty">not set</span>`;
+  const bfVal  = data.breakfasts?.length ? data.breakfasts.join(', ') : null;
+  const lnVal  = data.lunches?.length    ? data.lunches.join(', ')    : null;
+
+  function makeItem(label, value, field) {
+    const item = document.createElement('div');
+    item.className = 'dash-meta-item';
+    item.title = `Edit ${label.toLowerCase()}`;
+    item.innerHTML = `<span class="dash-meta-type">${label}</span>` +
+      `<span class="dash-meta-value">${value || _empty}</span>` +
+      `<span class="dash-meta-edit-hint">edit</span>`;
+    item.onclick = () => _startMetaEdit(item, label, value || '', field);
+    return item;
+  }
+
+  metaEl.appendChild(makeItem('Breakfast', bfVal, 'defaultBreakfasts'));
+  metaEl.appendChild(makeItem('Lunch', lnVal, 'defaultLunches'));
+  if (data.dessert) {
+    metaEl.appendChild(makeItem('Dessert', data.dessert, 'defaultDessert'));
+  }
+}
+
+function _startMetaEdit(itemEl, label, currentValue, field) {
+  const inp = document.createElement('input');
+  inp.type      = 'text';
+  inp.className = 'dash-meta-input';
+  inp.value     = currentValue;
+  inp.placeholder = label === 'Dessert' ? 'e.g. Brownies' : 'e.g. Oatmeal, Eggs & toast';
+  inp.title = 'Separate options with a comma · Enter to save · Esc to cancel';
+
+  itemEl.innerHTML = `<span class="dash-meta-type">${label}</span>`;
+  itemEl.appendChild(inp);
+  itemEl.onclick = null;
+
+  let done = false;
+
+  function cancel() {
+    if (done) return;
+    done = true;
+    const metaEl = document.getElementById('dashTonightMeta');
+    if (metaEl) { metaEl.innerHTML = ''; _renderDashMeta(metaEl, _dashData); }
+  }
+
+  async function save() {
+    if (done) return;
+    done = true;
+    const raw = inp.value.trim();
+    const isArray = field !== 'defaultDessert';
+    const payload = { [field]: isArray ? raw.split(',').map(s => s.trim()).filter(Boolean) : raw };
+    const r = await fetch('/dashboard/meta', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    if (!r || !r.ok) {
+      showToast('Could not save', { type: 'error' });
+      const metaEl = document.getElementById('dashTonightMeta');
+      if (metaEl) { metaEl.innerHTML = ''; _renderDashMeta(metaEl, _dashData); }
+      return;
+    }
+    if (isArray) {
+      if (field === 'defaultBreakfasts') _dashData.breakfasts = payload[field];
+      else                               _dashData.lunches    = payload[field];
+    } else {
+      _dashData.dessert = raw;
+    }
+    const metaEl = document.getElementById('dashTonightMeta');
+    if (metaEl) { metaEl.innerHTML = ''; _renderDashMeta(metaEl, _dashData); }
+  }
+
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  inp.addEventListener('blur', save);
+  setTimeout(() => inp.focus(), 0);
+}
+
+// ===== DASHBOARD MEAL EDITOR SHEET =====
+function _closeDashSheet(e, id) {
+  if (e && e.target.id !== id) return;
+  document.getElementById(id).style.display = 'none';
+}
+
+function openDashMealSheet(day) {
+  _dashMealSheetDay = day;
+  const entry = _dashData.days.find(d => d.day === day) || {};
+  const currentMeal = entry.meal || '';
+
+  document.getElementById('dashMealSheetDay').textContent = day;
+  const inp = document.getElementById('dashMealSheetInput');
+  inp.value = currentMeal === 'Out' ? '' : currentMeal;
+
+  // Quick action buttons
+  const quickEl = document.getElementById('dashMealSheetQuick');
+  const isOut = currentMeal === 'Out';
+  quickEl.innerHTML = `
+    <button class="dash-sheet-action${isOut ? ' out-active' : ''}" onclick="_dashToggleNightOut()">
+      ${isOut ? '🏠 back home' : '🌙 night out'}
+    </button>
+    ${currentMeal && !isOut ? `
+      <button class="dash-sheet-action" onclick="openDashMealRecipe('${currentMeal.replace(/'/g, "\\'")}');document.getElementById('dashMealSheet').style.display='none'">
+        📖 view recipe
+      </button>` : ''}
+  `;
+
+  // Pantry suggestion chips
+  const pantryRow = document.getElementById('dashSheetPantryRow');
+  const pantryChips = document.getElementById('dashSheetPantryChips');
+  if (_dashData.expiringPantry?.length) {
+    pantryChips.innerHTML = _dashData.expiringPantry.slice(0, 5).map(item => {
+      const escaped = item.name.replace(/'/g, "\\'");
+      return `<span class="dash-pantry-chip" onclick="document.getElementById('dashMealSheetInput').value='${escaped}';renderDashMealSearch()">${item.name}</span>`;
+    }).join('');
+    pantryRow.style.display = 'block';
+  } else {
+    pantryRow.style.display = 'none';
+  }
+
+  renderDashMealSearch();
+  document.getElementById('dashMealSheet').style.display = 'flex';
+  setTimeout(() => inp.focus(), 60);
+}
+
+function _dashToggleNightOut() {
+  const inp = document.getElementById('dashMealSheetInput');
+  const isNowOut = inp.value.trim() !== 'Out';
+  inp.value = isNowOut ? 'Out' : '';
+  const quickEl = document.getElementById('dashMealSheetQuick');
+  quickEl.querySelector('.dash-sheet-action').classList.toggle('out-active', isNowOut);
+  quickEl.querySelector('.dash-sheet-action').textContent = isNowOut ? '🏠 back home' : '🌙 night out';
+  renderDashMealSearch();
+}
+
+function renderDashMealSearch() {
+  const q = (document.getElementById('dashMealSheetInput')?.value || '').trim().toLowerCase();
+  const resultsEl = document.getElementById('dashMealSheetResults');
+  if (!resultsEl) return;
+  if (!q || q === 'out') { resultsEl.innerHTML = ''; return; }
+  const matches = recipes.filter(r => r.name.toLowerCase().includes(q)).slice(0, 7);
+  resultsEl.innerHTML = matches.map(r => {
+    const escaped = r.name.replace(/'/g, "\\'");
+    const stars   = r.rating ? '★'.repeat(r.rating) : '';
+    return `<div class="dash-sheet-result" onclick="_dashPickRecipe('${escaped}')">
+      <span>${r.name}</span>
+      ${stars ? `<span class="dash-sheet-result-meta">${stars}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function _dashPickRecipe(name) {
+  document.getElementById('dashMealSheetInput').value = name;
+  document.getElementById('dashMealSheetResults').innerHTML = '';
+}
+
+function dashMealKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); saveDashMeal(); }
+  if (e.key === 'Escape') document.getElementById('dashMealSheet').style.display = 'none';
+}
+
+async function saveDashMeal() {
+  const meal = (document.getElementById('dashMealSheetInput')?.value || '').trim();
+  const day  = _dashMealSheetDay;
+  if (!day) return;
+  document.getElementById('dashMealSheet').style.display = 'none';
+  const r = await fetch('/dashboard/meal', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day, meal }),
+  });
+  if (r.ok) {
+    showToast(`${day} updated`, { type: 'success' });
+    loadDashboard();
+  } else {
+    showToast('Could not save', { type: 'error' });
+  }
+  _dashMealSheetDay = null;
+}
+
+function showDashboard() {
+  const dash = document.getElementById('dashboardView');
+  const main = document.getElementById('mainApp');
+  if (dash) dash.style.display = 'block';
+  if (main) main.style.display = 'none';
+  loadDashboard();
+}
+
+function startPlanning() {
+  const dash = document.getElementById('dashboardView');
+  const main = document.getElementById('mainApp');
+  if (dash) dash.style.display = 'none';
+  if (main) main.style.display = 'block';
+  const startStep = prefs.lastWeekMeals?.length ? 0 : 1;
+  history.replaceState({ step: startStep, overlay: null }, '');
+  goToStep(startStep, true);
+  renderSchedule();
+}
+
 function resetApp() {
   meals = [];
+  athleteItems = [];
   swappingIndex = -1;
   staplesOneTime = [];
+  _extrasQueueLoaded = false;
   ['loadingBar','mealPlanCard','approveBtn','regenerateBtn',
+   'athleteItemsCard',
    'cartCard','budgetBar','cartUrlBox','cartLoadingBar',
    'cartError','serverNotice','doneBtn','ratingPanel'].forEach(id => {
     const el = document.getElementById(id);
@@ -674,7 +1148,7 @@ function resetApp() {
   const buildBtn = document.getElementById('buildCartBtn');
   if (buildBtn) buildBtn.style.display = 'none';
   document.getElementById('swapRow').className = 'swap-input-row';
-  goToStep(0);
+  showDashboard();
 }
 
 // ===== RECIPE REPOSITORY =====
@@ -1313,6 +1787,27 @@ async function moveStaple(id, dir) {
 
 // ===== STAPLES STEP (Step 4) =====
 
+async function loadExtrasQueue() {
+  if (_extrasQueueLoaded) return;
+  _extrasQueueLoaded = true;
+  try {
+    const res = await fetch('/extras-queue');
+    const data = await res.json();
+    const newItems = (data.items || []).filter(name =>
+      !staplesOneTime.some(o => o.name.toLowerCase() === name.toLowerCase())
+    );
+    if (!newItems.length) return;
+    newItems.forEach(name => staplesOneTime.push({name, qty: 1}));
+    _renderOneTimeList();
+    const badge = document.createElement('div');
+    badge.textContent = `${newItems.length} item${newItems.length > 1 ? 's' : ''} added from your phone`;
+    badge.style.cssText = 'background:var(--accent,#4caf50);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+    badge.id = 'extrasQueueBadge';
+    document.getElementById('staplesOneTimeList')?.before(badge);
+    setTimeout(() => badge.remove(), 5000);
+  } catch (_) {}
+}
+
 function renderStaplesStep() {
   const el = document.getElementById('staplesStepList');
   if (!el) return;
@@ -1340,6 +1835,7 @@ function renderStaplesStep() {
     </div>`;
   }).join('');
   _renderOneTimeList();
+  loadExtrasQueue();
 }
 
 function _renderOneTimeList() {
@@ -2482,7 +2978,13 @@ Return ONLY a JSON array of exactly ${dinnerCount} objects (one per planned day)
 
 Set isNew:true only for the brand new recipes.`;
 
+  athleteItems = [];
   try {
+    // Fire athlete items generation in parallel; failure silently falls back to []
+    const athletePromise = prefs.athleteTraining?.enabled
+      ? generateAthleteItems().catch(() => [])
+      : Promise.resolve([]);
+
     const resp = await fetch('/claude-prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2499,6 +3001,7 @@ Set isNew:true only for the brand new recipes.`;
     });
     const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
     meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
+    athleteItems = await athletePromise;
   } catch(e) {
     meals = [
       {day:'Monday',    meal:"Pasta with Rao's Sauce",         isNew:false},
@@ -2607,9 +3110,73 @@ function renderMeals() {
           <input type="checkbox" ${m.easyMode ? 'checked' : ''} ${m.easyLoading ? 'disabled' : ''} onchange="toggleEasyMode(${i}, this.checked)">
           <span>${easyLabel}</span>
         </label>
-        <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})" aria-label="Swap ${mealName}">↺ swap</button>
+        <button class="btn-swap ${isSwapping ? 'active' : ''}" onclick="startSwap(${i})" aria-label="Change ${mealName}">change →</button>
       </div>`;
   }).join('');
+  renderAthleteItems(athleteItems);
+}
+
+function renderAthleteItems(items) {
+  const card = document.getElementById('athleteItemsCard');
+  const list = document.getElementById('athleteItemsList');
+  if (!card || !list) return;
+  if (!items || !items.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = items.map(item => {
+    const { label, tag } = _classifyAthleteItem(item);
+    return `<div class="athlete-item-row"><span class="athlete-item-tag">${tag}</span><span>${label}</span></div>`;
+  }).join('');
+}
+
+function _classifyAthleteItem(item) {
+  const lower = item.toLowerCase();
+  let tag = 'snack';
+  if (/oat|bagel|bread|banana|toast|rice cake/i.test(lower)) tag = 'pre-run';
+  else if (/yogurt|chocolate milk|protein|cottage|recovery|gel|chew|gu|clif|rxbar|core power/i.test(lower)) tag = 'recovery';
+  else if (/electrolyte|nuun|gatorade|powerade|liquid i\.?v|drink mix|drink powder|hydration/i.test(lower)) tag = 'hydration';
+  return { label: item, tag };
+}
+
+async function generateAthleteItems() {
+  const at = prefs.athleteTraining || {};
+  const runDays = (at.runDays || []).filter(d => d !== at.longRunDay);
+  const appetite = at.appetiteSensitive
+    ? 'Note: timing-sensitive appetite — pre-run options must be small (100-200 cal) and very easy to digest.'
+    : '';
+  const prompt = `You are a sports dietitian planning a weekly personal grocery list for a marathon runner.
+
+Athlete context:
+- Training for ${at.raceName || 'a marathon'}${at.raceDate ? ' (' + at.raceDate + ')' : ''}
+- Phase: ${at.phase || 'Base Building'}
+- This week's long run: ${at.weeklyLongRunMi || '?'} miles on ${at.longRunDay || 'Saturday'}
+- Other run days: ${runDays.join(', ') || 'weekdays'}
+- Training at altitude (4,500 ft) — higher caloric and hydration needs
+${appetite}
+
+Generate a personal athlete grocery list covering:
+1. Pre-run items for ${runDays.join('/')} (quick, light, easy to digest 30 min before a 30-min run)
+2. Pre-long-run items for ${at.longRunDay || 'Saturday'} (${at.weeklyLongRunMi || '?'} mi — more substantial, eaten 1-2 hrs before)
+3. Post-run recovery items for all run days (protein + carbs within 30 min after)
+4. Training snacks for the week (energy-dense, grab-and-go, easy to eat even with low appetite)
+
+Rules:
+- Only suggest items readily available at Walmart
+- Be specific (e.g. "Quaker quick oats" not just "oats", "Chobani Greek yogurt" not just "yogurt")
+- No duplicates with likely family grocery items (pasta, milk, bread are already covered)
+- Aim for 10-14 items total
+
+Return ONLY a JSON array of grocery item name strings, no other text:
+["item 1", "item 2", ...]`;
+
+  const resp = await fetch('/claude-prompt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await resp.json();
+  if (!resp.ok || data.error) throw new Error(data.error || 'Server error');
+  const text = data.content.trim().replace(/```json|```/g, '').trim();
+  return JSON.parse(text);
 }
 
 async function toggleEasyMode(i, checked) {
@@ -3154,7 +3721,7 @@ async function startCartBuild(precomputedIngredients = null) {
         ...(s.itemId ? {itemId: s.itemId, productName: s.productName, lastPrice: s.lastPrice} : {}),
       }))
       .concat(staplesOneTime.map(o => ({name: o.name, qty: o.qty || 1, unit: ''})));
-    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047' };
+    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems };
     if (precomputedIngredients) body.ingredients = precomputedIngredients;
     const resp = await fetch('/build-cart', {
       method: 'POST',
@@ -3656,7 +4223,19 @@ function buildPreferencesPrompt() {
   const lines = [];
   lines.push(`HOUSEHOLD: Family of ${h.adults || 2} adults + ${h.kids || 0} kids (${h.kidsAges || ''}), zip ${h.zip || '59047'}`);
   lines.push(`BUDGET: Target ~$${h.budgetTarget || 175}, flex to $${h.budgetMax || 225}`);
-  if (prefs.nutritionFocus) lines.push(`NUTRITION FOCUS: ${prefs.nutritionFocus}`);
+  if (prefs.athleteTraining?.enabled) {
+    const at = prefs.athleteTraining;
+    const prevDayMap = { Monday:'Sunday', Tuesday:'Monday', Wednesday:'Tuesday', Thursday:'Wednesday', Friday:'Thursday', Saturday:'Friday', Sunday:'Saturday' };
+    const carbNightDay = prevDayMap[at.longRunDay || 'Saturday'];
+    const runDays = at.runDays || [];
+    lines.push(`\nATHLETE TRAINING: One adult is training for ${at.raceName || 'a marathon'}${at.raceDate ? ' (' + at.raceDate + ')' : ''}. Phase: ${at.phase || 'Base Building'}. Long run is ${at.longRunDay || 'Saturday'} (${at.weeklyLongRunMi || '?'} mi this week). Run days: ${runDays.join(', ') || 'Mon/Wed/Fri/Sat'}.`);
+    lines.push(`\nDINNER NUDGES FOR TRAINING (adjust the family dinner — everyone eats these):`);
+    lines.push(`- ${carbNightDay} dinner: carb-heavy (pasta, rice dishes, pizza) to fuel the long run`);
+    lines.push(`- ${at.longRunDay || 'Saturday'} dinner: protein-focused recovery meal (chicken, salmon, beef)`);
+    if (runDays.includes('Monday')) lines.push(`- Monday dinner: include good protein for post-tempo recovery`);
+  } else if (prefs.nutritionFocus) {
+    lines.push(`NUTRITION FOCUS: ${prefs.nutritionFocus}`);
+  }
   if (prefs.dietaryNotes?.length) {
     lines.push('\nDIETARY NOTES:');
     prefs.dietaryNotes.forEach(n => lines.push(`- ${n}`));
@@ -3804,7 +4383,18 @@ async function savePrefsPage() {
   prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
   prefs.notes           = document.getElementById('pf-notes').value.trim();
   prefs.nutritionFocus  = document.getElementById('pf-nutritionFocus').value;
+  prefs.athleteTraining = {
+    enabled:         document.getElementById('pf-athleteEnabled').checked,
+    raceName:        document.getElementById('pf-raceName').value.trim(),
+    raceDate:        document.getElementById('pf-raceDate').value.trim(),
+    phase:           document.getElementById('pf-trainingPhase').value,
+    longRunDay:      document.getElementById('pf-longRunDay').value,
+    weeklyLongRunMi: parseFloat(document.getElementById('pf-longRunMi').value) || null,
+    runDays:         [...document.querySelectorAll('.pf-runDay:checked')].map(cb => cb.value),
+    appetiteSensitive: document.getElementById('pf-appetiteSensitive').checked,
+  };
   prefs.timezone        = document.getElementById('pf-timezone').value.trim() || 'America/Denver';
+  prefs.emails          = document.getElementById('pf-emails').value.split(',').map(e => e.trim()).filter(Boolean);
 
   try {
     await fetch('/prefs', {
@@ -3820,6 +4410,12 @@ async function savePrefsPage() {
   _prefsDirty = false;
   closePrefsPage();
   showToast('Preferences saved');
+}
+
+function toggleAthleteTrainingFields() {
+  const enabled = document.getElementById('pf-athleteEnabled')?.checked;
+  const fields = document.getElementById('pf-athleteFields');
+  if (fields) fields.style.display = enabled ? 'block' : 'none';
 }
 
 function readPrefsList(containerId) {
@@ -3845,9 +4441,22 @@ function renderPrefsPage() {
   document.getElementById('pf-budgetTarget').value = h.budgetTarget ?? 175;
   document.getElementById('pf-budgetMax').value    = h.budgetMax ?? 225;
   document.getElementById('pf-timezone').value     = prefs.timezone || '';
+  document.getElementById('pf-emails').value        = (prefs.emails || []).join(', ');
   document.getElementById('pf-notes').value          = prefs.notes || '';
   document.getElementById('pf-nutritionFocus').value = prefs.nutritionFocus || '';
   document.getElementById('pf-storeOk').value        = prefs.storeOk || '';
+
+  const at = prefs.athleteTraining || {};
+  document.getElementById('pf-athleteEnabled').checked = !!at.enabled;
+  document.getElementById('pf-raceName').value         = at.raceName || '';
+  document.getElementById('pf-raceDate').value         = at.raceDate || '';
+  document.getElementById('pf-trainingPhase').value    = at.phase || 'Base Building';
+  document.getElementById('pf-longRunDay').value       = at.longRunDay || 'Saturday';
+  document.getElementById('pf-longRunMi').value        = at.weeklyLongRunMi || '';
+  document.getElementById('pf-appetiteSensitive').checked = !!at.appetiteSensitive;
+  const runDaySet = new Set(at.runDays || []);
+  document.querySelectorAll('.pf-runDay').forEach(cb => { cb.checked = runDaySet.has(cb.value); });
+  toggleAthleteTrainingFields();
 
   renderPrefsList('pf-dietList', prefs.dietaryNotes || []);
   renderBrandList(prefs.brandRules || []);
@@ -4402,13 +5011,13 @@ async function renderHistoryDashboard() {
 }
 
 // ===== INIT =====
-history.replaceState({ step: 0, overlay: null }, '');
-goToStep(0, true); // true = don't push another history entry on top of the replaceState above
+// Show dashboard as the landing page; planning flow stays hidden until "Start planning" is clicked.
+showDashboard();
+// Prime the planning flow in the background so it's ready when the user starts
+goToStep(0, true);
 renderSchedule();
 loadPrefs().then(() => {
   renderStep0Extras(); initServingSize(); renderRecapCard(); renderFrequentStaples(); checkOnboarding();
-  // Auto-advance to Your Week when there's no recap data
-  if (!prefs.lastWeekMeals?.length) goToStep(1, true);
 });
 loadHouseholdItems();
 loadRecipes();
