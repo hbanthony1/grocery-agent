@@ -22,6 +22,9 @@ data/meal_schedule.json
 data/users/
 data/users.json
 
+# Demo sandbox data
+data/demo/
+
 # OS
 .DS_Store
 Thumbs.db
