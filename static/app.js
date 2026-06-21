@@ -83,6 +83,8 @@ let meals = [];
 let athleteItems = [];
 let _approvedAthleteItems = new Set();
 let _skippedNonDinnerItems = new Set();
+let _nonDinnerIngredients = {};
+let _nonDinnerExpanded    = new Set();
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
@@ -3569,6 +3571,8 @@ function _renderReviewList() {
 
 async function startIngredientReview() {
   _skippedNonDinnerItems = new Set();
+  _nonDinnerExpanded    = new Set();
+  _nonDinnerIngredients = {};
   document.getElementById('reviewLoadingBar').style.display = 'flex';
   document.getElementById('reviewCard').style.display    = 'none';
   document.getElementById('reviewError').style.display   = 'none';
@@ -3662,20 +3666,66 @@ function _renderNonDinnerItems() {
     ...(weekDessert ? [{ label: weekDessert, cat: 'dessert' }] : []),
   ];
   const section = document.getElementById('nonDinnerReviewSection');
-  const list = document.getElementById('nonDinnerReviewList');
+  const list    = document.getElementById('nonDinnerReviewList');
   if (!section || !list || !all.length) { if (section) section.style.display = 'none'; return; }
   section.style.display = 'block';
   list.innerHTML = all.map(({ label, cat }) => {
-    const skipped = _skippedNonDinnerItems.has(label);
+    const skipped  = _skippedNonDinnerItems.has(label);
+    const expanded = _nonDinnerExpanded.has(label);
+    const cached   = _nonDinnerIngredients[label];
     const esc = label.replace(/'/g, '&#39;');
+    const ingSection = expanded ? _renderNonDinnerIngredients(label, cached) : '';
     return `<div class="review-item${skipped ? ' review-item-skipped' : ''}">
       <span class="review-item-cat">${cat}</span>
       <span class="review-item-name">${label}</span>
+      <button class="btn-pantry-toggle nd-ing-btn" onclick="toggleNonDinnerIngredients('${esc}')" title="View ingredients">${expanded ? '▾' : '▸'}</button>
       <button class="btn-pantry-toggle${skipped ? '' : ' active'}" onclick="toggleNonDinnerItem('${esc}')">
         ${skipped ? 'add back' : 'skip'}
       </button>
-    </div>`;
+    </div>${ingSection}`;
   }).join('');
+}
+
+function _renderNonDinnerIngredients(label, items) {
+  const id = label.replace(/[^a-zA-Z0-9]/g, '_');
+  if (!items) {
+    return `<div class="nd-ing-section" id="ndIng-${id}"><span class="nd-ing-loading">loading…</span></div>`;
+  }
+  const pantryNorms = pantry.map(p => normName(p.name)).filter(n => n.length >= 3);
+  const chips = items.map(ing => {
+    const norm = normName(ing);
+    const inPantry = norm.length >= 3 && pantryNorms.some(pn =>
+      norm === pn || (norm.length > 4 && norm.includes(pn)) || (pn.length > 4 && pn.includes(norm)));
+    const escIng = ing.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<span class="nd-ing-chip${inPantry ? ' in-pantry' : ''}">${escIng}${inPantry ? ' ✓' : ''}</span>`;
+  }).join('');
+  return `<div class="nd-ing-section" id="ndIng-${id}">${chips}</div>`;
+}
+
+async function toggleNonDinnerIngredients(label) {
+  if (_nonDinnerExpanded.has(label)) {
+    _nonDinnerExpanded.delete(label);
+    _renderNonDinnerItems();
+    return;
+  }
+  _nonDinnerExpanded.add(label);
+  _renderNonDinnerItems();
+  if (!_nonDinnerIngredients[label]) {
+    try {
+      const resp = await fetch('/claude-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `List 4-8 grocery items needed to make "${label}" for a family of 4. Be specific (e.g. "whole milk" not "milk", "large eggs" not "eggs"). Return ONLY a JSON array of strings, no markdown: ["item1","item2",...]`
+        }),
+      });
+      const data = await resp.json();
+      const parsed = JSON.parse((data.content || '[]').replace(/```json|```/g, '').trim());
+      _nonDinnerIngredients[label] = Array.isArray(parsed) ? parsed : [];
+    } catch(e) {
+      _nonDinnerIngredients[label] = [];
+    }
+    _renderNonDinnerItems();
+  }
 }
 
 function toggleNonDinnerItem(label) {

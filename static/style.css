@@ -397,6 +397,11 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .btn-pantry-toggle { font-size: 11px; font-family: var(--mono); color: var(--text3); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; transition: all 120ms; white-space: nowrap; flex-shrink: 0; margin-left: auto; }
 .btn-pantry-toggle.active { color: var(--text2); border-color: var(--text2); }
 .btn-pantry-toggle.active:hover { color: var(--urgent-red-text); border-color: var(--urgent-red-text); }
+.nd-ing-btn { padding:2px 6px; font-size:11px; min-width:20px; margin-left:0; }
+.nd-ing-section { display:flex; flex-wrap:wrap; gap:4px; padding:4px 0 6px 8px; }
+.nd-ing-loading { font-size:11px; color:var(--text3); font-family:var(--mono); }
+.nd-ing-chip { font-size:11px; font-family:var(--mono); background:var(--surface2); color:var(--text2); border:1px solid var(--border); border-radius:3px; padding:2px 6px; }
+.nd-ing-chip.in-pantry { background:var(--urgent-ok-bg); color:var(--urgent-ok-text); border-color:var(--urgent-ok-border); }
 .swap-recipe-item.queued-meal { border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); }
 .swap-recipe-item.queued-meal:hover { border-color: var(--primary); background: var(--primary-light); }
 .review-pantry-btn { font-size: 11px; font-family: var(--mono); color: var(--text3); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; transition: all 120ms; white-space: nowrap; flex-shrink: 0; }
