@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, redirect, session, Response
 from flask_cors import CORS
 from walmart_tool import search_product, build_cart_url
-import anthropic, os, json, re, time, traceback, csv, io, socket, smtplib, shutil
+import anthropic, os, json, re, time, traceback, csv, io, socket, smtplib, shutil, requests
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from email.mime.text import MIMEText
@@ -905,6 +905,60 @@ def add_recipe():
     return jsonify(recipe), 201
 
 
+@app.route('/recipes/url', methods=['POST'])
+def import_recipe_from_url():
+    from html.parser import HTMLParser
+    url = (request.json or {}).get('url', '').strip()
+    if not url:
+        return jsonify({'error': 'url required'}), 400
+    try:
+        r = requests.get(url, timeout=15,
+            headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'})
+        r.raise_for_status()
+    except Exception as e:
+        return jsonify({'error': f'Could not fetch URL: {e}'}), 400
+
+    class _Stripper(HTMLParser):
+        def __init__(self): super().__init__(); self.fed = []
+        def handle_data(self, d): self.fed.append(d)
+        def get_data(self): return ' '.join(self.fed)
+    s = _Stripper()
+    s.feed(r.text)
+    page_text = s.get_data()[:8000]
+
+    try:
+        msg = client.messages.create(model=MODEL, max_tokens=1024, messages=[{
+            'role': 'user',
+            'content': (
+                'Extract the recipe from this webpage. Return JSON only, no markdown:\n'
+                '{"name":"...","ingredients":["1 cup flour",...],"steps":["Preheat oven...",...],"tags":[]}\n\n'
+                'Tags must be from: quick, weekend, kid-friendly, comfort-food, dessert\n\n'
+                f'Page text:\n{page_text}'
+            )
+        }])
+        raw = msg.content[0].text.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1].rsplit('```', 1)[0]
+        data = json.loads(raw)
+    except Exception as e:
+        return jsonify({'error': f'Could not parse recipe: {e}'}), 500
+
+    recipe = {
+        'id': str(int(time.time() * 1000)),
+        'name': data.get('name', 'Imported Recipe'),
+        'rating': 0, 'timesPlanned': 0, 'lastPlanned': '',
+        'tags': data.get('tags', []),
+        'notes': f'imported from {url}',
+        'ingredients': data.get('ingredients', []),
+        'steps': data.get('steps', []),
+        'photo': None,
+    }
+    recipes = _load_recipes()
+    recipes.append(recipe)
+    _save_recipes(recipes)
+    return jsonify({'ok': True, 'recipe': recipe})
+
+
 @app.route('/recipes/batch-rate', methods=['POST'])
 def batch_rate_recipes():
     ratings = (request.json or {}).get('ratings', [])
@@ -1216,14 +1270,16 @@ _ICLOUD_EXTRAS = os.path.expanduser(r'~/iCloudDrive/grocery_extras.txt')
 
 @app.route('/extras-queue', methods=['GET'])
 def get_extras_queue():
+    path = _ICLOUD_EXTRAS
+    exists = os.path.isfile(path)
     try:
-        with open(_ICLOUD_EXTRAS, encoding='utf-8-sig') as f:
+        with open(path, encoding='utf-8-sig') as f:
             items = [l.strip() for l in f if l.strip()]
     except FileNotFoundError:
         items = []
     if items:
-        open(_ICLOUD_EXTRAS, 'w', encoding='utf-8').close()  # clear after reading
-    return jsonify({'items': items})
+        open(path, 'w', encoding='utf-8').close()
+    return jsonify({'items': items, 'path': path, 'exists': exists})
 
 
 # ── Staples ───────────────────────────────────────────────────────────────────

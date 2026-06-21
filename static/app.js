@@ -1421,6 +1421,49 @@ async function commitRecipeEdit(id) {
   renderRecipesPanel();
 }
 
+function openRecipeUrlImport() {
+  const list = document.getElementById('recipesList');
+  if (document.getElementById('url-import-form')) return;
+  const form = document.createElement('div');
+  form.className = 'recipe-card';
+  form.id = 'url-import-form';
+  form.innerHTML = `<div class="url-import-inner">
+    <div class="url-import-hint">paste a recipe URL (AllRecipes, NYT Cooking, any food blog)</div>
+    <div class="url-import-row">
+      <input class="recipes-search" id="urlImportInput" placeholder="https://..."
+             style="flex:1;margin-bottom:0" onkeydown="if(event.key==='Enter')submitRecipeUrl()">
+      <button class="btn primary" onclick="submitRecipeUrl()">import</button>
+      <button class="btn" onclick="document.getElementById('url-import-form').remove()">cancel</button>
+    </div>
+    <span id="urlImportStatus" class="url-import-status"></span>
+  </div>`;
+  list.prepend(form);
+  document.getElementById('urlImportInput').focus();
+}
+
+async function submitRecipeUrl() {
+  const url = (document.getElementById('urlImportInput')?.value || '').trim();
+  if (!url) return;
+  const status = document.getElementById('urlImportStatus');
+  if (status) status.textContent = 'fetching recipe…';
+  try {
+    const resp = await fetch('/recipes/url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Import failed');
+    document.getElementById('url-import-form')?.remove();
+    await loadRecipes();
+    renderRecipesPanel();
+    showToast(`"${data.recipe.name}" imported`, { type: 'success' });
+    openRecipeModal(data.recipe.id);
+  } catch(e) {
+    if (status) status.textContent = `Error: ${e.message}`;
+  }
+}
+
 function addRecipeManual() {
   const list = document.getElementById('recipesList');
   if (document.getElementById('add-form')) return;
@@ -1748,15 +1791,23 @@ async function loadExtrasQueue() {
     const newItems = (data.items || []).filter(name =>
       !staplesOneTime.some(o => o.name.toLowerCase() === name.toLowerCase())
     );
-    if (!newItems.length) return;
-    newItems.forEach(name => staplesOneTime.push({name, qty: 1}));
-    _renderOneTimeList();
-    const badge = document.createElement('div');
-    badge.textContent = `${newItems.length} item${newItems.length > 1 ? 's' : ''} added from your phone`;
-    badge.style.cssText = 'background:var(--accent,#4caf50);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
-    badge.id = 'extrasQueueBadge';
-    document.getElementById('staplesOneTimeList')?.before(badge);
-    setTimeout(() => badge.remove(), 5000);
+    if (newItems.length) {
+      newItems.forEach(name => staplesOneTime.push({ name, qty: 1 }));
+      _renderOneTimeList();
+      const badge = document.createElement('div');
+      badge.textContent = `${newItems.length} item${newItems.length > 1 ? 's' : ''} added from your phone`;
+      badge.style.cssText = 'background:var(--accent,#4caf50);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
+      badge.id = 'extrasQueueBadge';
+      document.getElementById('staplesOneTimeList')?.before(badge);
+      setTimeout(() => badge.remove(), 5000);
+    } else if (!data.exists && !document.getElementById('icloudSetupHint')) {
+      const hint = document.createElement('p');
+      hint.id = 'icloudSetupHint';
+      hint.className = 'review-hint';
+      hint.style.cssText = 'margin-top:8px;font-size:11px';
+      hint.innerHTML = `📱 <strong>iPhone extras:</strong> create <code>${data.path}</code> — type items one per line and they'll appear here on Sunday.`;
+      document.querySelector('#step4 .hh-extra-input-row')?.after(hint);
+    }
   } catch (_) {}
 }
 

@@ -731,6 +731,7 @@
       <span class="prefs-page-title">recipe book</span>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" onclick="addRecipeManual()">+ add</button>
+        <button class="btn" onclick="openRecipeUrlImport()">import URL</button>
         <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
         <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
         <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
