@@ -391,6 +391,14 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .review-dupe-badge { font-size: 10px; font-family: var(--mono); font-weight: 600; color: var(--accent-dark); background: var(--accent-light); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
 .review-combined-label { font-size: 10px; font-family: var(--mono); color: var(--approval-dark); background: var(--approval-light); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
 
+.review-group-label { font-size: 11px; font-family: var(--mono); color: var(--text2); letter-spacing: 0.07em; text-transform: uppercase; padding-bottom: 6px; border-bottom: 1.5px solid var(--border); margin-bottom: 4px; }
+.review-item-cat { font-size: 10px; font-family: var(--mono); color: var(--text3); background: var(--surface2); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
+.review-item-skipped .review-item-name { color: var(--text3); text-decoration: line-through; opacity: .55; }
+.btn-pantry-toggle { font-size: 11px; font-family: var(--mono); color: var(--text3); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; transition: all 120ms; white-space: nowrap; flex-shrink: 0; margin-left: auto; }
+.btn-pantry-toggle.active { color: var(--text2); border-color: var(--text2); }
+.btn-pantry-toggle.active:hover { color: var(--urgent-red-text); border-color: var(--urgent-red-text); }
+.swap-recipe-item.queued-meal { border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); }
+.swap-recipe-item.queued-meal:hover { border-color: var(--primary); background: var(--primary-light); }
 .review-pantry-btn { font-size: 11px; font-family: var(--mono); color: var(--text3); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; transition: all 120ms; white-space: nowrap; flex-shrink: 0; }
 .review-pantry-btn:hover { border-color: var(--approval); color: var(--approval-dark); }
 .review-pantry-btn.active { border-color: var(--approval); color: var(--approval-dark); background: var(--approval-light); }

@@ -82,6 +82,7 @@ let currentStep = 0;
 let meals = [];
 let athleteItems = [];
 let _approvedAthleteItems = new Set();
+let _skippedNonDinnerItems = new Set();
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
@@ -1093,6 +1094,8 @@ async function saveDashMeal() {
   const meal = (document.getElementById('dashMealSheetInput')?.value || '').trim();
   const day  = _dashMealSheetDay;
   if (!day) return;
+  const originalEntry = _dashData.days.find(d => d.day === day) || {};
+  const originalMeal  = originalEntry.meal || '';
   document.getElementById('dashMealSheet').style.display = 'none';
   const r = await fetch('/dashboard/meal', {
     method: 'PATCH',
@@ -1100,7 +1103,14 @@ async function saveDashMeal() {
     body: JSON.stringify({ day, meal }),
   });
   if (r.ok) {
-    showToast(`${day} updated`, { type: 'success' });
+    const wasReal = originalMeal && originalMeal !== 'Out' && originalMeal !== 'Leftovers' && originalMeal !== meal;
+    if (wasReal) {
+      prefs.nextWeekQueue = [...new Set([...(prefs.nextWeekQueue || []), originalMeal])];
+      fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {});
+      showToast(`${originalMeal} queued for next week`, { type: 'info' });
+    } else {
+      showToast(`${day} updated`, { type: 'success' });
+    }
     loadDashboard();
   } else {
     showToast('Could not save', { type: 'error' });
@@ -2667,8 +2677,18 @@ function renderSwapPicker(query) {
   const leftoversBtn = !q
     ? `<button class="swap-leftovers-btn" onclick="pickSwapLeftovers()">&#127374; Leftovers night</button>`
     : '';
-  if (!filtered.length) { picker.innerHTML = leftoversBtn; return; }
-  picker.innerHTML = leftoversBtn + `<div class="swap-picker-label">from your recipe book:</div>` +
+  const queuedSection = !q && prefs.nextWeekQueue?.length
+    ? `<div class="swap-picker-label">from last week:</div>` +
+      prefs.nextWeekQueue.map(name => {
+        const esc = name.replace(/'/g, '&#39;');
+        return `<div class="swap-recipe-item queued-meal" onclick="pickSwapQueued('${esc}')">
+          <span class="swap-recipe-stars">↩</span>
+          <span class="swap-recipe-name">${name}</span>
+        </div>`;
+      }).join('')
+    : '';
+  if (!filtered.length) { picker.innerHTML = leftoversBtn + queuedSection; return; }
+  picker.innerHTML = leftoversBtn + queuedSection + `<div class="swap-picker-label">from your recipe book:</div>` +
     filtered.map(r => {
       const esc = r.name.replace(/'/g, '&#39;');
       return `<div class="swap-recipe-item" onclick="pickSwapRecipe('${esc}')">
@@ -2676,6 +2696,16 @@ function renderSwapPicker(query) {
         <span class="swap-recipe-name">${r.name}</span>
       </div>`;
     }).join('');
+}
+
+function pickSwapQueued(name) {
+  meals[swappingIndex].meal = name;
+  meals[swappingIndex].isNew = false;
+  meals[swappingIndex].isOut = false;
+  meals[swappingIndex].isLeftovers = false;
+  prefs.nextWeekQueue = (prefs.nextWeekQueue || []).filter(n => n !== name);
+  fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {});
+  cancelSwap();
 }
 
 function pickSwapRecipe(name) {
@@ -2872,9 +2902,10 @@ async function runMealPlan() {
   const regenBtn = document.getElementById('regenerateBtn');
   if (regenBtn) regenBtn.style.display = 'none';
 
-  // Save breakfast/lunch defaults for next week
+  // Save breakfast/lunch defaults and clear carry-over queue
   prefs.defaultBreakfasts = [...weekBreakfasts];
   prefs.defaultLunches    = [...weekLunches];
+  prefs.nextWeekQueue     = [];
   try {
     await fetch('/prefs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(prefs) });
   } catch(e) {}
@@ -3404,6 +3435,7 @@ function _renderReviewList() {
 }
 
 async function startIngredientReview() {
+  _skippedNonDinnerItems = new Set();
   document.getElementById('reviewLoadingBar').style.display = 'flex';
   document.getElementById('reviewCard').style.display    = 'none';
   document.getElementById('reviewError').style.display   = 'none';
@@ -3466,6 +3498,7 @@ async function startIngredientReview() {
     document.getElementById('reviewCard').style.display        = 'block';
     document.getElementById('buildCartFromReviewBtn').style.display = 'inline-flex';
     _renderReviewList();
+    _renderNonDinnerItems();
 
   } catch(e) {
     document.getElementById('reviewLoadingBar').style.display = 'none';
@@ -3486,6 +3519,36 @@ async function buildCartFromReview() {
   });
   goToStep(6);
   startCartBuild(precomputed);
+}
+
+function _renderNonDinnerItems() {
+  const all = [
+    ...weekBreakfasts.map(n => ({ label: n, cat: 'breakfast' })),
+    ...weekLunches.map(n => ({ label: n, cat: 'lunch' })),
+    ...weekSnacks.map(n => ({ label: n, cat: 'snack' })),
+    ...(weekDessert ? [{ label: weekDessert, cat: 'dessert' }] : []),
+  ];
+  const section = document.getElementById('nonDinnerReviewSection');
+  const list = document.getElementById('nonDinnerReviewList');
+  if (!section || !list || !all.length) { if (section) section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = all.map(({ label, cat }) => {
+    const skipped = _skippedNonDinnerItems.has(label);
+    const esc = label.replace(/'/g, '&#39;');
+    return `<div class="review-item${skipped ? ' review-item-skipped' : ''}">
+      <span class="review-item-cat">${cat}</span>
+      <span class="review-item-name">${label}</span>
+      <button class="btn-pantry-toggle${skipped ? '' : ' active'}" onclick="toggleNonDinnerItem('${esc}')">
+        ${skipped ? 'add back' : 'skip'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function toggleNonDinnerItem(label) {
+  if (_skippedNonDinnerItems.has(label)) _skippedNonDinnerItems.delete(label);
+  else _skippedNonDinnerItems.add(label);
+  _renderNonDinnerItems();
 }
 
 function exportShoppingList() {
@@ -3710,7 +3773,7 @@ async function startCartBuild(precomputedIngredients = null) {
         ...(s.itemId ? {itemId: s.itemId, productName: s.productName, lastPrice: s.lastPrice} : {}),
       }))
       .concat(staplesOneTime.map(o => ({name: o.name, qty: o.qty || 1, unit: ''})));
-    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems.filter((_, i) => _approvedAthleteItems.has(i)) };
+    const body = { meals: mealNames, breakfasts: weekBreakfasts.filter(n => !_skippedNonDinnerItems.has(n)), lunches: weekLunches.filter(n => !_skippedNonDinnerItems.has(n)), dessert: _skippedNonDinnerItems.has(weekDessert) ? '' : weekDessert, snacks: weekSnacks.filter(n => !_skippedNonDinnerItems.has(n)), holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems.filter((_, i) => _approvedAthleteItems.has(i)) };
     if (precomputedIngredients) body.ingredients = precomputedIngredients;
     const resp = await fetch('/build-cart', {
       method: 'POST',
@@ -4194,7 +4257,6 @@ function buildPreferencesPrompt() {
     lines.push('\nBRAND RULES (always use these brands):');
     prefs.brandRules.forEach(r => lines.push(`- ${r.item}: ${r.brand}`));
   }
-  if (prefs.storeOk) lines.push(`\nSTORE BRAND / GREAT VALUE OK: ${prefs.storeOk}`);
 
   // 4-week history takes priority over single-week doNotRepeat
   if (prefs.mealHistory?.length) {
@@ -4319,7 +4381,7 @@ async function savePrefsPage() {
   prefs.dietaryNotes    = readPrefsList('pf-dietList');
   prefs.brandRules      = readBrandRules();
   prefs.householdItems  = readHhItemsPrefs();
-  prefs.storeOk         = document.getElementById('pf-storeOk').value.trim();
+  prefs.storeOk         = '';
   prefs.notes           = document.getElementById('pf-notes').value.trim();
   prefs.nutritionFocus  = document.getElementById('pf-nutritionFocus').value;
   prefs.athleteTraining = {
@@ -4380,9 +4442,12 @@ function renderPrefsPage() {
   document.getElementById('pf-budgetMax').value    = h.budgetMax ?? 225;
   document.getElementById('pf-timezone').value     = prefs.timezone || '';
   document.getElementById('pf-emails').value        = (prefs.emails || []).join(', ');
+  if (prefs.storeOk && !(prefs.notes || '').includes('Store brand OK')) {
+    prefs.notes = `Store brand OK for: ${prefs.storeOk}\n\n${prefs.notes || ''}`.trim();
+    prefs.storeOk = '';
+  }
   document.getElementById('pf-notes').value          = prefs.notes || '';
   document.getElementById('pf-nutritionFocus').value = prefs.nutritionFocus || '';
-  document.getElementById('pf-storeOk').value        = prefs.storeOk || '';
 
   const at = prefs.athleteTraining || {};
   document.getElementById('pf-athleteEnabled').checked = !!at.enabled;

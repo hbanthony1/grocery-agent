@@ -396,6 +396,10 @@
         </div>
       </div>
       <div id="reviewList"></div>
+      <div id="nonDinnerReviewSection" style="display:none">
+        <div class="review-group-label" style="margin-top:16px">breakfasts, lunches &amp; more</div>
+        <div id="nonDinnerReviewList"></div>
+      </div>
     </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(4)">← back</button>
@@ -590,17 +594,13 @@
             </div>
           </div>
           <div style="margin-top:14px">
-            <span class="prefs-sublabel">general notes</span>
-            <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
+            <span class="prefs-sublabel">brand preferences</span>
+            <div id="pf-brandList" class="prefs-brand-list"></div>
+            <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
           </div>
-        </div>
-        <div class="card" style="margin-top:14px">
-          <div class="card-label">brand rules</div>
-          <div id="pf-brandList" class="prefs-brand-list"></div>
-          <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
           <div style="margin-top:14px">
-            <span class="prefs-sublabel">store brand / Great Value ok for</span>
-            <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
+            <span class="prefs-sublabel">shopping notes</span>
+            <textarea class="prefs-notes-area" id="pf-notes" placeholder="Brand preferences, store brand guidance, specific product notes..."></textarea>
           </div>
         </div>
       </div>
