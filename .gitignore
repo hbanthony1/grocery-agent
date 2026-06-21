@@ -21,6 +21,7 @@ data/meal_schedule.json
 # Multi-user beta: all runtime data lives here
 data/users/
 data/users.json
+data/feedback.json
 
 # Demo sandbox data
 data/demo/

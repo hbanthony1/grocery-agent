@@ -81,6 +81,7 @@ function _trapFocus(el) {
 let currentStep = 0;
 let meals = [];
 let athleteItems = [];
+let _approvedAthleteItems = new Set();
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
@@ -407,8 +408,6 @@ async function loadHouseholdItems() {
 }
 
 // ===== FREQUENT STAPLES =====
-const LS_FREQUENT_SKIP_KEY = 'grocery_frequent_skip'; // names the user has explicitly unchecked
-let frequentSkipped = new Set(JSON.parse(localStorage.getItem(LS_FREQUENT_SKIP_KEY) || '[]'));
 
 // ===== STAPLES STATE =====
 let staples = [];  // [{id, name, qty, unit, notes}] — loaded from /staples
@@ -418,48 +417,6 @@ let staplesOneTime = [];  // [{name, qty}] for this week only, cleared on reset
 let _extrasQueueLoaded = false;
 let _staplesTrap = null;
 
-function renderFrequentStaples() {
-  const staples = prefs.frequentStaples || [];
-  const card = document.getElementById('fsCard');
-  const grid = document.getElementById('fsGrid');
-  if (!card || !grid) return;
-  if (!staples.length) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-
-  const validNames = new Set(staples);
-  for (const name of frequentSkipped) {
-    if (!validNames.has(name)) frequentSkipped.delete(name);
-  }
-  localStorage.setItem(LS_FREQUENT_SKIP_KEY, JSON.stringify([...frequentSkipped]));
-
-  grid.innerHTML = staples.map(name => {
-    const checked = !frequentSkipped.has(name);
-    const esc = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const display = _hhDisplayName(name);
-    return `<div class="hh-item-row">
-      <label class="hh-item">
-        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleFrequent('${esc}', this.checked)">
-        <span class="hh-item-name">${display}</span>
-      </label>
-    </div>`;
-  }).join('');
-
-  updateFsCount();
-}
-
-function toggleFrequent(name, checked) {
-  if (checked) frequentSkipped.delete(name);
-  else frequentSkipped.add(name);
-  localStorage.setItem(LS_FREQUENT_SKIP_KEY, JSON.stringify([...frequentSkipped]));
-  updateFsCount();
-}
-
-function updateFsCount() {
-  const staples = prefs.frequentStaples || [];
-  const selected = staples.filter(s => !frequentSkipped.has(s)).length;
-  const el = document.getElementById('fsCount');
-  if (el) el.textContent = `${selected} of ${staples.length}`;
-}
 
 function showHhAddRow() {
   document.getElementById('hhAddRow').style.display = 'flex';
@@ -1632,63 +1589,10 @@ function toggleStaplesPanel() {
   if (page.style.display !== 'none') { closeStaplesPage(); } else { openStaplesPage(); }
 }
 
-function renderFrequentStaplesInPanel() {
-  const el = document.getElementById('staplesFreqList');
-  if (!el) return;
-  const items = prefs.frequentStaples || [];
-  if (!items.length) {
-    el.innerHTML = '<div class="hh-loading" style="margin-top:8px">no frequent staples yet — click + add frequent to get started</div>';
-    return;
-  }
-  el.innerHTML = items.map((name, idx) =>
-    `<div class="staple-panel-row" style="align-items:center">
-      <input class="staple-panel-name" value="${name.replace(/"/g,'&quot;')}"
-        onblur="updateFreqStapleInPanel(${idx},this.value)"
-        onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.value=this.defaultValue" />
-      <button class="hh-item-delete" onclick="removeFreqStapleFromPanel(${idx})" title="remove" style="margin-left:auto">×</button>
-    </div>`
-  ).join('');
-}
-
-async function addFreqStapleFromPanel() {
-  const name = prompt('Frequent staple name (e.g. "Greek yogurt"):');
-  if (!name?.trim()) return;
-  prefs.frequentStaples = [...(prefs.frequentStaples || []), name.trim()];
-  try {
-    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
-  } catch(e) {}
-  renderFrequentStaplesInPanel();
-  renderFrequentStaples();
-}
-
-async function updateFreqStapleInPanel(idx, newName) {
-  const trimmed = newName.trim();
-  if (!trimmed) return removeFreqStapleFromPanel(idx);
-  const arr = [...(prefs.frequentStaples || [])];
-  arr[idx] = trimmed;
-  prefs.frequentStaples = arr;
-  try {
-    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
-  } catch(e) {}
-  renderFrequentStaplesInPanel();
-  renderFrequentStaples();
-}
-
-async function removeFreqStapleFromPanel(idx) {
-  const arr = [...(prefs.frequentStaples || [])];
-  arr.splice(idx, 1);
-  prefs.frequentStaples = arr;
-  try {
-    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
-  } catch(e) {}
-  renderFrequentStaplesInPanel();
-  renderFrequentStaples();
-}
 
 function renderStaplesPanel() {
   const el = document.getElementById('staplesPanelList');
   if (!el) return;
-  renderFrequentStaplesInPanel();
   if (!staples.length) {
     el.innerHTML = '<div class="hh-loading">no staples yet — click + add to get started</div>';
     return;
@@ -3183,14 +3087,33 @@ function renderMeals() {
 
 function renderAthleteItems(items) {
   const card = document.getElementById('athleteItemsCard');
-  const list = document.getElementById('athleteItemsList');
-  if (!card || !list) return;
+  if (!card) return;
   if (!items || !items.length) { card.style.display = 'none'; return; }
+  _approvedAthleteItems = new Set(items.map((_, i) => i));
   card.style.display = 'block';
-  list.innerHTML = items.map(item => {
+  _renderAthleteList();
+}
+
+function _renderAthleteList() {
+  const list = document.getElementById('athleteItemsList');
+  const count = document.getElementById('athleteItemsCount');
+  if (!list) return;
+  list.innerHTML = athleteItems.map((item, i) => {
     const { label, tag } = _classifyAthleteItem(item);
-    return `<div class="athlete-item-row"><span class="athlete-item-tag">${tag}</span><span>${label}</span></div>`;
+    const checked = _approvedAthleteItems.has(i);
+    return `<label class="athlete-item-row${checked ? '' : ' athlete-item-skipped'}">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleAthleteItem(${i})">
+      <span class="athlete-item-tag">${tag}</span>
+      <span>${label}</span>
+    </label>`;
   }).join('');
+  if (count) count.textContent = `${_approvedAthleteItems.size} of ${athleteItems.length} items in your cart`;
+}
+
+function toggleAthleteItem(idx) {
+  if (_approvedAthleteItems.has(idx)) _approvedAthleteItems.delete(idx);
+  else _approvedAthleteItems.add(idx);
+  _renderAthleteList();
 }
 
 function _classifyAthleteItem(item) {
@@ -3787,7 +3710,7 @@ async function startCartBuild(precomputedIngredients = null) {
         ...(s.itemId ? {itemId: s.itemId, productName: s.productName, lastPrice: s.lastPrice} : {}),
       }))
       .concat(staplesOneTime.map(o => ({name: o.name, qty: o.qty || 1, unit: ''})));
-    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], frequentStaples: (prefs.frequentStaples || []).filter(s => !frequentSkipped.has(s)), weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems };
+    const body = { meals: mealNames, breakfasts: weekBreakfasts, lunches: weekLunches, dessert: weekDessert, snacks: weekSnacks, holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems.filter((_, i) => _approvedAthleteItems.has(i)) };
     if (precomputedIngredients) body.ingredients = precomputedIngredients;
     const resp = await fetch('/build-cart', {
       method: 'POST',
@@ -3910,8 +3833,8 @@ function _renderCartList(groups, mealOrder) {
     const sourcesPresent = mealOrder.filter(src => groups[src]?.some(i => _match(i.name)));
     list.innerHTML = sourcesPresent.map(source => {
       const items = (groups[source] || []).filter(i => _match(i.name));
-      const isSpecial = ['staples', 'household', 'frequentStaples', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday', '_found'].includes(source);
-      const label = source === 'staples' ? 'Weekly Staples' : source === 'household' ? 'Household' : source === 'frequentStaples' ? 'Frequent Staples' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source === '_found' ? 'Manually Added' : source;
+      const isSpecial = ['staples', 'household', 'Breakfasts', 'Lunches', 'dessert', 'Snacks', 'holiday', '_found'].includes(source);
+      const label = source === 'staples' ? 'Staples' : source === 'household' ? 'Household' : source === 'dessert' ? 'Dessert' : source === 'holiday' ? '🎄 Holiday Meal' : source === '_found' ? 'Manually Added' : source;
       const groupTotal = items.reduce((sum, i) => { const k=`${source}-${(groups[source]||[]).indexOf(i)}`; return _cartDeselected.has(k) ? sum : sum + parseFloat(i.price.replace('$','')); }, 0);
       return `<div class="cart-group">
         <div class="cart-group-header">
@@ -4016,7 +3939,7 @@ function checkPriceSpikes(groups) {
   const lastPrices    = prefs.lastStaplePrices || {};
   const currentPrices = {};
   const spikes        = [];
-  const stapleGroups  = ['staples', 'frequentStaples', 'household', 'Snacks', 'dessert'];
+  const stapleGroups  = ['staples', 'household', 'Snacks', 'dessert'];
   stapleGroups.forEach(src => {
     (groups[src] || []).forEach(item => {
       const price = parseFloat(item.price.replace('$', ''));
@@ -4267,10 +4190,6 @@ function buildPreferencesPrompt() {
       lines.push(`- ${s.name}${meta ? ' (' + meta + ')' : ''}`);
     });
   }
-  if (prefs.frequentStaples?.length) {
-    lines.push('\nFREQUENT STAPLES (include most weeks — skip only if already stocked):');
-    prefs.frequentStaples.forEach(s => lines.push(`- ${s}`));
-  }
   if (prefs.brandRules?.length) {
     lines.push('\nBRAND RULES (always use these brands):');
     prefs.brandRules.forEach(r => lines.push(`- ${r.item}: ${r.brand}`));
@@ -4426,7 +4345,6 @@ async function savePrefsPage() {
 
   householdItems = (prefs.householdItems || []).map(_normalizeHhItem);
   renderHousehold();
-  renderFrequentStaples();
   _prefsDirty = false;
   closePrefsPage();
   showToast('Preferences saved');
@@ -5036,8 +4954,19 @@ showDashboard();
 // Prime the planning flow in the background so it's ready when the user starts
 goToStep(0, true);
 renderSchedule();
-loadPrefs().then(() => {
-  renderStep0Extras(); initServingSize(); renderRecapCard(); renderFrequentStaples(); checkOnboarding();
+loadPrefs().then(async () => {
+  renderStep0Extras(); initServingSize(); renderRecapCard(); checkOnboarding();
+  // One-time migration: move frequentStaples strings into unified staples.json
+  if (prefs.frequentStaples?.length) {
+    for (const name of prefs.frequentStaples) {
+      try { await fetch('/staples', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) }); } catch(e) {}
+    }
+    prefs.frequentStaples = [];
+    try { await fetch('/prefs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(prefs) }); } catch(e) {}
+    staples = await fetch('/staples').then(r => r.json()).then(d => d.items || []).catch(() => []);
+    renderStaplesStep();
+    renderStaplesPanel();
+  }
 });
 loadHouseholdItems();
 loadRecipes();
@@ -5069,3 +4998,35 @@ window.addEventListener('message', async (e) => {
     renderSchedule();
   }
 });
+
+// ===== FEEDBACK =====
+function openFeedbackModal() {
+  document.getElementById('feedbackModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('feedbackText').focus(), 60);
+}
+
+function closeFeedbackModal() {
+  document.getElementById('feedbackModal').style.display = 'none';
+  document.getElementById('feedbackText').value = '';
+}
+
+function _closeFeedbackModal(e) {
+  if (e.target.id === 'feedbackModal') closeFeedbackModal();
+}
+
+async function submitFeedback() {
+  const message = (document.getElementById('feedbackText')?.value || '').trim();
+  if (!message) return;
+  const type = document.querySelector('input[name="feedbackType"]:checked')?.value || 'other';
+  try {
+    await fetch('/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type, message })
+    });
+    closeFeedbackModal();
+    showToast('feedback sent — thank you!', { type: 'success' });
+  } catch(e) {
+    showToast('could not send feedback', { type: 'error' });
+  }
+}

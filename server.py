@@ -253,7 +253,7 @@ def _init_user_data(username: str) -> None:
             pass
 
 
-_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/api/mode', '/me', '/manifest.json', '/service-worker.js'}
+_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/api/mode', '/feedback', '/me', '/manifest.json', '/service-worker.js'}
 
 
 @app.before_request
@@ -295,6 +295,29 @@ def ping():
 @app.route('/api/mode')
 def api_mode():
     return jsonify({"mode": "demo" if _DEMO_MODE else "live"})
+
+
+@app.route('/feedback', methods=['POST'])
+def submit_feedback():
+    body = request.json or {}
+    entry = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'type': body.get('type', 'other'),
+        'message': body.get('message', '').strip(),
+    }
+    if not entry['message']:
+        return jsonify({'error': 'message required'}), 400
+    path = _dpath('feedback.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            items = json.load(f)
+    except Exception:
+        items = []
+    items.append(entry)
+    os.makedirs(_data_dir(), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(items, f, indent=2)
+    return jsonify({'ok': True})
 
 
 @app.route('/week-glance')
@@ -1647,7 +1670,6 @@ def build_cart():
         breakfasts            = data.get('breakfasts', [])
         lunches               = data.get('lunches', [])
         household             = data.get('household', [])
-        frequent_staples      = data.get('frequentStaples', [])
         dessert               = data.get('dessert', '')
         snacks                = data.get('snacks', [])
         holiday               = data.get('holiday') or {}
@@ -1721,8 +1743,6 @@ def build_cart():
 
         for name in household:
             all_search_tasks.append({"search_query": name, "qty": 1, "source": "household"})
-        for name in frequent_staples:
-            all_search_tasks.append({"search_query": name, "qty": 1, "source": "frequentStaples"})
         if dessert:
             all_search_tasks.append({"search_query": dessert, "qty": 1, "source": "dessert"})
         for name in snacks:
@@ -1802,7 +1822,7 @@ def build_cart():
                 not_found.append(task['search_query'])
                 print(f"  - No result: {task['search_query']}")
 
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'training', 'staples', 'frequentStaples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'training', 'staples', 'household']
         cart_url = build_cart_url(cart_items, staple_items=[])
 
         print(f"\nCart URL: {cart_url}")

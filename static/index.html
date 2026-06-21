@@ -315,7 +315,8 @@
     </div>
     <div id="athleteItemsCard" class="card" style="display:none;margin-top:10px">
       <div class="card-label">your training items this week</div>
-      <p class="review-hint" style="margin-bottom:8px">Personal athlete nutrition — added to your cart separately from the family grocery list.</p>
+      <p class="review-hint" style="margin-bottom:4px">Personal athlete nutrition — added to your cart separately from the family grocery list. Uncheck anything you already have.</p>
+      <div id="athleteItemsCount" class="review-hint" style="margin-bottom:8px;color:var(--text3)"></div>
       <div id="athleteItemsList" class="athlete-items-list"></div>
     </div>
     <div class="actions">
@@ -356,10 +357,6 @@
     <div class="card">
       <div class="card-label">weekly staples — confirm what you need this week</div>
       <div id="staplesStepList"><span class="hh-loading">loading staples...</span></div>
-    </div>
-    <div class="card" id="fsCard" style="display:none">
-      <div class="card-label hh-label">frequent staples — <span id="fsCount">0 of 0</span></div>
-      <div class="hh-grid" id="fsGrid"></div>
     </div>
     <div class="card">
       <div class="card-label">anything extra this week? <span class="card-label-hint">(one-time, not saved)</span></div>
@@ -651,19 +648,12 @@
       <span class="prefs-page-title">staples</span>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" onclick="clearStapleCache()" id="clearCacheBtn">clear cache</button>
-        <button class="btn" onclick="addStapleFromPanel()">+ add weekly</button>
+        <button class="btn" onclick="addStapleFromPanel()">+ add staple</button>
       </div>
     </div>
     <div class="recipes-page-body">
-      <p class="prefs-sublabel" style="margin:16px 0 4px"><strong>Weekly staples</strong> — items you buy every week without exception.</p>
+      <p class="prefs-sublabel" style="margin:16px 0 4px">Your recurring purchases — confirmed each week in Step 4.</p>
       <div id="staplesPanelList"></div>
-      <div style="margin-top:28px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <p class="prefs-sublabel"><strong>Frequent staples</strong> — items you buy most (but not every) week. You'll confirm which ones to include each session.</p>
-          <button class="btn" onclick="addFreqStapleFromPanel()" style="flex-shrink:0;margin-left:12px">+ add frequent</button>
-        </div>
-        <div id="staplesFreqList"></div>
-      </div>
     </div>
   </div>
 
@@ -817,5 +807,23 @@
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   }
 </script>
+
+<!-- FEEDBACK FAB + MODAL -->
+<button id="feedbackBtn" class="feedback-fab" onclick="openFeedbackModal()" aria-label="Give feedback" title="Give feedback">?</button>
+<div id="feedbackModal" class="feedback-modal" style="display:none" onclick="_closeFeedbackModal(event)">
+  <div class="feedback-modal-box">
+    <div class="feedback-modal-header">
+      <span class="feedback-modal-title">send feedback</span>
+      <button class="feedback-modal-close" onclick="closeFeedbackModal()">&#215;</button>
+    </div>
+    <div class="feedback-type-row">
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="bug" checked> bug</label>
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="suggestion"> suggestion</label>
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="other"> other</label>
+    </div>
+    <textarea id="feedbackText" class="feedback-textarea" rows="4" placeholder="What's on your mind?"></textarea>
+    <button class="btn primary" onclick="submitFeedback()">send</button>
+  </div>
+</div>
 </body>
 </html>
