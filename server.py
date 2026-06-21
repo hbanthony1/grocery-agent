@@ -45,6 +45,7 @@ STAPLES_PATH       = None
 SPEND_HISTORY_PATH = None
 GOOGLE_TOKEN_PATH  = None
 _DATA_DIR_OVERRIDE = None
+_DEMO_MODE         = False
 
 
 def _data_dir() -> str:
@@ -252,7 +253,7 @@ def _init_user_data(username: str) -> None:
             pass
 
 
-_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/me', '/manifest.json', '/service-worker.js'}
+_AUTH_EXEMPT = {'/login', '/logout', '/register', '/ping', '/api/mode', '/me', '/manifest.json', '/service-worker.js'}
 
 
 @app.before_request
@@ -291,6 +292,11 @@ def ping():
     return jsonify({"ok": True})
 
 
+@app.route('/api/mode')
+def api_mode():
+    return jsonify({"mode": "demo" if _DEMO_MODE else "live"})
+
+
 @app.route('/week-glance')
 def week_glance():
     """Aggregated data for the week-at-a-glance dashboard."""
@@ -301,22 +307,21 @@ def week_glance():
         prefs_data = {}
 
     pantry = _load_pantry()
-    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    day_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
     # Build meal map from lastWeekMeals: {day_name: {meal, isOut}}
     last_meals = prefs_data.get('lastWeekMeals', [])
     meal_map = {m['day']: m for m in last_meals if m.get('day')}
 
-    # Determine Monday of the planned week from mealHistory
+    # Determine the Sunday that starts the planned week from mealHistory
     meal_history = prefs_data.get('mealHistory', [])
-    week_monday_iso = None
+    week_sunday_iso = None
     if meal_history:
         try:
             from datetime import date as _date
             planning_date = _date.fromisoformat(meal_history[-1]['week'])
-            wd = planning_date.weekday()  # 0=Mon, 6=Sun
-            week_monday_iso = (planning_date + timedelta(days=1) if wd == 6
-                               else planning_date - timedelta(days=wd)).isoformat()
+            wd = planning_date.weekday()  # 0=Mon … 6=Sun
+            week_sunday_iso = (planning_date - timedelta(days=(wd + 1) % 7)).isoformat()
         except Exception:
             pass
 
@@ -333,10 +338,10 @@ def week_glance():
             'meal': m.get('meal', ''),
             'isOut': m.get('meal', '') == 'Out',
         }
-        if week_monday_iso:
+        if week_sunday_iso:
             try:
                 from datetime import date as _date
-                d = _date.fromisoformat(week_monday_iso) + timedelta(days=i)
+                d = _date.fromisoformat(week_sunday_iso) + timedelta(days=i)
                 day_entry['date'] = d.isoformat()
                 day_entry['dayNum'] = d.day
                 day_entry['month'] = d.strftime('%b')
@@ -1855,7 +1860,17 @@ def calendar_callback():
     except Exception as e:
         return f'Authorization failed: {e}. Try connecting again.', 400
     _save_google_creds(flow.credentials)
-    return redirect('/')
+    return '''<!DOCTYPE html><html><body>
+<script>
+  if (window.opener) {
+    window.opener.postMessage("calendar_connected", "*");
+    window.close();
+  } else {
+    window.location.href = "/";
+  }
+</script>
+<p>Connected! You can close this window.</p>
+</body></html>'''
 
 
 @app.route('/calendar/week')
@@ -2193,11 +2208,43 @@ def _print_startup(local_ip: str) -> None:
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--demo', action='store_true', help='Run in demo mode on port 5001 with isolated data/demo/ directory')
+    parser.add_argument('--seed', action='store_true', help='(with --demo) Copy live user data into data/demo/ before starting')
+    args = parser.parse_args()
+
+    port = 5000
+    if args.demo:
+        _DEMO_MODE = True
+        demo_dir = os.path.join(_DATA_ROOT, 'demo')
+        os.makedirs(demo_dir, exist_ok=True)
+        _DATA_DIR_OVERRIDE = demo_dir
+        _APP_BASE_URL = 'http://localhost:5001'
+        port = 5001
+
+        if args.seed:
+            users = _load_users()
+            live_users = users.get('users', {})
+            if live_users:
+                first_user = next(iter(live_users))
+                live_dir = os.path.join(_DATA_ROOT, 'users', first_user)
+                if os.path.isdir(live_dir):
+                    for fname in os.listdir(live_dir):
+                        src = os.path.join(live_dir, fname)
+                        if os.path.isfile(src):
+                            shutil.copy2(src, os.path.join(demo_dir, fname))
+                    print(f"  ✓  Demo seeded from live data ({first_user})")
+                else:
+                    print("  ⚠  No live user data directory found to seed from")
+            else:
+                print("  ⚠  No users found — demo will start empty")
+
     if app.secret_key == 'grocery-agent-local-dev-secret':
         print("  ⚠  FLASK_SECRET_KEY not set — sessions are insecure (OK for local use only)")
     users = _load_users()
-    if not users['users']:
-        print("  → No accounts yet. Visit http://localhost:5000/login to create yours.")
+    if not users['users'] and not args.demo:
+        print(f"  → No accounts yet. Visit http://localhost:{port}/login to create yours.")
     local_ip = _get_local_ip()
     _print_startup(local_ip)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)

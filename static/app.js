@@ -639,7 +639,7 @@ function renderCalBanner(status) {
         <div class="cal-empty-title">Connect Google Calendar</div>
         <div class="cal-empty-desc">Sync your week's events so the meal planner can match dinner complexity to your schedule.</div>
       </div>
-      <a class="btn primary" href="/calendar/auth">Connect →</a>
+      <a class="btn primary" href="/calendar/auth" target="_blank" rel="noopener" onclick="window._calAuthWin=window.open('/calendar/auth','_calauth','width=520,height=640');return false;">Connect →</a>
     </div>`;
   }
 }
@@ -5042,3 +5042,28 @@ loadRecipes();
 loadPantry().then(() => renderPantryToggle());
 loadStaples().then(() => renderStaplesStep());
 loadCalendarStatus();
+
+(async () => {
+  try {
+    const r = await fetch('/api/mode');
+    if (r.ok) {
+      const { mode } = await r.json();
+      if (mode === 'demo') {
+        document.title = '[DEMO] Grocery Agent';
+        const badge = document.createElement('span');
+        badge.id = 'demoBadge';
+        badge.textContent = 'DEMO';
+        badge.style.cssText = 'background:var(--primary);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;padding:3px 10px;border-radius:var(--r-pill);margin-right:8px;pointer-events:none;';
+        const actions = document.querySelector('.top-nav-actions');
+        if (actions) actions.prepend(badge);
+      }
+    }
+  } catch(e) {}
+})();
+
+window.addEventListener('message', async (e) => {
+  if (e.data === 'calendar_connected') {
+    await loadCalendarStatus();
+    renderSchedule();
+  }
+});
