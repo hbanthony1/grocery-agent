@@ -1750,6 +1750,8 @@ def build_cart():
             for dishes in holiday['menu'].values():
                 holiday_dishes.extend(dishes)
             job_sources = job_sources + [(dish, 'holiday') for dish in holiday_dishes if dish]
+        elif holiday.get('items'):
+            job_sources = job_sources + [(item, 'vacation') for item in holiday['items'] if item]
         elif holiday.get('type'):
             holiday_label = f"{holiday['type']} for {holiday.get('guests', 8)} people"
             job_sources = job_sources + [(holiday_label, 'holiday')]
@@ -1878,7 +1880,7 @@ def build_cart():
                 not_found.append(task['search_query'])
                 print(f"  - No result: {task['search_query']}")
 
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'dessert', 'Snacks', 'training', 'staples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'vacation', 'dessert', 'Snacks', 'training', 'staples', 'household']
         cart_url = build_cart_url(cart_items, staple_items=[])
 
         print(f"\nCart URL: {cart_url}")

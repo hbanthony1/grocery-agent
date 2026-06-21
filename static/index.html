@@ -686,10 +686,33 @@
       <div class="card">
         <div class="card-label">event</div>
         <div class="meal-pick-grid" id="hpTypePicker"></div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <div id="hpGuestsRow" style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
           <span class="prefs-sublabel" style="margin:0">guests</span>
           <input id="hpGuests" type="number" class="schedule-note" min="1" max="80" style="width:72px">
           <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpGenerateBtn" onclick="generateHolidayMenu()">generate menu →</button>
+        </div>
+        <div id="hpVacationControls" style="display:none;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <span class="prefs-sublabel" style="margin:0">trip type</span>
+            <select id="hpTripType" class="schedule-note" style="width:auto;padding:5px 10px;font-size:12px">
+              <option>Road trip</option>
+              <option>Flight</option>
+              <option>Hotel stay</option>
+            </select>
+          </div>
+          <div style="margin-bottom:10px">
+            <span class="prefs-sublabel" style="display:block;margin-bottom:6px">which days are you away?</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <label class="athlete-day-pill"><input type="checkbox" value="Sunday"    class="hp-vac-day"> Sun</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Monday"    class="hp-vac-day"> Mon</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Tuesday"   class="hp-vac-day"> Tue</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="hp-vac-day"> Wed</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Thursday"  class="hp-vac-day"> Thu</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Friday"    class="hp-vac-day"> Fri</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Saturday"  class="hp-vac-day"> Sat</label>
+            </div>
+          </div>
+          <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpVacGenBtn" onclick="generateVacationPlan()">plan travel food →</button>
         </div>
       </div>
       <div id="hpMenuCard" style="display:none">
@@ -698,13 +721,19 @@
           <div id="hpMenuBody"></div>
         </div>
       </div>
+      <div id="hpTravelCard" style="display:none">
+        <div class="card">
+          <div class="card-label">travel food <span style="font-size:10px;font-weight:400;opacity:0.55">(one item per line)</span></div>
+          <textarea id="hpTravelItems" class="prefs-notes-area" rows="8" placeholder="Granola bars&#10;String cheese&#10;Trail mix…"></textarea>
+        </div>
+      </div>
       <div id="hpNotesCard" style="display:none">
         <div class="card" style="display:flex;flex-direction:column;gap:14px">
           <div>
-            <span class="prefs-sublabel">guest notes</span>
+            <span class="prefs-sublabel">notes</span>
             <textarea id="hpNotes" class="prefs-notes-area" rows="3" placeholder="dietary restrictions, special guests, allergies..."></textarea>
           </div>
-          <div>
+          <div id="hpTimelineRow">
             <span class="prefs-sublabel">prep timeline</span>
             <textarea id="hpTimeline" class="prefs-notes-area" rows="4" placeholder="e.g. Thursday 8am: turkey in oven · 2pm: prep sides..."></textarea>
           </div>

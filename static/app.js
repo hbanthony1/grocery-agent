@@ -143,7 +143,7 @@ const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes'
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
 const SNACK_OPTIONS     = ['Trail mix', 'Chips & salsa', 'Crackers & cheese', 'Popcorn', 'Granola bars', 'Veggies & hummus', 'Fruit'];
-const HOLIDAY_OPTIONS   = ['Thanksgiving dinner', 'Christmas dinner', 'Easter brunch', 'Fourth of July cookout', 'Halloween party', 'Birthday party', 'Game day spread'];
+const HOLIDAY_OPTIONS   = ['Thanksgiving dinner', 'Christmas dinner', 'Easter brunch', 'Fourth of July cookout', 'Halloween party', 'Birthday party', 'Game day spread', 'Vacation / Trip'];
 
 function toTitleCase(s) {
   return (s || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -2592,12 +2592,23 @@ function _renderHolidayPlanner() {
   }
   const gEl = document.getElementById('hpGuests');
   if (gEl) gEl.value = curGuests;
-  if (weekHoliday?.menu) {
+  const isVacation = (weekHoliday?.type === 'Vacation / Trip');
+  _syncHpMode(isVacation);
+  if (isVacation && weekHoliday) {
+    const ttEl = document.getElementById('hpTripType');
+    if (ttEl) ttEl.value = weekHoliday.tripType || 'Road trip';
+    const vacDaySet = new Set(weekHoliday.vacDays || []);
+    document.querySelectorAll('.hp-vac-day').forEach(cb => { cb.checked = vacDaySet.has(cb.value); });
+    if (weekHoliday.items?.length) {
+      const tc = document.getElementById('hpTravelCard');
+      if (tc) tc.style.display = 'block';
+      const ta = document.getElementById('hpTravelItems');
+      if (ta) ta.value = weekHoliday.items.join('\n');
+      document.getElementById('hpNotesCard').style.display = 'block';
+    }
+  } else if (weekHoliday?.menu) {
     _renderHolidayMenuEdit(weekHoliday.menu);
     document.getElementById('hpNotesCard').style.display = 'block';
-  } else {
-    const mc = document.getElementById('hpMenuCard'); if (mc) mc.style.display = 'none';
-    const nc = document.getElementById('hpNotesCard'); if (nc) nc.style.display = 'none';
   }
   const nEl = document.getElementById('hpNotes');
   if (nEl) nEl.value = weekHoliday?.notes || '';
@@ -2607,6 +2618,21 @@ function _renderHolidayPlanner() {
 
 function selectHpType(type) {
   document.querySelectorAll('#hpTypePicker .meal-pick-chip').forEach(c => c.classList.toggle('selected', c.dataset.opt === type));
+  _syncHpMode(type === 'Vacation / Trip');
+}
+
+function _syncHpMode(isVacation) {
+  const gr = document.getElementById('hpGuestsRow');
+  const vc = document.getElementById('hpVacationControls');
+  const mc = document.getElementById('hpMenuCard');
+  const tc = document.getElementById('hpTravelCard');
+  const tr = document.getElementById('hpTimelineRow');
+  if (gr) gr.style.display     = isVacation ? 'none' : '';
+  if (vc) vc.style.display     = isVacation ? 'block' : 'none';
+  if (mc) mc.style.display     = 'none';
+  if (tc) tc.style.display     = 'none';
+  if (tr) tr.style.display     = isVacation ? 'none' : '';
+  document.getElementById('hpNotesCard').style.display = 'none';
 }
 
 async function generateHolidayMenu() {
@@ -2637,6 +2663,35 @@ async function generateHolidayMenu() {
   }
 }
 
+async function generateVacationPlan() {
+  const tripType = document.getElementById('hpTripType')?.value || 'Road trip';
+  const vacDays  = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
+  const days     = vacDays.length || 3;
+  const btn = document.getElementById('hpVacGenBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'planning...'; }
+  const tc = document.getElementById('hpTravelCard');
+  const ta = document.getElementById('hpTravelItems');
+  if (tc) tc.style.display = 'block';
+  if (ta) ta.value = '';
+  try {
+    const resp = await fetch('/claude-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: `Plan travel food for a family of 4 on a ${days}-day ${tripType.toLowerCase()}. List snacks and easy meals to pack or buy. Return ONLY a JSON array of item names, no markdown:\n["Granola bars","String cheese","Trail mix","Juice boxes","Peanut butter crackers","Dried fruit","Protein bars","Apple slices","Goldfish crackers","Beef jerky"]`
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    const items = JSON.parse((data.content || '').replace(/```json|```/g, '').trim());
+    if (ta) ta.value = items.join('\n');
+    document.getElementById('hpNotesCard').style.display = 'block';
+  } catch(e) {
+    if (ta) ta.value = '(could not generate — type items manually)';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'plan travel food →'; }
+  }
+}
+
 function _renderHolidayMenuEdit(menu) {
   const menuCard = document.getElementById('hpMenuCard');
   const menuBody = document.getElementById('hpMenuBody');
@@ -2662,32 +2717,55 @@ function saveHolidayPlan() {
   const selected = document.querySelector('#hpTypePicker .meal-pick-chip.selected');
   const type = selected?.dataset.opt || weekHoliday?.type || '';
   if (!type) { showToast('Pick an event type first'); return; }
-  const guests   = parseInt(document.getElementById('hpGuests')?.value) || 8;
-  const notes    = document.getElementById('hpNotes')?.value.trim() || '';
-  const timeline = document.getElementById('hpTimeline')?.value.trim() || '';
-  let menu = null;
-  const menuCard = document.getElementById('hpMenuCard');
-  if (menuCard?.style.display !== 'none') {
-    menu = {};
-    ['appetizers','mains','sides','desserts'].forEach(k => {
-      const ta = document.getElementById(`hpMenu-${k}`);
-      menu[k] = ta ? ta.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
-    });
+  const isVacation = type === 'Vacation / Trip';
+  if (isVacation) {
+    const tripType = document.getElementById('hpTripType')?.value || 'Road trip';
+    const vacDays  = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
+    const ta       = document.getElementById('hpTravelItems');
+    const items    = ta ? ta.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    const notes    = document.getElementById('hpNotes')?.value.trim() || '';
+    weekHoliday = { type, tripType, vacDays, items, notes };
+    vacDays.forEach(day => { if (schedule[day]) schedule[day].complexity = 'out'; });
+    renderSchedule();
+  } else {
+    const guests   = parseInt(document.getElementById('hpGuests')?.value) || 8;
+    const notes    = document.getElementById('hpNotes')?.value.trim() || '';
+    const timeline = document.getElementById('hpTimeline')?.value.trim() || '';
+    let menu = null;
+    const menuCard = document.getElementById('hpMenuCard');
+    if (menuCard?.style.display !== 'none') {
+      menu = {};
+      ['appetizers','mains','sides','desserts'].forEach(k => {
+        const ta = document.getElementById(`hpMenu-${k}`);
+        menu[k] = ta ? ta.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
+      });
+    }
+    weekHoliday = { type, guests, menu, notes, timeline };
   }
-  weekHoliday = { type, guests, menu, notes, timeline };
   closeHolidayPlanner();
   document.getElementById('navHoliday')?.classList.add('active');
   const card = document.getElementById('holidayCard');
   if (card) { card.style.display = 'block'; card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   renderHolidaySection();
-  showToast('Holiday plan saved');
+  showToast(isVacation ? 'Vacation plan saved — away days marked out' : 'Holiday plan saved');
 }
 
 function renderHolidaySection() {
   const el = document.getElementById('holidaySection');
-  if (!el) return;
-  if (!weekHoliday?.type) {
-    el.innerHTML = '';
+  if (!el || !weekHoliday?.type) { if (el) el.innerHTML = ''; return; }
+  if (weekHoliday.type === 'Vacation / Trip') {
+    const n = (weekHoliday.vacDays || []).length;
+    const preview = (weekHoliday.items || []).slice(0, 4).join(' · ');
+    el.innerHTML = `<div class="meal-pick-banner" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <div style="display:flex;width:100%;justify-content:space-between;align-items:center">
+        <span>✈ ${weekHoliday.tripType || 'Vacation'} · ${n} day${n !== 1 ? 's' : ''} away</span>
+        <div>
+          <button class="btn-link" onclick="openHolidayPlanner()">edit →</button>
+          <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="clearHolidayPlan()">remove</button>
+        </div>
+      </div>
+      ${preview ? `<span style="font-size:11px;opacity:0.65">${preview}…</span>` : ''}
+    </div>`;
     return;
   }
   const allDishes = weekHoliday.menu ? Object.values(weekHoliday.menu).flat() : [];
