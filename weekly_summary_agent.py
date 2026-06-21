@@ -15,10 +15,29 @@ from email.mime.multipart import MIMEMultipart
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-SCHEDULE_PATH = os.path.join(SCRIPT_DIR, 'data', 'meal_schedule.json')
-PREFS_PATH    = os.path.join(SCRIPT_DIR, 'data', 'prefs.json')
-TOKEN_PATH    = os.path.join(SCRIPT_DIR, 'data', 'google_token.json')
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _user_data_dir():
+    """Return the data directory for the first registered user, falling back to data/."""
+    users_path = os.path.join(SCRIPT_DIR, 'data', 'users.json')
+    try:
+        with open(users_path, encoding='utf-8') as f:
+            users = json.load(f).get('users', {})
+        if users:
+            first_user = next(iter(users))
+            user_dir = os.path.join(SCRIPT_DIR, 'data', 'users', first_user)
+            if os.path.isdir(user_dir):
+                return user_dir
+    except Exception:
+        pass
+    return os.path.join(SCRIPT_DIR, 'data')
+
+
+_DATA_DIR     = _user_data_dir()
+SCHEDULE_PATH = os.path.join(_DATA_DIR, 'meal_schedule.json')
+PREFS_PATH    = os.path.join(_DATA_DIR, 'prefs.json')
+TOKEN_PATH    = os.path.join(_DATA_DIR, 'google_token.json')
 
 load_dotenv(os.path.join(SCRIPT_DIR, '.env'))
 
@@ -31,7 +50,14 @@ except ImportError:
     _GCAL_AVAILABLE = False
 
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
-DAYS_ORDER    = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+DAYS_ORDER    = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+
+def _safe_date(s):
+    try:
+        return datetime.date.fromisoformat(s)
+    except Exception:
+        return None
 
 
 def _load_json(path):
@@ -52,7 +78,7 @@ def _get_timezone():
 
 
 def _week_range_from_schedule(schedule):
-    """Return (monday_date, sunday_date) for the week covered by the schedule."""
+    """Return (sunday_date, saturday_date) for the week covered by the schedule."""
     dates = []
     for entry in (schedule or []):
         try:
@@ -60,20 +86,18 @@ def _week_range_from_schedule(schedule):
         except Exception:
             pass
     if dates:
-        monday = min(dates)
-        # Ensure we start on Monday
-        monday -= datetime.timedelta(days=monday.weekday())
-        sunday = monday + datetime.timedelta(days=6)
-        return monday, sunday
+        earliest = min(dates)
+        # Anchor to the Sunday of that week (weekday(): Mon=0 … Sun=6)
+        sunday = earliest - datetime.timedelta(days=(earliest.weekday() + 1) % 7)
+        return sunday, sunday + datetime.timedelta(days=6)
     return None, None
 
 
-def _upcoming_week(tz):
-    """Mon–Sun of the week that starts tomorrow (used on Sundays + fallback)."""
+def _current_week(tz):
+    """Sun–Sat of the week containing today."""
     today = datetime.datetime.now(tz).date()
-    days_until_monday = (7 - today.weekday()) % 7 or 7
-    monday = today + datetime.timedelta(days=days_until_monday)
-    return monday, monday + datetime.timedelta(days=6)
+    sunday = today - datetime.timedelta(days=(today.weekday() + 1) % 7)
+    return sunday, sunday + datetime.timedelta(days=6)
 
 
 def _load_google_creds():
@@ -164,9 +188,8 @@ def _build_email(schedule, calendar_events, monday, sunday):
     lines.append("─" * 40)
     if meals_by_day:
         for day in DAYS_ORDER:
-            meal = meals_by_day.get(day)
-            if meal:
-                lines.append(f"{day:<12}{meal}")
+            meal = meals_by_day.get(day) or '—'
+            lines.append(f"{day:<12}{meal}")
     else:
         lines.append("No meal plan found — run a planning session first.")
     lines.append("")
@@ -197,12 +220,12 @@ def _build_email(schedule, calendar_events, monday, sunday):
     if meals_by_day:
         for day in DAYS_ORDER:
             meal = meals_by_day.get(day)
-            if meal:
-                meal_rows += f"""
+            meal_cell = e(meal) if meal else '<span style="color:#bbb">—</span>'
+            meal_rows += f"""
         <tr>
           <td style="padding:9px 14px 9px 0;border-bottom:1px solid #f0f0f0;
                      font-weight:600;color:#555;white-space:nowrap;width:100px">{e(day)}</td>
-          <td style="padding:9px 0;border-bottom:1px solid #f0f0f0;">{e(meal)}</td>
+          <td style="padding:9px 0;border-bottom:1px solid #f0f0f0;">{meal_cell}</td>
         </tr>"""
     else:
         meal_rows = """
@@ -252,9 +275,25 @@ def _build_email(schedule, calendar_events, monday, sunday):
     return plain, body
 
 
+def _resolve_recipients() -> list[str]:
+    prefs_path = os.path.join(_DATA_DIR, 'prefs.json')
+    try:
+        with open(prefs_path, encoding='utf-8') as f:
+            p = json.load(f)
+        emails = p.get('emails') or []
+        if not emails and p.get('email'):
+            emails = [p['email']]
+    except Exception:
+        emails = []
+    if not emails:
+        env_val = os.getenv('GMAIL_TO', 'hbanthony1@gmail.com')
+        emails = [e.strip() for e in env_val.split(',') if e.strip()]
+    return emails
+
+
 def send_summary(schedule, calendar_events, monday, sunday) -> None:
-    to_email   = os.getenv('GMAIL_TO', 'hbanthony1@gmail.com')
-    from_email = os.getenv('GMAIL_FROM', to_email)
+    recipients = _resolve_recipients()
+    from_email = os.getenv('GMAIL_FROM', recipients[0])
     app_pw     = os.getenv('GMAIL_APP_PASSWORD', '')
     if not app_pw:
         raise ValueError('GMAIL_APP_PASSWORD not set in .env')
@@ -264,7 +303,7 @@ def send_summary(schedule, calendar_events, monday, sunday) -> None:
 
     msg              = MIMEMultipart('alternative')
     msg['From']      = from_email
-    msg['To']        = to_email
+    msg['To']        = ', '.join(recipients)
     msg['Subject']   = f"Week of {week_label}"
     msg.attach(MIMEText(plain, 'plain'))
     msg.attach(MIMEText(html_body, 'html'))
@@ -278,10 +317,18 @@ def main():
     test_mode = '--test' in sys.argv
     tz        = _get_timezone()
     schedule  = _load_json(SCHEDULE_PATH) or []
+    today     = datetime.datetime.now(tz).date()
 
     monday, sunday = _week_range_from_schedule(schedule)
-    if monday is None:
-        monday, sunday = _upcoming_week(tz)
+    # If no schedule or it's from a past week, fall back to the current Sun–Sat week
+    if monday is None or monday < today:
+        monday, sunday = _current_week(tz)
+
+    # Only include entries that fall within the selected week
+    schedule = [
+        e for e in schedule
+        if _safe_date(e.get('date')) is not None and monday <= _safe_date(e['date']) <= sunday
+    ]
 
     cal_events = _get_calendar_events(monday, sunday, tz)
 

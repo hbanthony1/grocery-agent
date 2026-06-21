@@ -247,7 +247,7 @@ function stopMicrocopy() {
 }
 
 
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const DAY_ABBR = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
 
 // ===== NAVIGATION =====
@@ -540,13 +540,13 @@ function removeHhExtra(i) {
 
 // ===== SCHEDULE =====
 const SCHEDULE_DAYS = [
+  { key: 'Sunday',    short: 'Sun', default: 'open'   },
   { key: 'Monday',    short: 'Mon', default: 'normal' },
   { key: 'Tuesday',   short: 'Tue', default: 'normal' },
   { key: 'Wednesday', short: 'Wed', default: 'normal' },
   { key: 'Thursday',  short: 'Thu', default: 'normal' },
   { key: 'Friday',    short: 'Fri', default: 'quick'  },
   { key: 'Saturday',  short: 'Sat', default: 'open'   },
-  { key: 'Sunday',    short: 'Sun', default: 'open'   },
 ];
 const COMPLEXITY_CYCLE = ['normal', 'quick', 'open', 'out'];
 const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open', out: 'Out' };
@@ -3048,12 +3048,10 @@ Set isNew:true only for the brand new recipes.`;
 
 function getUpcomingWeekDates() {
   const today = new Date(); today.setHours(0,0,0,0);
-  const dow = today.getDay();
-  const toMon = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
-  const mon = new Date(today); mon.setDate(today.getDate() + toMon);
+  const sun = new Date(today); sun.setDate(today.getDate() - today.getDay());
   const result = {};
-  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach((d,i) => {
-    const dt = new Date(mon); dt.setDate(mon.getDate()+i);
+  ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach((d,i) => {
+    const dt = new Date(sun); dt.setDate(sun.getDate()+i);
     result[d] = dt.getDate();
   });
   return result;
@@ -3061,12 +3059,10 @@ function getUpcomingWeekDates() {
 
 function getUpcomingWeekFullDates() {
   const today = new Date(); today.setHours(0,0,0,0);
-  const dow = today.getDay();
-  const toMon = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
-  const mon = new Date(today); mon.setDate(today.getDate() + toMon);
+  const sun = new Date(today); sun.setDate(today.getDate() - today.getDay());
   const result = {};
-  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach((d,i) => {
-    const dt = new Date(mon); dt.setDate(mon.getDate()+i);
+  ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach((d,i) => {
+    const dt = new Date(sun); dt.setDate(sun.getDate()+i);
     result[d] = dt.toISOString().split('T')[0];
   });
   return result;
