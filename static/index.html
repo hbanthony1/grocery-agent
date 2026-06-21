@@ -667,11 +667,37 @@
         <a class="btn" href="/pantry/export" download="pantry.csv">export CSV</a>
         <button class="btn" id="pantryImportBtn" onclick="document.getElementById('pantryImportFile').click()">import CSV</button>
         <input type="file" id="pantryImportFile" accept=".csv" style="display:none" onchange="handlePantryImport(this)">
+        <button class="btn" onclick="openOrderUpload()">from order →</button>
       </div>
     </div>
     <div class="recipes-page-body">
       <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
       <div id="pantryList"></div>
+      <div id="orderUploadCard" style="display:none">
+        <div class="card" style="margin-top:12px">
+          <div class="card-label">import from walmart order</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn order-tab-btn active" id="orderTabCsv" onclick="switchOrderTab('csv')">paste CSV</button>
+            <button class="btn order-tab-btn" id="orderTabPdf" onclick="switchOrderTab('pdf')">upload PDF</button>
+          </div>
+          <div id="orderCsvSection">
+            <textarea id="orderCsvInput" class="prefs-notes-area" rows="5" placeholder="Paste your Walmart order history CSV text here…"></textarea>
+          </div>
+          <div id="orderPdfSection" style="display:none">
+            <input type="file" id="orderPdfInput" accept=".pdf" style="font-size:13px;margin-bottom:4px">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <button class="btn primary" onclick="parseWalmartOrder()">parse →</button>
+            <button class="btn" onclick="closeOrderUpload()">cancel</button>
+            <span id="orderParseStatus" style="font-size:12px;color:var(--text3)"></span>
+          </div>
+          <div id="orderResultsSection" style="display:none;margin-top:12px">
+            <div class="card-label" style="margin-bottom:8px">found items — check what to add</div>
+            <div id="orderItemsList"></div>
+            <button class="btn primary" style="margin-top:8px" onclick="confirmOrderItems()">add to pantry →</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -506,13 +506,14 @@ const SCHEDULE_DAYS = [
   { key: 'Friday',    short: 'Fri', default: 'quick'  },
   { key: 'Saturday',  short: 'Sat', default: 'open'   },
 ];
-const COMPLEXITY_CYCLE = ['normal', 'quick', 'open', 'out'];
-const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open', out: 'Out' };
+const COMPLEXITY_CYCLE = ['normal', 'quick', 'open', 'leftovers', 'out'];
+const COMPLEXITY_LABEL = { normal: 'Normal', quick: 'Quick', open: 'Open', leftovers: 'Leftovers', out: 'Out' };
 const COMPLEXITY_DESC  = {
-  quick:  'QUICK — 30 min or less (frozen, heat-and-eat, or simple assembly)',
-  normal: 'NORMAL — standard weeknight (30–60 min)',
-  open:   'OPEN — plenty of time (elaborate recipes welcome: lasagna, slow cooker, etc.)',
-  out:    'OUT — eating out or away from home, no dinner needed',
+  quick:     'QUICK — 30 min or less (frozen, heat-and-eat, or simple assembly)',
+  normal:    'NORMAL — standard weeknight (30–60 min)',
+  open:      'OPEN — plenty of time (elaborate recipes welcome: lasagna, slow cooker, etc.)',
+  leftovers: "LEFTOVERS — using what's in the fridge, no new ingredients needed",
+  out:       'OUT — eating out or away from home, no dinner needed',
 };
 
 let schedule = {};
@@ -618,7 +619,7 @@ function cycleComplexity(day) {
 
 function buildSchedulePrompt() {
   return SCHEDULE_DAYS
-    .filter(d => schedule[d.key].complexity !== 'out')
+    .filter(d => !['out', 'leftovers'].includes(schedule[d.key].complexity))
     .map(d => `- ${d.key}: ${COMPLEXITY_DESC[schedule[d.key].complexity]}`)
     .join('\n');
 }
@@ -3054,9 +3055,10 @@ async function runMealPlan() {
       ).join('\n')}\n`
     : '';
 
-  const outDays  = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity === 'out').map(d => d.key);
-  const planDays = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity !== 'out').map(d => d.key);
-  const dinnerCount = planDays.length;
+  const outDays      = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity === 'out').map(d => d.key);
+  const leftoverDays = SCHEDULE_DAYS.filter(d => schedule[d.key].complexity === 'leftovers').map(d => d.key);
+  const planDays     = SCHEDULE_DAYS.filter(d => !['out', 'leftovers'].includes(schedule[d.key].complexity)).map(d => d.key);
+  const dinnerCount  = planDays.length;
 
   const newMealInstruction = includeNew
     ? `IMPORTANT: Exactly 2 of the planned meals must be completely new recipes this family has NOT cooked before.
@@ -3066,9 +3068,11 @@ async function runMealPlan() {
        The remaining meals should come from their recipe book or favorites list, rotating in variety.`
     : `All planned meals should come from the recipe book or favorites list, rotating for variety.`;
 
-  const outNote = outDays.length
-    ? `\nSkip these days entirely — family is eating out or has no dinner planned: ${outDays.join(', ')}\n`
-    : '';
+  const skipNotes = [
+    ...outDays.map(d => `${d} (eating out)`),
+    ...leftoverDays.map(d => `${d} (leftovers — no meal needed)`),
+  ];
+  const outNote = skipNotes.length ? `\nSkip these days entirely: ${skipNotes.join(', ')}\n` : '';
 
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly ${dinnerCount} dinners — one for each of: ${planDays.join(', ')}.
@@ -4898,6 +4902,101 @@ async function handlePantryImport(input) {
   }
   input.value = '';
   if (btn) setTimeout(() => { btn.textContent = 'import CSV'; btn.disabled = false; }, 3000);
+}
+
+let _orderParsedItems = [];
+
+function openOrderUpload() {
+  const card = document.getElementById('orderUploadCard');
+  if (card) { card.style.display = 'block'; card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
+function closeOrderUpload() {
+  const card = document.getElementById('orderUploadCard');
+  if (card) card.style.display = 'none';
+  _orderParsedItems = [];
+  const s  = document.getElementById('orderResultsSection'); if (s)  s.style.display = 'none';
+  const st = document.getElementById('orderParseStatus');    if (st) st.textContent = '';
+  const ti = document.getElementById('orderCsvInput');       if (ti) ti.value = '';
+  const pi = document.getElementById('orderPdfInput');       if (pi) pi.value = '';
+}
+
+function switchOrderTab(tab) {
+  document.getElementById('orderCsvSection').style.display = tab === 'csv' ? '' : 'none';
+  document.getElementById('orderPdfSection').style.display = tab === 'pdf' ? '' : 'none';
+  document.querySelectorAll('.order-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tab === 'csv' ? 'orderTabCsv' : 'orderTabPdf')?.classList.add('active');
+}
+
+async function parseWalmartOrder() {
+  const status    = document.getElementById('orderParseStatus');
+  const pdfHidden = document.getElementById('orderPdfSection')?.style.display === 'none';
+  const activeTab = pdfHidden ? 'csv' : 'pdf';
+  let body;
+  if (activeTab === 'csv') {
+    const csv = document.getElementById('orderCsvInput')?.value.trim();
+    if (!csv) { if (status) status.textContent = 'Paste your CSV first'; return; }
+    body = { csv };
+  } else {
+    const file = document.getElementById('orderPdfInput')?.files[0];
+    if (!file) { if (status) status.textContent = 'Choose a PDF first'; return; }
+    const pdf = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    body = { pdf };
+  }
+  if (status) status.textContent = 'Parsing…';
+  try {
+    const endpoint = activeTab === 'csv' ? '/feedback/order-csv' : '/feedback/order-pdf';
+    const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Parse failed');
+    _orderParsedItems = data.pantryItems || [];
+    if (status) status.textContent = `Found ${_orderParsedItems.length} items`;
+    _renderOrderResults();
+  } catch(e) {
+    if (status) status.textContent = `Error: ${e.message}`;
+  }
+}
+
+function _renderOrderResults() {
+  const section = document.getElementById('orderResultsSection');
+  const list    = document.getElementById('orderItemsList');
+  if (!section || !list) return;
+  section.style.display = _orderParsedItems.length ? 'block' : 'none';
+  list.innerHTML = _orderParsedItems.map((item, i) => {
+    const esc = (item.name || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `<div class="order-result-row">
+      <input type="checkbox" id="orderItem${i}" checked>
+      <label for="orderItem${i}" style="flex:1;cursor:pointer">${esc}</label>
+      <input class="schedule-note" style="width:52px" value="${item.amount || ''}" placeholder="qty"
+             oninput="_orderParsedItems[${i}].amount=this.value">
+      <input class="schedule-note" style="width:64px" value="${item.unit || ''}" placeholder="unit"
+             oninput="_orderParsedItems[${i}].unit=this.value">
+    </div>`;
+  }).join('');
+}
+
+async function confirmOrderItems() {
+  const items = _orderParsedItems
+    .filter((_, i) => document.getElementById(`orderItem${i}`)?.checked)
+    .map(item => ({ name: item.name, amount: item.amount || '', unit: item.unit || '' }));
+  if (!items.length) { showToast('No items selected'); return; }
+  try {
+    const resp = await fetch('/pantry/batch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }),
+    });
+    if (!resp.ok) throw new Error('Failed to add items');
+    await loadPantry();
+    renderPantryPanel();
+    closeOrderUpload();
+    showToast(`${items.length} item${items.length !== 1 ? 's' : ''} added to pantry`);
+  } catch(e) {
+    showToast(`Error: ${e.message}`, { type: 'error' });
+  }
 }
 
 async function handleRecipesImport(input) {
