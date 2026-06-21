@@ -175,6 +175,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .btn-nav { background: none; border: 1.5px solid var(--border); border-radius: var(--r-pill); padding: 6px 14px; font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 120ms; }
 .btn-nav:hover { background: var(--surface); color: var(--text); border-color: #C8C8C8; }
 .btn-nav.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.btn-nav-icon { padding: 6px 10px; font-size: 15px; opacity: 0.6; }
+.btn-nav-icon:hover { opacity: 1; }
 
 /* Step progress cards (hero) */
 .hero-steps { display: flex; align-items: center; gap: 0; margin-bottom: 28px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-xl); padding: 4px; }
@@ -281,7 +283,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .cx-quick  { background: var(--accent-light);   color: var(--accent-dark); }
 .cx-normal { background: var(--approval-light); color: var(--approval); }
 .cx-open   { background: var(--surface2);       color: var(--text2); }
-.cx-out    { background: var(--surface);        color: var(--text3); }
+.cx-out      { background: var(--surface);  color: var(--text3); }
+.cx-leftovers { background: var(--surface2); color: var(--text2); }
 
 .btn-swap { background: none; border: 1.5px solid var(--border); border-radius: var(--r); padding: 4px 8px; font-size: 12px; color: var(--text3); cursor: pointer; transition: all 120ms; flex-shrink: 0; }
 .btn-swap:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
@@ -296,6 +299,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 .meal-card.easy-meal { background: var(--approval-light); border-left-color: var(--approval); }
 .meal-card.out-night { opacity: 0.55; }
 .meal-card.out-night .meal-name { color: var(--text2); font-style: italic; cursor: default; }
+.meal-card.leftovers-night { opacity: 0.65; }
+.meal-card.leftovers-night .meal-name { color: var(--text2); font-style: italic; cursor: default; }
 
 /* Serving size stepper */
 .serving-size-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
@@ -576,6 +581,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 /* Swap picker */
 .swap-recipe-picker { display: flex; flex-direction: column; gap: 4px; }
 .swap-picker-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.04em; text-transform: uppercase; }
+.swap-leftovers-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--surface); font-size: 12px; color: var(--text2); cursor: pointer; transition: all 120ms; margin-bottom: 6px; }
+.swap-leftovers-btn:hover { border-color: var(--text2); color: var(--text); }
 .swap-recipe-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface); cursor: pointer; transition: all 120ms; }
 .swap-recipe-item:hover { border-color: var(--primary); background: var(--primary-light); }
 .swap-recipe-stars { flex-shrink: 0; }
@@ -1059,6 +1066,10 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
   font-style: italic;
   color: var(--text3);
 }
+.dash-day-col.leftovers .dash-day-dinner {
+  font-style: italic;
+  color: var(--text2);
+}
 
 .dash-day-abbr {
   font-family: var(--mono);
@@ -1338,6 +1349,11 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 }
 .dash-sheet-action:hover { border-color: var(--primary); color: var(--primary); }
 .dash-sheet-action.out-active {
+  background: var(--surface2);
+  border-color: var(--text2);
+  color: var(--text);
+}
+.dash-sheet-action.leftovers-active {
   background: var(--surface2);
   border-color: var(--text2);
   color: var(--text);

@@ -794,10 +794,10 @@ async function loadDashboard() {
       const isToday   = d.day === todayDay;
       const isPast    = d.date && d.date < todayIso;
       const events    = data.calendarEvents ? (data.calendarEvents[d.day] || []) : [];
-      const hasRecipe = d.meal && !d.isOut;
+      const hasRecipe = d.meal && !d.isOut && !d.isLeftovers;
       const dayClass  = ['dash-day-col',
         isToday ? 'today' : isPast ? 'past' : '',
-        d.isOut ? 'out' : (!d.meal ? 'empty' : ''),
+        d.isOut ? 'out' : (d.isLeftovers ? 'leftovers' : (!d.meal ? 'empty' : '')),
         hasRecipe ? 'has-recipe' : '',
       ].filter(Boolean).join(' ');
 
@@ -806,7 +806,7 @@ async function loadDashboard() {
       ).join('');
 
       const escapedDay  = d.day.replace(/'/g, "\\'");
-      const mealLabel   = d.isOut ? 'Out' : (d.meal || (d.date ? '—' : ''));
+      const mealLabel   = d.isOut ? 'Out' : (d.isLeftovers ? 'Leftovers' : (d.meal || (d.date ? '—' : '')));
       const dinnerHtml  = `<span class="dash-day-dinner">${mealLabel}</span>`;
 
       return `<div class="${dayClass}" onclick="openDashMealSheet('${escapedDay}')" title="Edit ${d.day} dinner">
@@ -1025,18 +1025,22 @@ function openDashMealSheet(day) {
 
   document.getElementById('dashMealSheetDay').textContent = day;
   const inp = document.getElementById('dashMealSheetInput');
-  inp.value = currentMeal === 'Out' ? '' : currentMeal;
+  const isOut = currentMeal === 'Out';
+  const isLeftovers = currentMeal === 'Leftovers';
+  inp.value = (isOut || isLeftovers) ? '' : currentMeal;
 
   // Quick action buttons
   const quickEl = document.getElementById('dashMealSheetQuick');
-  const isOut = currentMeal === 'Out';
   quickEl.innerHTML = `
     <button class="dash-sheet-action${isOut ? ' out-active' : ''}" onclick="_dashToggleNightOut()">
       ${isOut ? '🏠 back home' : '🌙 night out'}
     </button>
-    ${currentMeal && !isOut ? `
+    <button class="dash-sheet-action${isLeftovers ? ' leftovers-active' : ''}" onclick="_dashToggleLeftovers()">
+      ${isLeftovers ? '&#8617; cancel' : '&#127374; leftovers'}
+    </button>
+    ${currentMeal && !isOut && !isLeftovers ? `
       <button class="dash-sheet-action" onclick="openDashMealRecipe('${currentMeal.replace(/'/g, "\\'")}');document.getElementById('dashMealSheet').style.display='none'">
-        📖 view recipe
+        &#128214; view recipe
       </button>` : ''}
   `;
 
@@ -1062,9 +1066,21 @@ function _dashToggleNightOut() {
   const inp = document.getElementById('dashMealSheetInput');
   const isNowOut = inp.value.trim() !== 'Out';
   inp.value = isNowOut ? 'Out' : '';
-  const quickEl = document.getElementById('dashMealSheetQuick');
-  quickEl.querySelector('.dash-sheet-action').classList.toggle('out-active', isNowOut);
-  quickEl.querySelector('.dash-sheet-action').textContent = isNowOut ? '🏠 back home' : '🌙 night out';
+  const btns = document.getElementById('dashMealSheetQuick').querySelectorAll('.dash-sheet-action');
+  btns[0].classList.toggle('out-active', isNowOut);
+  btns[0].textContent = isNowOut ? '\u{1F3E0} back home' : '\u{1F319} night out';
+  if (isNowOut && btns[1]) { btns[1].classList.remove('leftovers-active'); btns[1].innerHTML = '&#127374; leftovers'; }
+  renderDashMealSearch();
+}
+
+function _dashToggleLeftovers() {
+  const inp = document.getElementById('dashMealSheetInput');
+  const isNowLeftovers = inp.value.trim() !== 'Leftovers';
+  inp.value = isNowLeftovers ? 'Leftovers' : '';
+  const btns = document.getElementById('dashMealSheetQuick').querySelectorAll('.dash-sheet-action');
+  btns[1].classList.toggle('leftovers-active', isNowLeftovers);
+  btns[1].innerHTML = isNowLeftovers ? '&#8617; cancel' : '&#127374; leftovers';
+  if (isNowLeftovers && btns[0]) { btns[0].classList.remove('out-active'); btns[0].textContent = '\u{1F319} night out'; }
   renderDashMealSearch();
 }
 
@@ -1081,7 +1097,7 @@ function renderDashMealSearch() {
   const q = (document.getElementById('dashMealSheetInput')?.value || '').trim().toLowerCase();
   const resultsEl = document.getElementById('dashMealSheetResults');
   if (!resultsEl) return;
-  if (!q || q === 'out') { resultsEl.innerHTML = ''; return; }
+  if (!q || q === 'out' || q === 'leftovers') { resultsEl.innerHTML = ''; return; }
   const matches = recipes.filter(r => r.name.toLowerCase().includes(q)).slice(0, 7);
   resultsEl.innerHTML = matches.map(_dashRecipeResultHtml).join('');
 }
@@ -2744,8 +2760,11 @@ function renderSwapPicker(query) {
     .filter(r => !q || r.name.toLowerCase().includes(q))
     .sort((a, b) => (b.rating - a.rating) || (b.timesPlanned - a.timesPlanned))
     .slice(0, 5);
-  if (!filtered.length) { picker.innerHTML = ''; return; }
-  picker.innerHTML = `<div class="swap-picker-label">from your recipe book:</div>` +
+  const leftoversBtn = !q
+    ? `<button class="swap-leftovers-btn" onclick="pickSwapLeftovers()">&#127374; Leftovers night</button>`
+    : '';
+  if (!filtered.length) { picker.innerHTML = leftoversBtn; return; }
+  picker.innerHTML = leftoversBtn + `<div class="swap-picker-label">from your recipe book:</div>` +
     filtered.map(r => {
       const esc = r.name.replace(/'/g, '&#39;');
       return `<div class="swap-recipe-item" onclick="pickSwapRecipe('${esc}')">
@@ -2758,6 +2777,17 @@ function renderSwapPicker(query) {
 function pickSwapRecipe(name) {
   meals[swappingIndex].meal = name;
   meals[swappingIndex].isNew = false;
+  meals[swappingIndex].isOut = false;
+  meals[swappingIndex].isLeftovers = false;
+  cancelSwap();
+}
+
+function pickSwapLeftovers() {
+  if (swappingIndex < 0) return;
+  meals[swappingIndex].meal = 'Leftovers';
+  meals[swappingIndex].isLeftovers = true;
+  meals[swappingIndex].isNew = false;
+  meals[swappingIndex].isOut = false;
   cancelSwap();
 }
 
@@ -2845,7 +2875,7 @@ async function _finalizeWeek() {
   const fullDates = getUpcomingWeekFullDates();
   const weekdays  = new Set(['Monday','Tuesday','Wednesday','Thursday','Friday']);
   const schedule  = meals
-    .filter(m => !m.isOut && weekdays.has(m.day))
+    .filter(m => !m.isOut && !m.isLeftovers && weekdays.has(m.day))
     .map(m => ({
       date:     fullDates[m.day] || '',
       day:      m.day,
@@ -2866,7 +2896,7 @@ async function _finalizeWeek() {
     fetch('/spend-history', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({date: today, total: totalNum, mealCount: meals.filter(m => !m.isOut).length}),
+      body: JSON.stringify({date: today, total: totalNum, mealCount: meals.filter(m => !m.isOut && !m.isLeftovers).length}),
     }).catch(() => {});
   }
 }
@@ -2993,6 +3023,7 @@ Rules:
 - Prioritize meals from the Recipe Book when available, especially those with high ratings
 - Never repeat a meal from the "Do NOT repeat" list
 - Vary proteins: no same protein two days in a row
+- Never suggest two meals that share the same base dish format in the same week (e.g., two pasta dishes, two taco variations, two soups, two stir-fries, two burgers)
 - Keep meals practical and kid-friendly
 
 Return ONLY a JSON array of exactly ${dinnerCount} objects (one per planned day), no other text, no markdown:
@@ -3096,6 +3127,22 @@ function renderMeals() {
           <div class="meal-tags"></div>
         </div>
         <span class="cx cx-out">Out</span>
+        <button class="btn-swap" onclick="startSwap(${i})" aria-label="Change ${dow}">change →</button>
+      </div>`;
+    }
+    if (m.isLeftovers) {
+      return `
+      <div class="meal-card leftovers-night" id="meal${i}">
+        <div class="day-badge">
+          <span class="dow">${dow}</span>
+          <span class="dom">${dom}</span>
+        </div>
+        <div class="meal-info">
+          <div class="meal-name">Leftovers</div>
+          <div class="meal-tags"></div>
+        </div>
+        <span class="cx cx-leftovers">Leftovers</span>
+        <button class="btn-swap" onclick="startSwap(${i})" aria-label="Change ${dow}">change →</button>
       </div>`;
     }
     const isSwapping = swappingIndex === i;
@@ -3262,6 +3309,8 @@ function applySwap() {
   if (val && swappingIndex >= 0) {
     meals[swappingIndex].meal = val;
     meals[swappingIndex].isNew = false;
+    meals[swappingIndex].isOut = false;
+    meals[swappingIndex].isLeftovers = false;
   }
   cancelSwap();
 }
@@ -3437,7 +3486,7 @@ async function startIngredientReview() {
   document.getElementById('reviewError').style.display   = 'none';
   document.getElementById('buildCartFromReviewBtn').style.display = 'none';
 
-  const mealData  = meals.filter(m => !m.isOut).map(m => ({
+  const mealData  = meals.filter(m => !m.isOut && !m.isLeftovers).map(m => ({
     name:     m.meal.replace(' [NEW]', '').trim(),
     easyMode: !!m.easyMode,
   }));
@@ -3594,7 +3643,7 @@ async function generatePrepGuide() {
   const body = document.getElementById('prepGuideBody');
   if (btn) { btn.disabled = true; btn.textContent = 'generating...'; }
 
-  const mealData = meals.filter(m => !m.isOut).map(m => ({
+  const mealData = meals.filter(m => !m.isOut && !m.isLeftovers).map(m => ({
     day:        m.day,
     meal:       m.meal.replace(' [NEW]', '').trim(),
     complexity: schedule[m.day]?.complexity || 'normal',
@@ -3724,10 +3773,9 @@ async function startCartBuild(precomputedIngredients = null) {
   const ssb = document.getElementById('swapSuggestBox'); if (ssb) ssb.style.display = 'none';
   const nfb = document.getElementById('notFoundBox');    if (nfb) nfb.style.display = 'none';
   const spb = document.getElementById('spikeBox');       if (spb) spb.style.display = 'none';
-  const reb = document.getElementById('reuseBox');       if (reb) reb.style.display = 'none';
   startMicrocopy(CART_BUILD_MSGS, 'cartLoadingMsg', 4000);
 
-  const mealNames = meals.filter(m => !m.isOut).map(m => m.meal.replace(' [NEW]','').trim());
+  const mealNames = meals.filter(m => !m.isOut && !m.isLeftovers).map(m => m.meal.replace(' [NEW]','').trim());
 
   try {
     const controller = new AbortController();
@@ -3987,39 +4035,6 @@ function checkPriceSpikes(groups) {
 
 
 
-function flagIngredientReuse(groups, mealOrder) {
-  const STOP = new Set(['great','value','brand','fresh','count','pack','ounce','fluid','large','small','organic','natural','original','classic','premium','select','whole','ready','quick','easy','family','serving','style','grade','extra','light','dark','lean','boneless','skinless','sliced','diced','chopped','shredded','grated','cooked','added','free','each','with','from','your','the','and','for','box','bag','jar','can','bottle','gallon','quart','pint','liter','walmart','best','choice']);
-
-  function kws(name) {
-    return name.toLowerCase()
-      .replace(/\d+(\.\d+)?(\s*(oz|lb|fl|ct|pk|g|ml|qt|pt|gal))?\b/gi, '')
-      .replace(/[^a-z\s]/g, ' ').split(/\s+/)
-      .filter(w => w.length > 3 && !STOP.has(w));
-  }
-
-  const SKIP_SOURCES = new Set(['staples','frequentStaples','household','Snacks','dessert','Breakfasts','Lunches','holiday']);
-  const mealSources = mealOrder.filter(src => !SKIP_SOURCES.has(src) && groups[src]?.length);
-
-  const wordMap = {}; // word → [{meal, name}]
-  mealSources.forEach(meal => {
-    (groups[meal] || []).forEach(item => {
-      kws(item.name).forEach(kw => {
-        (wordMap[kw] = wordMap[kw] || []).push({ meal, name: item.name });
-      });
-    });
-  });
-
-  const results = [];
-  for (const [kw, entries] of Object.entries(wordMap)) {
-    const meals = [...new Set(entries.map(e => e.meal))];
-    if (meals.length >= 2) {
-      const seen = new Set();
-      const items = entries.filter(e => { if (seen.has(e.name)) return false; seen.add(e.name); return true; }).slice(0, 3);
-      results.push({ keyword: kw, items });
-    }
-  }
-  return results.slice(0, 5);
-}
 
 function _renderNotFoundBox() {
   const notFoundBox = document.getElementById('notFoundBox');
@@ -4084,19 +4099,6 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
 
   // Not-found items — interactive retry rows
   _renderNotFoundBox();
-
-  // Ingredient reuse flag
-  const reuseBox = document.getElementById('reuseBox');
-  if (reuseBox) {
-    const overlaps = flagIngredientReuse(groups, mealOrder);
-    if (overlaps.length) {
-      reuseBox.style.display = 'block';
-      reuseBox.innerHTML = `<strong>Possible ingredient overlaps — review before ordering:</strong><br>` +
-        overlaps.map(o => `• <em>${o.keyword}</em>: ${o.items.map(i => `${i.name} (${i.meal})`).join(' · ')}`).join('<br>');
-    } else {
-      reuseBox.style.display = 'none';
-    }
-  }
 
   // Price spike detection
   const spikes = checkPriceSpikes(groups);

@@ -337,6 +337,7 @@ def week_glance():
             'month': None,
             'meal': m.get('meal', ''),
             'isOut': m.get('meal', '') == 'Out',
+            'isLeftovers': m.get('meal', '') == 'Leftovers',
         }
         if week_sunday_iso:
             try:
@@ -467,10 +468,12 @@ def dashboard_update_meal():
     for m in meals:
         if m.get('day') == day:
             m['meal'] = meal
+            m['isOut'] = meal == 'Out'
+            m['isLeftovers'] = meal == 'Leftovers'
             found = True
             break
     if not found:
-        meals.append({'day': day, 'meal': meal, 'isOut': meal == 'Out', 'easyMode': False})
+        meals.append({'day': day, 'meal': meal, 'isOut': meal == 'Out', 'isLeftovers': meal == 'Leftovers', 'easyMode': False})
     prefs['lastWeekMeals'] = meals
     os.makedirs(_data_dir(), exist_ok=True)
     with open(_dpath('prefs.json'), 'w', encoding='utf-8') as f:
@@ -1167,6 +1170,7 @@ def generate_single_meal():
     prompt = f"""Suggest ONE completely new dinner recipe for a family of 4 for {day}.
 Time available: {complexity_desc}
 Do NOT suggest any of these: {exclude_str}
+Also avoid dishes that share the same base format as the meals already planned (e.g., if pasta is already planned, do not suggest another pasta dish; if tacos are planned, avoid other taco variations).
 Family: kid-friendly comfort food, chicken, pasta, tacos, American/Italian/Mexican cuisine, practical weeknight meals.
 Return ONLY the recipe name — no explanation, no punctuation, just the name."""
     try:
@@ -1310,7 +1314,7 @@ def generate_prep_list():
 
     meal_lines = '\n'.join(
         f"  {m.get('day','')}: {m.get('meal','')} ({m.get('complexity','normal')} night)"
-        for m in meals if not m.get('isOut')
+        for m in meals if not m.get('isOut') and not m.get('isLeftovers')
     )
     pantry_lines = ', '.join(m.get('name','') for m in pantry[:20]) or 'not specified'
 

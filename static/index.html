@@ -25,7 +25,7 @@
     <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">holiday</button>
     <button class="btn-nav" id="navTheme" onclick="cycleTheme()" aria-label="Toggle color theme">auto</button>
     <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
-    <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">preferences</button>
+    <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Preferences" title="Preferences">&#9881;</button>
     <button class="btn-nav" id="navLogout" onclick="doLogout()" title="Sign out">sign out</button>
   </div>
 </nav>
@@ -435,7 +435,6 @@
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
       <div id="notFoundBox" class="cart-info-box warn" style="display:none"></div>
       <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
-      <div id="reuseBox" class="cart-info-box note" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
