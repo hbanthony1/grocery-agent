@@ -741,6 +741,23 @@ def add_spend_history():
     return jsonify({'ok': True})
 
 
+@app.route('/spend-history', methods=['DELETE'])
+def delete_spend_history_entry():
+    date_str = (request.json or {}).get('date', '')
+    if not date_str:
+        return jsonify({'error': 'date required'}), 400
+    try:
+        with open(_dpath('spend_history.json'), encoding='utf-8') as f:
+            history = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        history = []
+    history = [h for h in history if h.get('date') != date_str]
+    os.makedirs(_data_dir(), exist_ok=True)
+    with open(_dpath('spend_history.json'), 'w', encoding='utf-8') as f:
+        json.dump(history, f, indent=2)
+    return '', 204
+
+
 # ── Pantry ────────────────────────────────────────────────────────────────────
 
 @app.route('/pantry', methods=['GET'])
@@ -1279,7 +1296,7 @@ def get_extras_queue():
         items = []
     if items:
         open(path, 'w', encoding='utf-8').close()
-    return jsonify({'items': items, 'path': path, 'exists': exists})
+    return jsonify({'items': items, 'path': path, 'exists': exists, 'hint': not exists})
 
 
 # ── Staples ───────────────────────────────────────────────────────────────────

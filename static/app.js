@@ -145,15 +145,13 @@ const BREAKFAST_OPTIONS = ['Scrambled eggs & toast', 'Cereal & milk', 'Pancakes'
 const LUNCH_OPTIONS     = ['Sandwiches', 'Leftovers', 'Grilled cheese', 'Soup', 'Salads', 'Mac & cheese'];
 const DESSERT_OPTIONS   = ['Ice cream', 'Cookies', 'Brownies', 'Fruit salad', 'Cheesecake', 'Pudding', 'Pie'];
 const SNACK_OPTIONS     = ['Trail mix', 'Chips & salsa', 'Crackers & cheese', 'Popcorn', 'Granola bars', 'Veggies & hummus', 'Fruit'];
-const HOLIDAY_OPTIONS   = ['Thanksgiving dinner', 'Christmas dinner', 'Easter brunch', 'Fourth of July cookout', 'Halloween party', 'Birthday party', 'Game day spread', 'Vacation / Trip'];
+const HOLIDAY_OPTIONS   = ['Thanksgiving dinner', 'Christmas dinner', 'Easter brunch', 'Fourth of July cookout', 'Halloween party', 'Birthday party', 'Game day spread', 'Dinner Party', 'Visiting Family & Friends', 'Vacation / Trip'];
 
 function toTitleCase(s) {
   return (s || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
 // ===== HOUSEHOLD CATEGORIES =====
-let hhExtras = []; // {name, save} — one-off items added on step 2
-
 const HH_CATEGORIES = {
   produce:   ['apple','banana','orange','grape','strawberr','blueberr','mango','pineapple','avocado','tomato','lettuce','spinach','kale','broccoli','carrot','celery','cucumber','onion','garlic','pepper','potato','zucchini','corn','pear','peach','plum','lemon','lime','melon','berry','berries','salad','mushroom','herb','cilantro','parsley','basil'],
   dairy:     ['milk','butter','cheese','yogurt','cream','egg','eggs','creamer','sour cream','half and half','cottage','kefir','whipped'],
@@ -463,45 +461,6 @@ async function submitNewHouseholdItem() {
   localStorage.setItem(LS_HOUSEHOLD_KEY, JSON.stringify([...householdChecked]));
   await loadHouseholdItems();
   cancelHhAdd();
-}
-
-// ===== ANYTHING ELSE? =====
-function renderHhExtras() {
-  const list = document.getElementById('hhExtrasList');
-  if (!list) return;
-  list.innerHTML = hhExtras.length
-    ? hhExtras.map((extra, i) => `
-      <div class="hh-extra-row">
-        <span class="hh-extra-name">${extra.name}</span>
-        <label class="hh-extra-save">
-          <input type="checkbox" ${extra.save ? 'checked' : ''} onchange="toggleHhExtraSave(${i}, this.checked)">
-          <span>save to my list</span>
-        </label>
-        <button class="hh-item-delete" onclick="removeHhExtra(${i})" title="remove" style="opacity:1">×</button>
-      </div>`).join('')
-    : '';
-}
-
-function addHhExtra() {
-  const input = document.getElementById('hhExtraInput');
-  const name = (input.value || '').trim();
-  if (!name) return;
-  hhExtras.push({ name, save: false });
-  input.value = '';
-  renderHhExtras();
-}
-
-function handleHhExtraKey(e) {
-  if (e.key === 'Enter') addHhExtra();
-}
-
-function toggleHhExtraSave(i, checked) {
-  if (hhExtras[i]) hhExtras[i].save = checked;
-}
-
-function removeHhExtra(i) {
-  hhExtras.splice(i, 1);
-  renderHhExtras();
 }
 
 // ===== SCHEDULE =====
@@ -1671,13 +1630,14 @@ function renderStaplesPanel() {
             onblur="patchStaple('${esc}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
           ${cachedDot}
         </div>
+        ${s.notes ? `<div class="staple-notes-sub">${s.notes.replace(/</g,'&lt;')}</div>` : ''}
         <div class="staple-panel-meta">
           <input class="staple-panel-qty" type="number" min="1" value="${s.qty || 1}"
             onblur="patchStaple('${esc}','qty',+this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
           <input class="staple-panel-unit" value="${(s.unit||'').replace(/"/g,'&quot;')}" placeholder="unit (gallon, bunch…)"
             onblur="patchStaple('${esc}','unit',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
         </div>
-        <input class="staple-panel-notes" value="${(s.notes||'').replace(/"/g,'&quot;')}" placeholder="brand notes (optional)"
+        <input class="staple-panel-notes" value="${(s.notes||'').replace(/"/g,'&quot;')}" placeholder="add brand notes…"
           onblur="patchStaple('${esc}','notes',this.value)" onkeydown="if(event.key==='Enter')this.blur()" />
       </div>
       <div class="staple-panel-actions">
@@ -1813,9 +1773,10 @@ async function loadExtrasQueue() {
       const hint = document.createElement('p');
       hint.id = 'icloudSetupHint';
       hint.className = 'review-hint';
-      hint.style.cssText = 'margin-top:8px;font-size:11px';
-      hint.innerHTML = `📱 <strong>iPhone extras:</strong> create <code>${data.path}</code> — type items one per line and they'll appear here on Sunday.`;
-      document.querySelector('#step4 .hh-extra-input-row')?.after(hint);
+      hint.style.cssText = 'margin-top:8px;font-size:11px;color:var(--text3)';
+      hint.innerHTML = `📱 <strong>iPhone extras:</strong> create <code>${data.path}</code> — type items one per line and they'll appear here.`;
+      const anchor = document.querySelector('#step4 .card') || document.getElementById('staplesOneTimeList');
+      anchor?.after(hint);
     }
   } catch (_) {}
 }
@@ -3082,6 +3043,11 @@ async function runMealPlan() {
   ];
   const outNote = skipNotes.length ? `\nSkip these days entirely: ${skipNotes.join(', ')}\n` : '';
 
+  const quickRecipes = recipes.filter(r => (r.tags||[]).some(t => /quick|easy|fast/i.test(t))).map(r => r.name);
+  const quickRule = quickRecipes.length
+    ? `- For QUICK nights you MUST choose from these quick-tagged recipes in the book: ${quickRecipes.join(', ')}. Only deviate if none fit the week's variety rules.`
+    : '- For QUICK nights choose meals that take 30 minutes or less (frozen, heat-and-eat, simple assembly).';
+
   const prompt = `You are a weekly meal planner for a family household in Montana.
 Based on the preferences below, generate exactly ${dinnerCount} dinners — one for each of: ${planDays.join(', ')}.
 This week they are cooking for ${servingSize} people.
@@ -3095,7 +3061,8 @@ ${outNote}
 ${newMealInstruction}
 
 Rules:
-- Match each meal's cook time and effort to the schedule above — QUICK days need ≤30 min meals, OPEN days can have elaborate recipes
+- Match each meal's cook time and effort to the schedule above — OPEN days can have elaborate recipes
+${quickRule}
 - Prioritize meals from the Recipe Book when available, especially those with high ratings
 - Never repeat a meal from the "Do NOT repeat" list
 - Vary proteins: no same protein two days in a row
@@ -3127,6 +3094,11 @@ Set isNew:true only for the brand new recipes.`;
     outDays.forEach(day => {
       meals = meals.filter(m => m.day !== day);
       meals.push({ day, meal: 'Out', isOut: true, isNew: false });
+    });
+    // Force Leftovers entries — Claude excludes them from the plan, so we re-inject
+    leftoverDays.forEach(day => {
+      meals = meals.filter(m => m.day !== day);
+      meals.push({ day, meal: 'Leftovers', isLeftovers: true, isNew: false });
     });
     const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
     meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
@@ -3188,6 +3160,7 @@ function renderMeals() {
   if (regenBtn) regenBtn.style.display = 'inline-flex';
   const dates = getUpcomingWeekDates();
   const grid = document.getElementById('mealGrid');
+  const _normMN = s => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
   grid.innerHTML = meals.map((m,i) => {
     const dom = dates[m.day] || '';
     const dow = DAY_ABBR[m.day] || m.day.slice(0,3);
@@ -3227,7 +3200,7 @@ function renderMeals() {
     const cx = schedule[m.day]?.complexity || 'normal';
     const cxLabel = COMPLEXITY_LABEL[cx] || 'Normal';
     const mealName = m.meal.replace(' [NEW]','');
-    const matchedRecipe = recipes.find(rec => rec.name.toLowerCase() === mealName.toLowerCase());
+    const matchedRecipe = recipes.find(rec => _normMN(rec.name) === _normMN(mealName)) || recipes.find(rec => { const rn=_normMN(rec.name),mn=_normMN(mealName); return rn.includes(mn)||mn.includes(rn); });
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="${mealName}">` : '';
     const easyLabel = m.easyLoading ? '...' : (m.easyMode ? '✓ easy' : 'use easy');
     const easyTitle = m.easyMode ? 'Using a store-bought version — click to switch back to homemade' : 'Switch to a store-bought or frozen version';
@@ -3590,21 +3563,35 @@ async function startIngredientReview() {
   }));
   const mealNames = mealData.map(m => m.name);
 
-  try {
-    const resp = await fetch('/generate-ingredients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meals: mealData, servings: servingSize }),
-    });
-    if (resp.status === 404 || !(resp.headers.get('content-type') || '').includes('json')) {
-      throw new Error('Server needs to be restarted — open Terminal and run: python server.py');
-    }
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || 'Failed to load ingredients');
+  // Use ingredients from local recipes[] for any meal already in the book (catches mid-session adds)
+  const _normIR = s => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  const cachedIng = {}, toFetch = [];
+  mealData.forEach(m => {
+    const rec = recipes.find(r => _normIR(r.name) === _normIR(m.name));
+    if (rec && rec.ingredients?.length) cachedIng[m.name] = rec.ingredients;
+    else toFetch.push(m);
+  });
 
+  try {
+    let fetchedIng = {};
+    if (toFetch.length) {
+      const resp = await fetch('/generate-ingredients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meals: toFetch, servings: servingSize }),
+      });
+      if (resp.status === 404 || !(resp.headers.get('content-type') || '').includes('json')) {
+        throw new Error('Server needs to be restarted — open Terminal and run: python server.py');
+      }
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || 'Failed to load ingredients');
+      fetchedIng = data.ingredients || {};
+    }
+
+    const allIng = { ...cachedIng, ...fetchedIng };
     _reviewItems = [];
     mealNames.forEach(mealName => {
-      const ings = (data.ingredients || {})[mealName] || [];
+      const ings = allIng[mealName] || [];
       ings.forEach((ing, idx) => {
         _reviewItems.push({
           key:          `${mealName}-${idx}`,
@@ -3910,23 +3897,10 @@ async function approveMealPlan() {
     await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
   } catch(e) {}
 
-  hhExtras = [];
-  renderHhExtras();
   goToStep(3); // → Household step
 }
 
-async function navigateAndBuildCart() {
-  const toSave = hhExtras.filter(e => e.save).map(e => e.name);
-  if (toSave.length) {
-    if (!prefs.householdItems) prefs.householdItems = [];
-    toSave.forEach(n => {
-      const exists = prefs.householdItems.some(i => (typeof i === 'string' ? i : i.name) === n);
-      if (!exists) prefs.householdItems.push({ name: n, category: _hhCategory(n), brand: '' });
-    });
-    try {
-      await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
-    } catch(e) {}
-  }
+function navigateAndBuildCart() {
   navigateToStaples();
 }
 
@@ -3962,7 +3936,7 @@ async function startCartBuild(precomputedIngredients = null) {
         ...(s.itemId ? {itemId: s.itemId, productName: s.productName, lastPrice: s.lastPrice} : {}),
       }))
       .concat(staplesOneTime.map(o => ({name: o.name, qty: o.qty || 1, unit: ''})));
-    const body = { meals: mealNames, breakfasts: weekBreakfasts.filter(n => !_skippedNonDinnerItems.has(n)), lunches: weekLunches.filter(n => !_skippedNonDinnerItems.has(n)), dessert: _skippedNonDinnerItems.has(weekDessert) ? '' : weekDessert, snacks: weekSnacks.filter(n => !_skippedNonDinnerItems.has(n)), holiday: weekHoliday, household: [...householdChecked, ...hhExtras.map(e => e.name)], weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems.filter((_, i) => _approvedAthleteItems.has(i)) };
+    const body = { meals: mealNames, breakfasts: weekBreakfasts.filter(n => !_skippedNonDinnerItems.has(n)), lunches: weekLunches.filter(n => !_skippedNonDinnerItems.has(n)), dessert: _skippedNonDinnerItems.has(weekDessert) ? '' : weekDessert, snacks: weekSnacks.filter(n => !_skippedNonDinnerItems.has(n)), holiday: weekHoliday, household: [...householdChecked], weeklyStaples: confirmedStaples, servings: servingSize, zip: prefs.household?.zip || '59047', trainingItems: athleteItems.filter((_, i) => _approvedAthleteItems.has(i)) };
     if (precomputedIngredients) body.ingredients = precomputedIngredients;
     const resp = await fetch('/build-cart', {
       method: 'POST',
@@ -4876,7 +4850,10 @@ async function openMealRecipe(i) {
   const mealObj = meals[i];
   if (!mealObj) return;
   const name = mealObj.meal.replace(' [NEW]', '').trim();
-  const r = recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
+  const _normN = s => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  const _nn = _normN(name);
+  let r = recipes.find(r => _normN(r.name) === _nn);
+  if (!r) r = recipes.find(r => { const rn=_normN(r.name); return rn.includes(_nn)||_nn.includes(rn); });
 
   document.getElementById('recipeModal').style.display = 'flex';
 
@@ -5049,7 +5026,7 @@ async function confirmOrderItems() {
     await loadPantry();
     renderPantryPanel();
     closeOrderUpload();
-    showToast(`${items.length} item${items.length !== 1 ? 's' : ''} added to pantry`);
+    showToast(`${items.length} item${items.length !== 1 ? 's' : ''} added to pantry`, { duration: 6000 });
   } catch(e) {
     showToast(`Error: ${e.message}`, { type: 'error' });
   }
@@ -5218,6 +5195,17 @@ function closeHistoryPage(fromHistory = false) {
   _historyTrap?.(); _historyTrap = null;
 }
 
+async function deleteHistoryWeek(date) {
+  if (!confirm(`Delete spend history for week of ${date}?`)) return;
+  await fetch('/spend-history', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date }),
+  }).catch(() => null);
+  showToast('Week removed', { duration: 4000 });
+  renderHistoryDashboard();
+}
+
 async function renderHistoryDashboard() {
   const el = document.getElementById('historyDashboard');
   if (!el) return;
@@ -5256,6 +5244,7 @@ async function renderHistoryDashboard() {
           <div class="spend-bar-ref-line spend-bar-max-line"    style="left:${mPct}%" title="max $${budgetMax}"></div>
         </div>
         <span class="spend-bar-val" style="color:${color}">$${w.total.toFixed(0)}</span>
+        <button class="spend-bar-delete" onclick="deleteHistoryWeek('${w.date}')" title="Delete week of ${label}" aria-label="Delete week of ${label}">×</button>
       </div>`;
     }).join('');
 

@@ -22,7 +22,7 @@
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
     <button class="btn-nav" id="navStaples" onclick="toggleStaplesPanel()">staples</button>
-    <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">holiday</button>
+    <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">occasions</button>
     <button class="btn-nav" id="navTheme" onclick="cycleTheme()" aria-label="Toggle color theme">auto</button>
     <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
     <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Preferences" title="Preferences">&#9881;</button>
@@ -337,14 +337,6 @@
         <button class="btn" style="height:30px;padding:0 10px;font-size:12px" onclick="cancelHhAdd()">cancel</button>
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
-    </div>
-    <div class="card hh-extras-card">
-      <div class="card-label">anything else needed this week?</div>
-      <div id="hhExtrasList"></div>
-      <div class="hh-extra-input-row">
-        <input class="schedule-note" id="hhExtraInput" placeholder="add a one-off item..." onkeydown="handleHhExtraKey(event)" />
-        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addHhExtra()">add</button>
-      </div>
     </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(2)">← back</button>
@@ -705,7 +697,7 @@
   <div id="holidayPage" class="prefs-page" style="display:none">
     <div class="prefs-page-header">
       <button class="btn" onclick="closeHolidayPlanner()">← back</button>
-      <span class="prefs-page-title">holiday planner</span>
+      <span class="prefs-page-title">occasions planner</span>
       <button class="btn primary" onclick="saveHolidayPlan()">save →</button>
     </div>
     <div class="prefs-page-body holiday-planner-body">

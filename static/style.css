@@ -257,8 +257,9 @@ html[data-theme="dark"] .top-nav { background: rgba(9,9,15,0.88); backdrop-filte
 .staple-panel-qty:focus { outline: none; border-color: var(--primary); }
 .staple-panel-unit { flex: 1; border: 1.5px solid var(--border); border-radius: var(--r-sm); padding: 4px 8px; font-size: 13px; background: var(--bg); color: var(--text); }
 .staple-panel-unit:focus { outline: none; border-color: var(--primary); }
-.staple-panel-notes { border: 1.5px solid var(--border); border-radius: var(--r-sm); padding: 4px 8px; font-size: 12px; color: var(--text2); background: var(--bg); width: 100%; box-sizing: border-box; }
-.staple-panel-notes:focus { outline: none; border-color: var(--primary); }
+.staple-panel-notes { border: none; border-bottom: 1px dashed var(--border); border-radius: 0; padding: 2px 0; font-size: 10px; color: var(--text3); background: transparent; width: 100%; box-sizing: border-box; }
+.staple-panel-notes:focus { outline: none; border-bottom-color: var(--primary); }
+.staple-notes-sub { font-size: 10px; color: var(--text3); margin-top: 1px; font-family: var(--mono); }
 .staple-panel-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .staple-reorder-btn { background: none; border: 1.5px solid var(--border); border-radius: var(--r-sm); width: 28px; height: 28px; cursor: pointer; font-size: 14px; color: var(--text3); display: flex; align-items: center; justify-content: center; }
 .staple-reorder-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
@@ -864,6 +865,9 @@ html[data-theme="dark"] .top-nav { background: rgba(9,9,15,0.88); backdrop-filte
 .spend-bar-target-line { background: var(--approval); opacity: .4; }
 .spend-bar-max-line    { background: var(--urgent-red-text); opacity: .4; }
 .spend-bar-val { font-size: 11px; font-family: var(--mono); width: 36px; text-align: right; flex-shrink: 0; font-weight: 600; }
+.spend-bar-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0; line-height: 1; opacity: 0; transition: opacity .15s; }
+.spend-bar-row:hover .spend-bar-delete { opacity: 1; }
+.spend-bar-delete:hover { color: var(--urgent-red-text); }
 
 .spend-meal-history { display: flex; flex-direction: column; gap: 12px; }
 .spend-meal-week { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; border-bottom: 1px solid var(--border); }
