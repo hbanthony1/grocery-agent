@@ -582,6 +582,20 @@ function cycleComplexity(day) {
   const idx = COMPLEXITY_CYCLE.indexOf(schedule[day].complexity);
   schedule[day].complexity = COMPLEXITY_CYCLE[(idx + 1) % COMPLEXITY_CYCLE.length];
   renderSchedule();
+  if (!meals.length) return;
+  // Patch the live meal plan to reflect the complexity change immediately
+  const cx = schedule[day].complexity;
+  meals = meals.filter(m => m.day !== day);
+  if (cx === 'out') {
+    meals.push({ day, meal: 'Out', isOut: true, isNew: false });
+  } else if (cx === 'leftovers') {
+    meals.push({ day, meal: 'Leftovers', isLeftovers: true, isNew: false });
+  } else {
+    meals.push({ day, meal: '', isNew: false });
+  }
+  const _ord = SCHEDULE_DAYS.map(d => d.key);
+  meals.sort((a, b) => _ord.indexOf(a.day) - _ord.indexOf(b.day));
+  renderMeals();
 }
 
 function buildSchedulePrompt() {
@@ -3194,13 +3208,26 @@ function renderMeals() {
         <button class="btn-swap" onclick="startSwap(${i})" aria-label="Change ${dow}">change →</button>
       </div>`;
     }
+    if (!m.meal) {
+      return `
+      <div class="meal-card" id="meal${i}">
+        <div class="day-badge">
+          <span class="dow">${dow}</span>
+          <span class="dom">${dom}</span>
+        </div>
+        <div class="meal-info">
+          <div class="meal-name" style="color:var(--text3)">no meal selected</div>
+        </div>
+        <button class="btn-swap" onclick="startSwap(${i})" aria-label="Pick meal for ${dow}">change →</button>
+      </div>`;
+    }
     const isSwapping = swappingIndex === i;
     const tags = lookupTags(m.meal);
     const tagsHtml = tags.map(t => `<span class="tag">${t}</span>`).join('');
     const cx = schedule[m.day]?.complexity || 'normal';
     const cxLabel = COMPLEXITY_LABEL[cx] || 'Normal';
     const mealName = m.meal.replace(' [NEW]','');
-    const matchedRecipe = recipes.find(rec => _normMN(rec.name) === _normMN(mealName)) || recipes.find(rec => { const rn=_normMN(rec.name),mn=_normMN(mealName); return rn.includes(mn)||mn.includes(rn); });
+    const matchedRecipe = mealName ? (recipes.find(rec => _normMN(rec.name) === _normMN(mealName)) || recipes.find(rec => { const rn=_normMN(rec.name),mn=_normMN(mealName); return mn && (rn.includes(mn)||mn.includes(rn)); })) : null;
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="${mealName}">` : '';
     const easyLabel = m.easyLoading ? '...' : (m.easyMode ? '✓ easy' : 'use easy');
     const easyTitle = m.easyMode ? 'Using a store-bought version — click to switch back to homemade' : 'Switch to a store-bought or frozen version';
