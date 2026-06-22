@@ -712,11 +712,17 @@
         <div id="hpVacationControls" style="display:none;margin-top:12px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
             <span class="prefs-sublabel" style="margin:0">trip type</span>
-            <select id="hpTripType" class="schedule-note" style="width:auto;padding:5px 10px;font-size:12px">
+            <select id="hpTripType" class="schedule-note" style="width:auto;padding:5px 10px;font-size:12px" onchange="_updateKitchenToggleVisibility(this.value)">
               <option>Road trip</option>
               <option>Flight</option>
               <option>Hotel stay</option>
+              <option>Cabin / Rental</option>
             </select>
+          </div>
+          <div id="hpKitchenRow" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" id="hpHasKitchen"> we'll have a kitchen at the destination
+            </label>
           </div>
           <div style="margin-bottom:10px">
             <span class="prefs-sublabel" style="display:block;margin-bottom:6px">which days are you away?</span>
@@ -730,7 +736,13 @@
               <label class="athlete-day-pill"><input type="checkbox" value="Saturday"  class="hp-vac-day"> Sat</label>
             </div>
           </div>
-          <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpVacGenBtn" onclick="generateVacationPlan()">plan travel food →</button>
+          <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpVacGenBtn" onclick="generateVacationPlan()">plan this trip →</button>
+        </div>
+        <div id="hpHostingControls" style="display:none;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="prefs-sublabel" style="margin:0">how many nights are they staying?</span>
+            <input type="number" id="hpVisitDays" min="1" max="10" value="3" class="schedule-note" style="width:60px">
+          </div>
         </div>
       </div>
       <div id="hpMenuCard" style="display:none">
@@ -741,8 +753,8 @@
       </div>
       <div id="hpTravelCard" style="display:none">
         <div class="card">
-          <div class="card-label">travel food <span style="font-size:10px;font-weight:400;opacity:0.55">(one item per line)</span></div>
-          <textarea id="hpTravelItems" class="prefs-notes-area" rows="8" placeholder="Granola bars&#10;String cheese&#10;Trail mix…"></textarea>
+          <div class="card-label">travel food</div>
+          <div id="hpTravelBody"></div>
         </div>
       </div>
       <div id="hpNotesCard" style="display:none">

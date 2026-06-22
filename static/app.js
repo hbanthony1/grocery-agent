@@ -2576,21 +2576,41 @@ function _renderHolidayPlanner() {
   }
   const gEl = document.getElementById('hpGuests');
   if (gEl) gEl.value = curGuests;
-  const isVacation = (weekHoliday?.type === 'Vacation / Trip');
-  _syncHpMode(isVacation);
-  if (isVacation && weekHoliday) {
+  const mode = curType === 'Vacation / Trip' ? 'vacation' : curType === 'Visiting Family & Friends' ? 'hosting' : 'event';
+  _syncHpMode(mode);
+  const btn = document.getElementById('hpGenerateBtn');
+  if (btn) {
+    if (mode === 'hosting') { btn.textContent = 'plan visit meals →'; btn.onclick = generateHostingPlan; }
+    else { btn.textContent = 'generate menu →'; btn.onclick = generateHolidayMenu; }
+  }
+  if (mode === 'vacation' && weekHoliday) {
     const ttEl = document.getElementById('hpTripType');
     if (ttEl) ttEl.value = weekHoliday.tripType || 'Road trip';
+    _updateKitchenToggleVisibility(weekHoliday.tripType || 'Road trip');
+    const hkEl = document.getElementById('hpHasKitchen');
+    if (hkEl) hkEl.checked = !!weekHoliday.hasKitchen;
     const vacDaySet = new Set(weekHoliday.vacDays || []);
     document.querySelectorAll('.hp-vac-day').forEach(cb => { cb.checked = vacDaySet.has(cb.value); });
-    if (weekHoliday.items?.length) {
+    if (weekHoliday.plan) {
+      _renderTravelPlanEdit(weekHoliday.plan);
+      document.getElementById('hpTravelCard').style.display = 'block';
+      document.getElementById('hpNotesCard').style.display = 'block';
+    } else if (weekHoliday.items?.length) {
       const tc = document.getElementById('hpTravelCard');
-      if (tc) tc.style.display = 'block';
-      const ta = document.getElementById('hpTravelItems');
-      if (ta) ta.value = weekHoliday.items.join('\n');
+      if (tc) {
+        tc.style.display = 'block';
+        const body = document.getElementById('hpTravelBody');
+        if (body) body.innerHTML = `<div class="travel-day-section-legacy"><textarea class="prefs-notes-area travel-meal-ta" data-day="legacy" data-meal="Items" rows="8">${weekHoliday.items.join('\n')}</textarea></div>`;
+      }
       document.getElementById('hpNotesCard').style.display = 'block';
     }
-  } else if (weekHoliday?.menu) {
+  } else if (mode === 'hosting' && weekHoliday?.nights) {
+    _renderHostingEdit(weekHoliday.nights);
+    const vd = document.getElementById('hpVisitDays');
+    if (vd) vd.value = weekHoliday.visitDays || weekHoliday.nights.length || 3;
+    document.getElementById('hpMenuCard').style.display = 'block';
+    document.getElementById('hpNotesCard').style.display = 'block';
+  } else if (mode === 'event' && weekHoliday?.menu) {
     _renderHolidayMenuEdit(weekHoliday.menu);
     document.getElementById('hpNotesCard').style.display = 'block';
   }
@@ -2602,21 +2622,41 @@ function _renderHolidayPlanner() {
 
 function selectHpType(type) {
   document.querySelectorAll('#hpTypePicker .meal-pick-chip').forEach(c => c.classList.toggle('selected', c.dataset.opt === type));
-  _syncHpMode(type === 'Vacation / Trip');
+  const mode = type === 'Vacation / Trip' ? 'vacation' : type === 'Visiting Family & Friends' ? 'hosting' : 'event';
+  _syncHpMode(mode);
+  const btn = document.getElementById('hpGenerateBtn');
+  if (btn) {
+    if (mode === 'hosting') { btn.textContent = 'plan visit meals →'; btn.onclick = generateHostingPlan; }
+    else { btn.textContent = 'generate menu →'; btn.onclick = generateHolidayMenu; }
+  }
 }
 
-function _syncHpMode(isVacation) {
-  const gr = document.getElementById('hpGuestsRow');
-  const vc = document.getElementById('hpVacationControls');
-  const mc = document.getElementById('hpMenuCard');
-  const tc = document.getElementById('hpTravelCard');
-  const tr = document.getElementById('hpTimelineRow');
-  if (gr) gr.style.display     = isVacation ? 'none' : '';
-  if (vc) vc.style.display     = isVacation ? 'block' : 'none';
-  if (mc) mc.style.display     = 'none';
-  if (tc) tc.style.display     = 'none';
-  if (tr) tr.style.display     = isVacation ? 'none' : '';
-  document.getElementById('hpNotesCard').style.display = 'none';
+function _syncHpMode(mode) {
+  const gr   = document.getElementById('hpGuestsRow');
+  const vc   = document.getElementById('hpVacationControls');
+  const hc   = document.getElementById('hpHostingControls');
+  const mc   = document.getElementById('hpMenuCard');
+  const tc   = document.getElementById('hpTravelCard');
+  const nc   = document.getElementById('hpNotesCard');
+  const tr   = document.getElementById('hpTimelineRow');
+  if (gr) gr.style.display  = mode === 'vacation' ? 'none' : 'flex';
+  if (vc) vc.style.display  = mode === 'vacation' ? 'block' : 'none';
+  if (hc) hc.style.display  = mode === 'hosting'  ? 'block' : 'none';
+  if (mc) mc.style.display  = 'none';
+  if (tc) tc.style.display  = 'none';
+  if (nc) nc.style.display  = 'none';
+  if (tr) tr.style.display  = mode === 'event' ? '' : 'none';
+}
+
+function _updateKitchenToggleVisibility(tripType) {
+  const row = document.getElementById('hpKitchenRow');
+  if (!row) return;
+  const noKitchenTypes = ['Flight', 'Hotel stay'];
+  row.style.display = noKitchenTypes.includes(tripType) ? 'none' : '';
+  if (tripType === 'Cabin / Rental') {
+    const cb = document.getElementById('hpHasKitchen');
+    if (cb) cb.checked = true;
+  }
 }
 
 async function generateHolidayMenu() {
@@ -2648,32 +2688,163 @@ async function generateHolidayMenu() {
 }
 
 async function generateVacationPlan() {
-  const tripType = document.getElementById('hpTripType')?.value || 'Road trip';
-  const vacDays  = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
-  const days     = vacDays.length || 3;
+  const tripType   = document.getElementById('hpTripType')?.value || 'Road trip';
+  const hasKitchen = document.getElementById('hpHasKitchen')?.checked || false;
+  const vacDays    = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
+  const n          = vacDays.length || 3;
+  const people     = servingSize || 4;
   const btn = document.getElementById('hpVacGenBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'planning...'; }
-  const tc = document.getElementById('hpTravelCard');
-  const ta = document.getElementById('hpTravelItems');
+  const tc   = document.getElementById('hpTravelCard');
+  const body = document.getElementById('hpTravelBody');
   if (tc) tc.style.display = 'block';
-  if (ta) ta.value = '';
+  if (body) body.innerHTML = '<span class="hh-loading">Planning your trip food…</span>';
+  const destNote = hasKitchen
+    ? `They have kitchen access at the destination — plan easy meals to cook there.`
+    : 'No kitchen access — they will eat out or use a hotel for destination meals.';
+  const destMealsExample = hasKitchen
+    ? '[{"type":"Breakfast","items":["Instant oatmeal packets","Granola bars"],"eatOut":false},{"type":"Dinner","items":["Rotisserie chicken","Pre-made salad kit"],"eatOut":false}]'
+    : '[]';
+  const prompt = `Plan food for a family of ${people} on a ${n}-day ${tripType.toLowerCase()}.
+${destNote}
+
+Return ONLY valid JSON, no markdown:
+{
+  "travelDays": [
+    {
+      "label": "Travel day",
+      "meals": [
+        {"type": "Breakfast", "items": ["Overnight oats","Bananas"], "eatOut": false},
+        {"type": "Snacks & Lunch", "items": ["Trail mix","String cheese","Apples","Crackers"], "eatOut": false},
+        {"type": "Dinner", "items": [], "eatOut": true}
+      ]
+    }
+  ],
+  "destinationDays": {
+    "label": "Days at destination",
+    "eatOut": ${!hasKitchen},
+    "meals": ${destMealsExample}
+  }
+}
+
+Rules:
+- Road trip: hearty breakfast before departure, snacks for driving hours, variety for kids
+- Flight: no liquids >3oz, compact and TSA-friendly, nothing that needs refrigeration
+- Cabin/Rental with kitchen: simple 1-pan dinners, assume minimal cookware
+- Hotel stay: breakfast items only, travel snacks
+- All items must be real buyable Walmart grocery products with normal consumer packaging
+- Scale quantities for ${people} people`;
   try {
     const resp = await fetch('/claude-prompt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: `Plan travel food for a family of 4 on a ${days}-day ${tripType.toLowerCase()}. List snacks and easy meals to pack or buy. Return ONLY a JSON array of item names, no markdown:\n["Granola bars","String cheese","Trail mix","Juice boxes","Peanut butter crackers","Dried fruit","Protein bars","Apple slices","Goldfish crackers","Beef jerky"]`
-      }),
+      body: JSON.stringify({ prompt }),
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error);
-    const items = JSON.parse((data.content || '').replace(/```json|```/g, '').trim());
-    if (ta) ta.value = items.join('\n');
+    const plan = JSON.parse((data.content || '').replace(/```json|```/g, '').trim());
+    _renderTravelPlanEdit(plan);
     document.getElementById('hpNotesCard').style.display = 'block';
   } catch(e) {
-    if (ta) ta.value = '(could not generate — type items manually)';
+    if (body) body.innerHTML = '<div class="recap-hint" style="color:var(--urgent-red-text)">Could not generate — try again or add items manually.</div>';
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'plan travel food →'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'plan this trip →'; }
   }
+}
+
+function _renderTravelPlanEdit(plan) {
+  const body = document.getElementById('hpTravelBody');
+  if (!body) return;
+  const renderMeals = meals => meals.map(meal => {
+    if (meal.eatOut) {
+      return `<div class="travel-meal-row">
+        <span class="travel-meal-label">${meal.type}</span>
+        <span class="travel-eat-out-note">Eating out — no items needed</span>
+      </div>`;
+    }
+    const val  = (meal.items || []).join('\n');
+    const rows = Math.max(2, (meal.items || []).length + 1);
+    return `<div class="travel-meal-row">
+      <span class="travel-meal-label">${meal.type}</span>
+      <textarea class="prefs-notes-area travel-meal-ta" data-meal="${meal.type}" rows="${rows}" placeholder="one item per line…">${val}</textarea>
+    </div>`;
+  }).join('');
+  const sections = [];
+  for (const day of (plan.travelDays || [])) {
+    sections.push(`<details class="travel-day-section" open>
+      <summary>${day.label || 'Travel day'}</summary>
+      ${renderMeals(day.meals || [])}
+    </details>`);
+  }
+  const dest = plan.destinationDays;
+  if (dest) {
+    if (dest.eatOut) {
+      sections.push(`<details class="travel-day-section" open>
+        <summary>${dest.label || 'Destination days'}</summary>
+        <span class="travel-eat-out-note">Eating out — no items needed</span>
+      </details>`);
+    } else {
+      sections.push(`<details class="travel-day-section" open>
+        <summary>${dest.label || 'Destination days'}</summary>
+        ${renderMeals(dest.meals || [])}
+      </details>`);
+    }
+  }
+  body.innerHTML = sections.join('');
+}
+
+async function generateHostingPlan() {
+  const guests = parseInt(document.getElementById('hpGuests')?.value) || 6;
+  const nights = parseInt(document.getElementById('hpVisitDays')?.value) || 3;
+  const total  = guests + (servingSize || 4);
+  const btn = document.getElementById('hpGenerateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'planning...'; }
+  const menuCard = document.getElementById('hpMenuCard');
+  const menuBody = document.getElementById('hpMenuBody');
+  if (menuCard) menuCard.style.display = 'block';
+  if (menuBody) menuBody.innerHTML = '<span class="hh-loading">Planning visit meals…</span>';
+  const prefsText = buildPreferencesPrompt();
+  const prompt = `Generate a dinner plan for ${total} people for ${nights} nights.
+A family is hosting out-of-town visitors. Match their preferences where possible.
+${prefsText ? `Family preferences:\n${prefsText}\n` : ''}
+Return ONLY valid JSON array, no markdown:
+[
+  {"night": 1, "dinner": "Sheet Pan Lemon Herb Chicken", "sides": ["Roasted vegetables","Dinner rolls"]},
+  {"night": 2, "dinner": "Taco Bar", "sides": ["Spanish rice","Black beans","All toppings"]},
+  {"night": 3, "dinner": "Spaghetti & Meatballs", "sides": ["Caesar salad","Garlic bread"]}
+]
+Rules: crowd-pleasing, make-ahead-friendly, practical grocery-store ingredients, vary proteins each night, feeds ${total} people.`;
+  try {
+    const resp = await fetch('/claude-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    const nightsData = JSON.parse((data.content || '').replace(/```json|```/g, '').trim());
+    _renderHostingEdit(nightsData);
+    document.getElementById('hpNotesCard').style.display = 'block';
+  } catch(e) {
+    if (menuBody) menuBody.innerHTML = '<div class="recap-hint" style="color:var(--urgent-red-text)">Could not generate — try again.</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'plan visit meals →'; }
+  }
+}
+
+function _renderHostingEdit(nights) {
+  const menuCard = document.getElementById('hpMenuCard');
+  const menuBody = document.getElementById('hpMenuBody');
+  if (!menuCard || !menuBody) return;
+  menuCard.style.display = 'block';
+  menuBody.innerHTML = nights.map((n, i) => {
+    const idx   = n.night || (i + 1);
+    const sides = Array.isArray(n.sides) ? n.sides.join('\n') : (n.sides || '');
+    const rows  = Math.max(2, (Array.isArray(n.sides) ? n.sides.length : 1) + 1);
+    return `<div class="hosting-night-block">
+      <span class="prefs-sublabel">Night ${idx}</span>
+      <input class="staple-panel-name hosting-dinner-input" value="${(n.dinner||'').replace(/"/g,'&quot;')}" placeholder="dinner name" data-night="${idx}">
+      <textarea class="prefs-notes-area hosting-sides-ta" rows="${rows}" data-night="${idx}" placeholder="sides, one per line…">${sides}</textarea>
+    </div>`;
+  }).join('');
 }
 
 function _renderHolidayMenuEdit(menu) {
@@ -2701,19 +2872,79 @@ function saveHolidayPlan() {
   const selected = document.querySelector('#hpTypePicker .meal-pick-chip.selected');
   const type = selected?.dataset.opt || weekHoliday?.type || '';
   if (!type) { showToast('Pick an event type first'); return; }
-  const isVacation = type === 'Vacation / Trip';
-  if (isVacation) {
-    const tripType = document.getElementById('hpTripType')?.value || 'Road trip';
-    const vacDays  = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
-    const ta       = document.getElementById('hpTravelItems');
-    const items    = ta ? ta.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
-    const notes    = document.getElementById('hpNotes')?.value.trim() || '';
-    weekHoliday = { type, tripType, vacDays, items, notes };
+  const notes = document.getElementById('hpNotes')?.value.trim() || '';
+
+  if (type === 'Vacation / Trip') {
+    const tripType   = document.getElementById('hpTripType')?.value || 'Road trip';
+    const hasKitchen = document.getElementById('hpHasKitchen')?.checked || false;
+    const vacDays    = [...document.querySelectorAll('.hp-vac-day:checked')].map(cb => cb.value);
+    // Read plan back from rendered travel-day sections
+    let plan = null;
+    const travelBody = document.getElementById('hpTravelBody');
+    if (travelBody) {
+      const travelDays = [];
+      let destinationDays = null;
+      travelBody.querySelectorAll('.travel-day-section').forEach((sec, secIdx) => {
+        const label = sec.querySelector('summary')?.textContent?.trim() || `Section ${secIdx + 1}`;
+        const mealRows = [];
+        sec.querySelectorAll('.travel-meal-ta').forEach(ta => {
+          const items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+          mealRows.push({ type: ta.dataset.meal || 'Items', items, eatOut: false });
+        });
+        const hasEatOutNote = sec.querySelector('.travel-eat-out-note');
+        if (secIdx === 0) {
+          travelDays.push({ label, meals: mealRows });
+        } else {
+          destinationDays = hasEatOutNote && !mealRows.length
+            ? { label, eatOut: true, meals: [] }
+            : { label, eatOut: false, meals: mealRows };
+        }
+      });
+      // Legacy flat textarea (backward compat path)
+      travelBody.querySelectorAll('.travel-day-section-legacy .travel-meal-ta').forEach(ta => {
+        if (!plan) {
+          const items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+          plan = { travelDays: [{ label: 'Travel days', meals: [{ type: 'Items', items, eatOut: false }] }], destinationDays: { label: 'Destination', eatOut: true, meals: [] } };
+        }
+      });
+      if (!plan && travelDays.length) {
+        plan = { travelDays, destinationDays: destinationDays || { label: 'Destination', eatOut: true, meals: [] } };
+      }
+    }
+    // Flatten all items for cart compat
+    const items = [];
+    if (plan) {
+      (plan.travelDays || []).forEach(d => (d.meals || []).forEach(m => items.push(...(m.items || []))));
+      const dest = plan.destinationDays;
+      if (dest && !dest.eatOut) (dest.meals || []).forEach(m => items.push(...(m.items || [])));
+    }
+    weekHoliday = { type, tripType, hasKitchen, vacDays, plan, items, notes };
     vacDays.forEach(day => { if (schedule[day]) schedule[day].complexity = 'out'; });
+    if (meals.length) {
+      vacDays.forEach(day => {
+        meals = meals.filter(m => m.day !== day);
+        meals.push({ day, meal: 'Out', isOut: true, isNew: false });
+      });
+      const _ord = SCHEDULE_DAYS.map(d => d.key);
+      meals.sort((a, b) => _ord.indexOf(a.day) - _ord.indexOf(b.day));
+      renderMeals();
+    }
     renderSchedule();
+
+  } else if (type === 'Visiting Family & Friends') {
+    const guests    = parseInt(document.getElementById('hpGuests')?.value) || 6;
+    const visitDays = parseInt(document.getElementById('hpVisitDays')?.value) || 3;
+    const nights = [];
+    document.querySelectorAll('.hosting-night-block').forEach((block, i) => {
+      const dinner  = block.querySelector('.hosting-dinner-input')?.value.trim() || '';
+      const sidesTA = block.querySelector('.hosting-sides-ta');
+      const sides   = sidesTA ? sidesTA.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
+      nights.push({ night: i + 1, dinner, sides });
+    });
+    weekHoliday = { type, guests, visitDays, nights, notes };
+
   } else {
     const guests   = parseInt(document.getElementById('hpGuests')?.value) || 8;
-    const notes    = document.getElementById('hpNotes')?.value.trim() || '';
     const timeline = document.getElementById('hpTimeline')?.value.trim() || '';
     let menu = null;
     const menuCard = document.getElementById('hpMenuCard');
@@ -2726,41 +2957,57 @@ function saveHolidayPlan() {
     }
     weekHoliday = { type, guests, menu, notes, timeline };
   }
+
   closeHolidayPlanner();
   document.getElementById('navHoliday')?.classList.add('active');
   const card = document.getElementById('holidayCard');
   if (card) { card.style.display = 'block'; card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   renderHolidaySection();
-  showToast(isVacation ? 'Vacation plan saved — away days marked out' : 'Holiday plan saved');
+  const isVacation = type === 'Vacation / Trip';
+  const isHosting  = type === 'Visiting Family & Friends';
+  showToast(isVacation ? 'Trip plan saved — away days marked out' : isHosting ? 'Visit plan saved' : 'Occasion plan saved');
 }
 
 function renderHolidaySection() {
   const el = document.getElementById('holidaySection');
   if (!el || !weekHoliday?.type) { if (el) el.innerHTML = ''; return; }
+  const actions = `<div>
+    <button class="btn-link" onclick="openHolidayPlanner()">edit →</button>
+    <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="clearHolidayPlan()">remove</button>
+  </div>`;
+
   if (weekHoliday.type === 'Vacation / Trip') {
-    const n = (weekHoliday.vacDays || []).length;
-    const preview = (weekHoliday.items || []).slice(0, 4).join(' · ');
+    const n         = (weekHoliday.vacDays || []).length;
+    const itemCount = (weekHoliday.items || []).length;
     el.innerHTML = `<div class="meal-pick-banner" style="flex-direction:column;align-items:flex-start;gap:4px">
       <div style="display:flex;width:100%;justify-content:space-between;align-items:center">
-        <span>✈ ${weekHoliday.tripType || 'Vacation'} · ${n} day${n !== 1 ? 's' : ''} away</span>
-        <div>
-          <button class="btn-link" onclick="openHolidayPlanner()">edit →</button>
-          <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="clearHolidayPlan()">remove</button>
-        </div>
+        <span>✈ ${weekHoliday.tripType || 'Trip'} · ${n} day${n !== 1 ? 's' : ''} away${itemCount ? ` · ${itemCount} items packed` : ''}</span>
+        ${actions}
       </div>
-      ${preview ? `<span style="font-size:11px;opacity:0.65">${preview}…</span>` : ''}
     </div>`;
     return;
   }
+
+  if (weekHoliday.type === 'Visiting Family & Friends') {
+    const nights  = weekHoliday.nights || [];
+    const total   = (weekHoliday.guests || 0) + (servingSize || 4);
+    const preview = nights.slice(0, 3).map(n => n.dinner).filter(Boolean).join(' · ');
+    el.innerHTML = `<div class="meal-pick-banner" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <div style="display:flex;width:100%;justify-content:space-between;align-items:center">
+        <span>👨‍👩‍👧‍👦 Hosting ${total} people · ${weekHoliday.visitDays || nights.length} nights</span>
+        ${actions}
+      </div>
+      ${preview ? `<span style="font-size:11px;opacity:0.65">${preview}${nights.length > 3 ? '…' : ''}</span>` : ''}
+    </div>`;
+    return;
+  }
+
   const allDishes = weekHoliday.menu ? Object.values(weekHoliday.menu).flat() : [];
   const preview   = allDishes.slice(0, 5).join(' · ') + (allDishes.length > 5 ? '…' : '');
   el.innerHTML = `<div class="meal-pick-banner" style="flex-direction:column;align-items:flex-start;gap:4px">
     <div style="display:flex;width:100%;justify-content:space-between;align-items:center">
       <span>🎄 ${weekHoliday.type} · ${weekHoliday.guests} guests</span>
-      <div>
-        <button class="btn-link" onclick="openHolidayPlanner()">edit →</button>
-        <button class="btn-link" style="margin-left:8px;opacity:0.6" onclick="clearHolidayPlan()">remove</button>
-      </div>
+      ${actions}
     </div>
     ${preview ? `<span style="font-size:11px;opacity:0.65">${preview}</span>` : ''}
   </div>`;

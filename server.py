@@ -1767,6 +1767,24 @@ def build_cart():
             for dishes in holiday['menu'].values():
                 holiday_dishes.extend(dishes)
             job_sources = job_sources + [(dish, 'holiday') for dish in holiday_dishes if dish]
+        elif holiday.get('nights'):
+            for night in holiday['nights']:
+                if night.get('dinner'):
+                    job_sources.append((night['dinner'], 'hosting'))
+                for side in (night.get('sides') or []):
+                    if side:
+                        job_sources.append((side, 'hosting'))
+        elif holiday.get('plan'):
+            plan = holiday['plan']
+            all_items = []
+            for day in plan.get('travelDays', []):
+                for meal in day.get('meals', []):
+                    all_items.extend(meal.get('items', []))
+            dest = plan.get('destinationDays', {})
+            if not dest.get('eatOut'):
+                for meal in dest.get('meals', []):
+                    all_items.extend(meal.get('items', []))
+            job_sources = job_sources + [(item, 'vacation') for item in all_items if item]
         elif holiday.get('items'):
             job_sources = job_sources + [(item, 'vacation') for item in holiday['items'] if item]
         elif holiday.get('type'):
@@ -1897,7 +1915,7 @@ def build_cart():
                 not_found.append(task['search_query'])
                 print(f"  - No result: {task['search_query']}")
 
-        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'vacation', 'dessert', 'Snacks', 'training', 'staples', 'household']
+        meal_order = list(meals) + ['Breakfasts', 'Lunches', 'holiday', 'hosting', 'vacation', 'dessert', 'Snacks', 'training', 'staples', 'household']
         cart_url = build_cart_url(cart_items, staple_items=[])
 
         print(f"\nCart URL: {cart_url}")
