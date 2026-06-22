@@ -270,6 +270,12 @@ function goToStep(n, fromHistory = false) {
   currentStep = n;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (!fromHistory) history.pushState({ step: n, overlay: null }, '');
+  document.querySelectorAll('#step' + n + ' .card').forEach((c, i) => {
+    c.classList.remove('animate-in');
+    void c.offsetWidth;
+    c.style.animationDelay = (i * 40) + 'ms';
+    c.classList.add('animate-in');
+  });
 }
 
 // ===== HISTORY API (browser back button) =====
