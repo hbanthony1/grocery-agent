@@ -23,9 +23,8 @@
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
     <button class="btn-nav" id="navStaples" onclick="toggleStaplesPanel()">staples</button>
     <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">occasions</button>
-    <button class="btn-nav" id="navTheme" onclick="cycleTheme()" aria-label="Toggle color theme">auto</button>
     <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
-    <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Preferences" title="Preferences">&#9881;</button>
+    <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Settings" title="Settings">&#9881;</button>
     <button class="btn-nav" id="navLogout" onclick="doLogout()" title="Sign out">sign out</button>
   </div>
 </nav>
@@ -482,18 +481,39 @@
   <div id="prefsPage" class="prefs-page" style="display:none">
     <div class="prefs-page-header">
       <button class="btn" onclick="closePrefsPage()">← back</button>
-      <span class="prefs-page-title">preferences</span>
+      <span class="prefs-page-title">settings</span>
       <button class="btn mustard" id="prefsSaveBtn" onclick="savePrefsPage()">save →</button>
     </div>
     <div class="prefs-page-tabs">
-      <button class="prefs-tab active" id="prefTab-family" onclick="switchPrefsTab('family')">Family</button>
+      <button class="prefs-tab active" id="prefTab-appearance" onclick="switchPrefsTab('appearance')">Appearance</button>
+      <button class="prefs-tab" id="prefTab-household" onclick="switchPrefsTab('household')">Household</button>
       <button class="prefs-tab" id="prefTab-food" onclick="switchPrefsTab('food')">Food</button>
       <button class="prefs-tab" id="prefTab-history" onclick="switchPrefsTab('history')">History</button>
       <button class="prefs-tab" id="prefTab-account" onclick="switchPrefsTab('account')">Account</button>
     </div>
     <div class="prefs-page-body">
-      <!-- TAB: Family -->
-      <div class="prefs-tab-content" id="prefContent-family">
+      <!-- TAB: Appearance -->
+      <div class="prefs-tab-content" id="prefContent-appearance" style="display:none">
+        <div class="card">
+          <div class="card-label">color theme</div>
+          <div class="theme-option-row">
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="auto" onchange="_applyTheme(this.value)">
+              Auto (follows system)
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="dark" onchange="_applyTheme(this.value)">
+              Dark
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="light" onchange="_applyTheme(this.value)">
+              Light
+            </label>
+          </div>
+        </div>
+      </div>
+      <!-- TAB: Household -->
+      <div class="prefs-tab-content" id="prefContent-household" style="display:none">
         <div class="card">
           <div class="card-label">household</div>
           <div class="prefs-household-grid">

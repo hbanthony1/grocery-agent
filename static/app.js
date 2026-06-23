@@ -6,19 +6,12 @@ function _applyTheme(theme) {
   const html = document.documentElement;
   if (theme === 'auto') html.removeAttribute('data-theme');
   else html.setAttribute('data-theme', theme);
-  const btn = document.getElementById('navTheme');
-  if (btn) btn.textContent = theme;
+  localStorage.setItem(LS_THEME, theme);
+  document.querySelectorAll('input[name="pf-theme"]').forEach(r => { r.checked = r.value === theme; });
 }
 
 function initTheme() {
   _applyTheme(localStorage.getItem(LS_THEME) || 'auto');
-}
-
-function cycleTheme() {
-  const current = localStorage.getItem(LS_THEME) || 'auto';
-  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
-  localStorage.setItem(LS_THEME, next);
-  _applyTheme(next);
 }
 
 async function doLogout() {
@@ -4737,9 +4730,10 @@ function closePrefsPage(fromHistory = false) {
 }
 
 function switchPrefsTab(tab) {
-  ['family', 'food', 'history', 'account'].forEach(t => {
-    document.getElementById(`prefTab-${t}`).classList.toggle('active', t === tab);
-    document.getElementById(`prefContent-${t}`).style.display = t === tab ? '' : 'none';
+  ['appearance', 'household', 'food', 'history', 'account'].forEach(t => {
+    document.getElementById(`prefTab-${t}`)?.classList.toggle('active', t === tab);
+    const el = document.getElementById(`prefContent-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
   });
   if (tab === 'account') _populateAccountTab();
 }
@@ -4898,11 +4892,14 @@ function renderPrefsPage() {
   document.querySelectorAll('.pf-runDay').forEach(cb => { cb.checked = runDaySet.has(cb.value); });
   toggleAthleteTrainingFields();
 
+  const _curTheme = localStorage.getItem(LS_THEME) || 'auto';
+  document.querySelectorAll('input[name="pf-theme"]').forEach(r => { r.checked = r.value === _curTheme; });
+
   renderPrefsList('pf-dietList', prefs.dietaryNotes || []);
   renderBrandList(prefs.brandRules || []);
   renderHhItemsPrefs((prefs.householdItems || []).map(_normalizeHhItem));
   renderMealHistoryCard();
-  switchPrefsTab('family');
+  switchPrefsTab('appearance');
 
   const btn = document.getElementById('prefsSaveBtn');
   if (btn) { btn.textContent = 'save →'; btn.disabled = false; }

@@ -667,6 +667,9 @@ html[data-theme="dark"] .top-nav { background: rgba(9,9,15,0.88); backdrop-filte
 .holiday-planner-body { gap: 16px; }
 .holiday-menu-section { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .holiday-menu-section:last-child { margin-bottom: 0; }
+.theme-option-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.theme-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); cursor: pointer; }
+.theme-option input[type="radio"] { accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
 .travel-day-section { border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 10px; overflow: hidden; }
 .travel-day-section:last-child { margin-bottom: 0; }
 .travel-day-section summary { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text2); cursor: pointer; list-style: none; background: var(--surface2); user-select: none; }
