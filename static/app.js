@@ -274,26 +274,29 @@ window.addEventListener('popstate', e => {
   const state = e.state || { step: 0, overlay: null };
 
   // Close any open overlay without touching history (we're already mid-popstate)
-  const prefsOpen   = document.getElementById('prefsPage')?.style.display    !== 'none';
-  const recipesOpen = document.getElementById('recipesPage')?.style.display   !== 'none';
-  const pantryOpen  = document.getElementById('pantryPanel')?.style.display   !== 'none';
-  const staplesOpen = document.getElementById('staplesPage')?.style.display   !== 'none';
-  const holidayOpen = document.getElementById('holidayPage')?.style.display   !== 'none';
-  const historyOpen = document.getElementById('historyPage')?.style.display   !== 'none';
-  if (holidayOpen) closeHolidayPlanner(true);
-  if (prefsOpen)   closePrefsPage(true);
-  if (recipesOpen) closeRecipesPage(true);
-  if (pantryOpen)  closePantryPage(true);
-  if (staplesOpen) closeStaplesPage(true);
-  if (historyOpen) closeHistoryPage(true);
+  const prefsOpen    = document.getElementById('prefsPage')?.style.display     !== 'none';
+  const recipesOpen  = document.getElementById('recipesPage')?.style.display    !== 'none';
+  const pantryOpen   = document.getElementById('pantryPanel')?.style.display    !== 'none';
+  const staplesOpen  = document.getElementById('staplesPage')?.style.display    !== 'none';
+  const trainingOpen = document.getElementById('trainingPage')?.style.display   !== 'none';
+  const holidayOpen  = document.getElementById('holidayPage')?.style.display    !== 'none';
+  const historyOpen  = document.getElementById('historyPage')?.style.display    !== 'none';
+  if (holidayOpen)  closeHolidayPlanner(true);
+  if (prefsOpen)    closePrefsPage(true);
+  if (recipesOpen)  closeRecipesPage(true);
+  if (pantryOpen)   closePantryPage(true);
+  if (staplesOpen)  closeStaplesPage(true);
+  if (trainingOpen) closeTrainingPage(true);
+  if (historyOpen)  closeHistoryPage(true);
 
   // Re-open overlay from state (e.g. user pressed forward)
-  if      (state.overlay === 'prefs')   openPrefsPage(true);
-  else if (state.overlay === 'recipes') openRecipesPage(true);
-  else if (state.overlay === 'pantry')  openPantryPage(true);
-  else if (state.overlay === 'staples') openStaplesPage(true);
-  else if (state.overlay === 'holiday') openHolidayPlanner(true);
-  else if (state.overlay === 'history') openHistoryPage(true);
+  if      (state.overlay === 'prefs')    openPrefsPage(true);
+  else if (state.overlay === 'recipes')  openRecipesPage(true);
+  else if (state.overlay === 'pantry')   openPantryPage(true);
+  else if (state.overlay === 'staples')  openStaplesPage(true);
+  else if (state.overlay === 'training') openTrainingPage(true);
+  else if (state.overlay === 'holiday')  openHolidayPlanner(true);
+  else if (state.overlay === 'history')  openHistoryPage(true);
 
   // Navigate to the correct step
   if (typeof state.step === 'number' && state.step !== currentStep) {
@@ -416,6 +419,7 @@ let staplesSkipped = new Set(JSON.parse(localStorage.getItem(LS_STAPLES_SKIP) ||
 let staplesOneTime = [];  // [{name, qty}] for this week only, cleared on reset
 let _extrasQueueLoaded = false;
 let _staplesTrap = null;
+let _trainingTrap = null;
 
 
 function showHhAddRow() {
@@ -1119,7 +1123,7 @@ function resetApp() {
   staplesOneTime = [];
   _extrasQueueLoaded = false;
   ['loadingBar','mealPlanCard','approveBtn','regenerateBtn',
-   'athleteItemsCard',
+   'tr-itemsCard',
    'cartCard','budgetBar','cartUrlBox','cartLoadingBar',
    'cartError','serverNotice','doneBtn','ratingPanel'].forEach(id => {
     const el = document.getElementById(id);
@@ -1202,15 +1206,17 @@ function setStar(rating, pickerId) {
 
 // Recipe page (full-screen)
 function _syncPanelOpen() {
-  const prefsOpen   = document.getElementById('prefsPage').style.display    !== 'none';
-  const recipesOpen = document.getElementById('recipesPage').style.display   !== 'none';
-  const pantryOpen  = document.getElementById('pantryPanel').style.display   !== 'none';
-  const staplesOpen = document.getElementById('staplesPage').style.display   !== 'none';
-  const historyOpen = document.getElementById('historyPage')?.style.display  !== 'none';
+  const prefsOpen    = document.getElementById('prefsPage').style.display     !== 'none';
+  const recipesOpen  = document.getElementById('recipesPage').style.display    !== 'none';
+  const pantryOpen   = document.getElementById('pantryPanel').style.display    !== 'none';
+  const staplesOpen  = document.getElementById('staplesPage').style.display    !== 'none';
+  const trainingOpen = document.getElementById('trainingPage')?.style.display  !== 'none';
+  const historyOpen  = document.getElementById('historyPage')?.style.display   !== 'none';
   document.getElementById('navPrefs').classList.toggle('active', prefsOpen);
   document.getElementById('navRecipes').classList.toggle('active', recipesOpen);
   document.getElementById('navPantry').classList.toggle('active', pantryOpen);
   document.getElementById('navStaples').classList.toggle('active', staplesOpen);
+  document.getElementById('navTraining')?.classList.toggle('active', trainingOpen || !!prefs.athleteTraining?.enabled);
   document.getElementById('navHistory')?.classList.toggle('active', historyOpen);
 }
 
@@ -1617,6 +1623,84 @@ function toggleStaplesPanel() {
   if (page.style.display !== 'none') { closeStaplesPage(); } else { openStaplesPage(); }
 }
 
+function openTrainingPage(fromHistory = false) {
+  if (!fromHistory) history.pushState({ step: currentStep, overlay: 'training' }, '');
+  document.getElementById('trainingPage').style.display = 'flex';
+  _syncPanelOpen();
+  renderTrainingPanel();
+  _trainingTrap = _trapFocus(document.getElementById('trainingPage'));
+}
+
+function closeTrainingPage(fromHistory = false) {
+  if (!fromHistory) history.replaceState({ step: currentStep, overlay: null }, '');
+  document.getElementById('trainingPage').style.display = 'none';
+  _syncPanelOpen();
+  _trainingTrap?.(); _trainingTrap = null;
+}
+
+function toggleTrainingPanel() {
+  const page = document.getElementById('trainingPage');
+  if (page.style.display !== 'none') closeTrainingPage();
+  else openTrainingPage();
+}
+
+function toggleTrainingEnabled() {
+  const enabled = document.getElementById('tr-enabled')?.checked;
+  const fields = document.getElementById('tr-fields');
+  if (fields) fields.style.display = enabled ? 'block' : 'none';
+}
+
+function renderTrainingPanel() {
+  const at = prefs.athleteTraining || {};
+  const enabled = document.getElementById('tr-enabled');
+  if (enabled) enabled.checked = !!at.enabled;
+  const raceName = document.getElementById('tr-raceName');
+  if (raceName) raceName.value = at.raceName || '';
+  const raceDate = document.getElementById('tr-raceDate');
+  if (raceDate) raceDate.value = at.raceDate || '';
+  const phase = document.getElementById('tr-trainingPhase');
+  if (phase) phase.value = at.phase || 'Base Building';
+  const longRunDay = document.getElementById('tr-longRunDay');
+  if (longRunDay) longRunDay.value = at.longRunDay || 'Saturday';
+  const longRunMi = document.getElementById('tr-longRunMi');
+  if (longRunMi) longRunMi.value = at.weeklyLongRunMi || '';
+  const appetite = document.getElementById('tr-appetiteSensitive');
+  if (appetite) appetite.checked = !!at.appetiteSensitive;
+  const runDaySet = new Set(at.runDays || []);
+  document.querySelectorAll('.tr-runDay').forEach(cb => { cb.checked = runDaySet.has(cb.value); });
+  toggleTrainingEnabled();
+  const itemsCard = document.getElementById('tr-itemsCard');
+  if (itemsCard) {
+    if (athleteItems.length > 0) {
+      itemsCard.style.display = 'block';
+      _renderAthleteList();
+    } else {
+      itemsCard.style.display = 'none';
+    }
+  }
+}
+
+async function saveTrainingPrefs() {
+  prefs.athleteTraining = {
+    enabled:          document.getElementById('tr-enabled').checked,
+    raceName:         document.getElementById('tr-raceName').value.trim(),
+    raceDate:         document.getElementById('tr-raceDate').value.trim(),
+    phase:            document.getElementById('tr-trainingPhase').value,
+    longRunDay:       document.getElementById('tr-longRunDay').value,
+    weeklyLongRunMi:  parseFloat(document.getElementById('tr-longRunMi').value) || null,
+    runDays:          [...document.querySelectorAll('.tr-runDay:checked')].map(cb => cb.value),
+    appetiteSensitive: document.getElementById('tr-appetiteSensitive').checked,
+  };
+  const btn = document.querySelector('#trainingPage .prefs-page-header .btn.primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'saving…'; }
+  try {
+    await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) });
+    showToast('Training settings saved');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'save →'; }
+  }
+  _syncPanelOpen();
+}
 
 function renderStaplesPanel() {
   const el = document.getElementById('staplesPanelList');
@@ -3357,6 +3441,11 @@ Set isNew:true only for the brand new recipes.`;
     const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
     meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
     athleteItems = await athletePromise;
+    if (athleteItems.length) {
+      renderAthleteItems(athleteItems);
+      showToast('Athlete items ready — open training panel');
+      document.getElementById('navTraining')?.classList.add('active');
+    }
   } catch(e) {
     meals = [
       {day:'Monday',    meal:"Pasta with Rao's Sauce",         isNew:false},
@@ -3498,17 +3587,16 @@ function renderMeals() {
 }
 
 function renderAthleteItems(items) {
-  const card = document.getElementById('athleteItemsCard');
-  if (!card) return;
-  if (!items || !items.length) { card.style.display = 'none'; return; }
+  if (!items || !items.length) return;
   _approvedAthleteItems = new Set(items.map((_, i) => i));
-  card.style.display = 'block';
+  const itemsCard = document.getElementById('tr-itemsCard');
+  if (itemsCard) itemsCard.style.display = 'block';
   _renderAthleteList();
 }
 
 function _renderAthleteList() {
-  const list = document.getElementById('athleteItemsList');
-  const count = document.getElementById('athleteItemsCount');
+  const list = document.getElementById('tr-itemsList');
+  const count = document.getElementById('tr-itemsCount');
   if (!list) return;
   list.innerHTML = athleteItems.map((item, i) => {
     const { label, tag } = _classifyAthleteItem(item);
@@ -4815,16 +4903,6 @@ async function savePrefsPage() {
   prefs.storeOk         = '';
   prefs.notes           = document.getElementById('pf-notes').value.trim();
   prefs.nutritionFocus  = document.getElementById('pf-nutritionFocus').value;
-  prefs.athleteTraining = {
-    enabled:         document.getElementById('pf-athleteEnabled').checked,
-    raceName:        document.getElementById('pf-raceName').value.trim(),
-    raceDate:        document.getElementById('pf-raceDate').value.trim(),
-    phase:           document.getElementById('pf-trainingPhase').value,
-    longRunDay:      document.getElementById('pf-longRunDay').value,
-    weeklyLongRunMi: parseFloat(document.getElementById('pf-longRunMi').value) || null,
-    runDays:         [...document.querySelectorAll('.pf-runDay:checked')].map(cb => cb.value),
-    appetiteSensitive: document.getElementById('pf-appetiteSensitive').checked,
-  };
   prefs.timezone        = document.getElementById('pf-timezone').value.trim() || 'America/Denver';
   prefs.emails          = document.getElementById('pf-emails').value.split(',').map(e => e.trim()).filter(Boolean);
 
@@ -4841,12 +4919,6 @@ async function savePrefsPage() {
   _prefsDirty = false;
   closePrefsPage();
   showToast('Preferences saved');
-}
-
-function toggleAthleteTrainingFields() {
-  const enabled = document.getElementById('pf-athleteEnabled')?.checked;
-  const fields = document.getElementById('pf-athleteFields');
-  if (fields) fields.style.display = enabled ? 'block' : 'none';
 }
 
 function readPrefsList(containerId) {
@@ -4879,18 +4951,6 @@ function renderPrefsPage() {
   }
   document.getElementById('pf-notes').value          = prefs.notes || '';
   document.getElementById('pf-nutritionFocus').value = prefs.nutritionFocus || '';
-
-  const at = prefs.athleteTraining || {};
-  document.getElementById('pf-athleteEnabled').checked = !!at.enabled;
-  document.getElementById('pf-raceName').value         = at.raceName || '';
-  document.getElementById('pf-raceDate').value         = at.raceDate || '';
-  document.getElementById('pf-trainingPhase').value    = at.phase || 'Base Building';
-  document.getElementById('pf-longRunDay').value       = at.longRunDay || 'Saturday';
-  document.getElementById('pf-longRunMi').value        = at.weeklyLongRunMi || '';
-  document.getElementById('pf-appetiteSensitive').checked = !!at.appetiteSensitive;
-  const runDaySet = new Set(at.runDays || []);
-  document.querySelectorAll('.pf-runDay').forEach(cb => { cb.checked = runDaySet.has(cb.value); });
-  toggleAthleteTrainingFields();
 
   const _curTheme = localStorage.getItem(LS_THEME) || 'auto';
   document.querySelectorAll('input[name="pf-theme"]').forEach(r => { r.checked = r.value === _curTheme; });

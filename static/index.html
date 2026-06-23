@@ -22,6 +22,7 @@
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
     <button class="btn-nav" id="navStaples" onclick="toggleStaplesPanel()">staples</button>
+    <button class="btn-nav" id="navTraining" onclick="toggleTrainingPanel()">training</button>
     <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">occasions</button>
     <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
     <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Settings" title="Settings">&#9881;</button>
@@ -312,12 +313,6 @@
         </div>
       </div>
     </div>
-    <div id="athleteItemsCard" class="card" style="display:none;margin-top:10px">
-      <div class="card-label">your training items this week</div>
-      <p class="review-hint" style="margin-bottom:4px">Personal athlete nutrition — added to your cart separately from the family grocery list. Uncheck anything you already have.</p>
-      <div id="athleteItemsCount" class="review-hint" style="margin-bottom:8px;color:var(--text3)"></div>
-      <div id="athleteItemsList" class="athlete-items-list"></div>
-    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(1)">← back</button>
       <button class="btn" id="regenerateBtn" onclick="runMealPlan()" style="display:none">↺ regenerate</button>
@@ -552,60 +547,6 @@
             </select>
           </div>
           <div style="margin-top:14px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <span class="prefs-sublabel">athlete training</span>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="checkbox" id="pf-athleteEnabled" onchange="toggleAthleteTrainingFields()" />
-                <span class="prefs-sublabel" style="margin-bottom:0">active</span>
-              </label>
-            </div>
-            <div id="pf-athleteFields" style="display:none">
-              <div class="prefs-household-grid" style="margin-bottom:10px">
-                <div class="prefs-field prefs-field-wide"><label>race</label><input type="text" id="pf-raceName" placeholder="e.g. Portland Marathon" /></div>
-                <div class="prefs-field prefs-field-wide"><label>race date</label><input type="text" id="pf-raceDate" placeholder="e.g. October 4, 2026" /></div>
-                <div class="prefs-field prefs-field-wide">
-                  <label>training phase</label>
-                  <select id="pf-trainingPhase" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
-                    <option value="Base Building">Base Building</option>
-                    <option value="Aerobic Development">Aerobic Development</option>
-                    <option value="Peak Mileage">Peak Mileage</option>
-                    <option value="Taper">Taper</option>
-                    <option value="Race Week">Race Week</option>
-                  </select>
-                </div>
-                <div class="prefs-field">
-                  <label>long run day</label>
-                  <select id="pf-longRunDay" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
-                  </select>
-                </div>
-                <div class="prefs-field"><label>long run this week (mi)</label><input type="number" id="pf-longRunMi" min="1" max="30" placeholder="10" /></div>
-              </div>
-              <div style="margin-bottom:8px">
-                <span class="prefs-sublabel" style="display:block;margin-bottom:6px">run days this week</span>
-                <div style="display:flex;flex-wrap:wrap;gap:6px">
-                  <label class="athlete-day-pill"><input type="checkbox" value="Monday" class="pf-runDay" /> Mon</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Tuesday" class="pf-runDay" /> Tue</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="pf-runDay" /> Wed</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Thursday" class="pf-runDay" /> Thu</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Friday" class="pf-runDay" /> Fri</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Saturday" class="pf-runDay" /> Sat</label>
-                  <label class="athlete-day-pill"><input type="checkbox" value="Sunday" class="pf-runDay" /> Sun</label>
-                </div>
-              </div>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
-                <input type="checkbox" id="pf-appetiteSensitive" />
-                <span class="prefs-sublabel" style="margin-bottom:0">timing-sensitive appetite (pre-run meals small + easy to digest)</span>
-              </label>
-            </div>
-          </div>
-          <div style="margin-top:14px">
             <span class="prefs-sublabel">brand preferences</span>
             <div id="pf-brandList" class="prefs-brand-list"></div>
             <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
@@ -666,6 +607,75 @@
     <div class="recipes-page-body">
       <p class="prefs-sublabel" style="margin:16px 0 4px">Your recurring purchases — confirmed each week in Step 4.</p>
       <div id="staplesPanelList"></div>
+    </div>
+  </div>
+
+  <!-- TRAINING PANEL (full-screen) -->
+  <div id="trainingPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeTrainingPage()">← back</button>
+      <span class="prefs-page-title">training</span>
+      <button class="btn primary" onclick="saveTrainingPrefs()">save →</button>
+    </div>
+    <div class="recipes-page-body">
+      <div class="card">
+        <div class="card-label">athlete training</div>
+        <label class="prefs-toggle-row">
+          <input type="checkbox" id="tr-enabled" onchange="toggleTrainingEnabled()">
+          <span>enabled</span>
+        </label>
+        <div id="tr-fields" style="display:none;margin-top:14px">
+          <div class="prefs-household-grid" style="margin-bottom:10px">
+            <div class="prefs-field prefs-field-wide"><label>race</label><input type="text" id="tr-raceName" placeholder="e.g. Portland Marathon" /></div>
+            <div class="prefs-field prefs-field-wide"><label>race date</label><input type="text" id="tr-raceDate" placeholder="e.g. October 4, 2026" /></div>
+            <div class="prefs-field prefs-field-wide">
+              <label>training phase</label>
+              <select id="tr-trainingPhase" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                <option value="Base Building">Base Building</option>
+                <option value="Aerobic Development">Aerobic Development</option>
+                <option value="Peak Mileage">Peak Mileage</option>
+                <option value="Race Week">Race Week</option>
+                <option value="Taper">Taper</option>
+              </select>
+            </div>
+            <div class="prefs-field">
+              <label>long run day</label>
+              <select id="tr-longRunDay" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+            <div class="prefs-field"><label>long run this week (mi)</label><input type="number" id="tr-longRunMi" min="1" max="30" placeholder="10" /></div>
+          </div>
+          <div style="margin-bottom:8px">
+            <span class="prefs-sublabel" style="display:block;margin-bottom:6px">run days this week</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <label class="athlete-day-pill"><input type="checkbox" value="Monday" class="tr-runDay" /> Mon</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Tuesday" class="tr-runDay" /> Tue</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="tr-runDay" /> Wed</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Thursday" class="tr-runDay" /> Thu</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Friday" class="tr-runDay" /> Fri</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Saturday" class="tr-runDay" /> Sat</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Sunday" class="tr-runDay" /> Sun</label>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
+            <input type="checkbox" id="tr-appetiteSensitive" />
+            <span class="prefs-sublabel" style="margin-bottom:0">timing-sensitive appetite (pre-run meals small + easy to digest)</span>
+          </label>
+        </div>
+      </div>
+      <div id="tr-itemsCard" class="card" style="display:none;margin-top:10px">
+        <div class="card-label">this week's items</div>
+        <p class="review-hint" style="margin-bottom:4px">Personal athlete nutrition — added to your cart separately from the family grocery list. Uncheck anything you already have.</p>
+        <div id="tr-itemsCount" class="review-hint" style="margin-bottom:8px;color:var(--text3)"></div>
+        <div id="tr-itemsList" class="athlete-items-list"></div>
+      </div>
     </div>
   </div>
 
