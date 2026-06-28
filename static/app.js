@@ -5791,12 +5791,27 @@ loadCalendarStatus();
       const { mode } = await r.json();
       if (mode === 'demo') {
         document.title = '[DEMO] Grocery Agent';
-        const badge = document.createElement('span');
-        badge.id = 'demoBadge';
-        badge.textContent = 'DEMO';
-        badge.style.cssText = 'background:var(--primary);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;padding:3px 10px;border-radius:var(--r-pill);margin-right:8px;pointer-events:none;';
+        const sel = document.createElement('select');
+        sel.id = 'demoScenarioPicker';
+        sel.style.cssText = 'background:var(--primary);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 8px;border-radius:var(--r-pill);border:none;cursor:pointer;margin-right:8px;appearance:none;-webkit-appearance:none;outline:none;';
+        sel.innerHTML = `
+          <option value="">DEMO ▾</option>
+          <option value="sunday-pre">Sunday pre-order</option>
+          <option value="sunday-post">Sunday post-order</option>
+          <option value="midweek">Mid-week</option>`;
+        sel.onchange = async () => {
+          const scenario = sel.value;
+          if (!scenario) return;
+          sel.disabled = true;
+          await fetch('/demo/load-scenario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenario }),
+          }).catch(() => {});
+          location.reload();
+        };
         const actions = document.querySelector('.top-nav-actions');
-        if (actions) actions.prepend(badge);
+        if (actions) actions.prepend(sel);
       }
     }
   } catch(e) {}

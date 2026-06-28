@@ -1,3 +1,3 @@
 Open issues
 
-* I want the Demo version to allow for different scenarios I can manually test - Sunday morning pre-order, Sunday morning post-order, Mid-week, etc.
+(none — backlog cleared)

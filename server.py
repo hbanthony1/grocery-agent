@@ -297,6 +297,71 @@ def api_mode():
     return jsonify({"mode": "demo" if _DEMO_MODE else "live"})
 
 
+@app.route('/demo/load-scenario', methods=['POST'])
+def demo_load_scenario():
+    if not _DEMO_MODE:
+        return jsonify({'error': 'Not in demo mode'}), 403
+    scenario = (request.json or {}).get('scenario', '')
+    if scenario not in ('sunday-pre', 'sunday-post', 'midweek'):
+        return jsonify({'error': 'Unknown scenario'}), 400
+
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs = json.load(f)
+    except Exception:
+        prefs = {}
+
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    if scenario == 'sunday-pre':
+        meal_history = prefs.get('mealHistory', [])
+        last_week = meal_history[-1] if meal_history else None
+        days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        if last_week:
+            meals_list = (last_week.get('meals') or []) + [''] * 7
+            prefs['lastWeekMeals'] = [
+                {'day': d, 'meal': m, 'isOut': False, 'isLeftovers': False, 'easyMode': False}
+                for d, m in zip(days, meals_list) if m
+            ]
+        else:
+            prefs['lastWeekMeals'] = [
+                {'day': 'Monday',    'meal': 'Spaghetti Bolognese', 'isOut': False, 'isLeftovers': False, 'easyMode': False},
+                {'day': 'Tuesday',   'meal': 'Chicken Tacos',        'isOut': False, 'isLeftovers': False, 'easyMode': False},
+                {'day': 'Wednesday', 'meal': 'Beef Stir-Fry',        'isOut': False, 'isLeftovers': False, 'easyMode': False},
+                {'day': 'Thursday',  'meal': 'Homemade Pizza',       'isOut': False, 'isLeftovers': False, 'easyMode': False},
+                {'day': 'Friday',    'meal': 'Fish Tacos',           'isOut': False, 'isLeftovers': False, 'easyMode': False},
+                {'day': 'Saturday',  'meal': 'Pot Roast',            'isOut': False, 'isLeftovers': False, 'easyMode': False},
+            ]
+        prefs.pop('prepGuide', None)
+
+    else:  # sunday-post or midweek
+        prefs['lastWeekMeals'] = []
+        guide_date = today if scenario == 'sunday-post' else (
+            datetime.today() - timedelta(days=4)
+        ).strftime('%Y-%m-%d')
+        prefs['prepGuide'] = {
+            'date': guide_date,
+            'sections': [
+                {'title': 'Cook tonight (Sunday)', 'tasks': [
+                    'Marinate chicken thighs for Tuesday stir-fry (30 min, then refrigerate)',
+                    'Brown ground beef for Wednesday pasta — cool and refrigerate',
+                ]},
+                {'title': 'Prep tonight', 'tasks': [
+                    'Chop onions, peppers, and garlic — store in separate containers',
+                    'Cook a large pot of rice for weeknight grain bowls',
+                ]},
+                {'title': 'Thaw schedule', 'tasks': [
+                    'Thursday: move salmon fillets from freezer to fridge',
+                ]},
+            ],
+        }
+
+    with open(_dpath('prefs.json'), 'w', encoding='utf-8') as f:
+        json.dump(prefs, f, indent=2)
+
+    return jsonify({'ok': True, 'scenario': scenario})
+
+
 @app.route('/feedback', methods=['POST'])
 def submit_feedback():
     body = request.json or {}
