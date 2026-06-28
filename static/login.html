@@ -58,10 +58,13 @@
 
   .logo {
     font-size: 22px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: -0.5px;
     margin-bottom: 4px;
     color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   .logo em { color: var(--accent); font-style: normal; }
   .tagline {
@@ -170,7 +173,10 @@
 <button class="theme-btn" onclick="cycleTheme()" id="themeBtn">auto</button>
 
 <div class="card">
-  <div class="logo">Grocery <em>Agent</em></div>
+  <div class="logo">
+    <svg width="32" height="32" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#2d1b69"/><rect x="6" y="8" width="16" height="3.5" rx="1.75" fill="#a78bfa"/><rect x="8" y="13" width="12" height="3.5" rx="1.75" fill="#8b5cf6"/><rect x="10" y="18" width="8" height="3.5" rx="1.75" fill="#6d28d9"/><path d="M22 3L22.6 5L25 5.5L22.6 6L22 8L21.4 6L19 5.5L21.4 5Z" fill="#ddd6fe"/></svg>
+    Grocery <em>Agent</em>
+  </div>
   <div class="tagline">Weekly meal planner</div>
 
   <div class="tabs">

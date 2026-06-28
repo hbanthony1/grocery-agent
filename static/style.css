@@ -175,8 +175,8 @@ body { background: var(--bg); font-family: var(--sans); color: var(--text); font
 
 /* Top nav */
 .top-nav { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: var(--bg); border-bottom: 1.5px solid var(--border); display: flex; align-items: center; padding: 0 32px; z-index: 50; box-shadow: var(--shadow-sm); }
-.top-nav-logo { font-family: var(--sans); font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -.3px; flex: 1; }
-.top-nav-logo em { font-style: normal; background: var(--grad-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.top-nav-logo { font-family: var(--sans); font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -.4px; flex: 1; display: flex; align-items: center; gap: 8px; }
+.top-nav-logo em { font-style: normal; color: var(--primary); }
 .top-nav-actions { display: flex; align-items: center; gap: 6px; }
 .btn-nav { background: none; border: 1.5px solid var(--border); border-radius: var(--r-pill); padding: 6px 14px; font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 120ms; }
 .btn-nav:hover { background: var(--surface); color: var(--text); border-color: #C8C8C8; }
@@ -762,7 +762,7 @@ html[data-theme="dark"] .top-nav { background: rgba(9,9,15,0.88); backdrop-filte
 .wizard-backdrop { position: fixed; inset: 0; background: rgba(20,20,20,.45); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .wizard-card { background: var(--bg); border: 1.5px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); width: 100%; max-width: 480px; overflow: hidden; }
 .wizard-header { background: var(--surface); border-bottom: 1.5px solid var(--border); padding: 20px 24px 16px; display: flex; align-items: center; justify-content: space-between; }
-.wizard-logo { font-family: var(--sans); font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.3px; }
+.wizard-logo { font-family: var(--sans); font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -.4px; display: flex; align-items: center; gap: 7px; }
 .wizard-logo em { font-style: normal; color: var(--primary); }
 .wizard-progress { display: flex; gap: 6px; align-items: center; }
 .wizard-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 200ms var(--ease-spring); }

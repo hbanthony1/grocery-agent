@@ -1282,7 +1282,7 @@ Return ONLY the recipe name — no explanation, no punctuation, just the name.""
 
 # ── iCloud extras queue ───────────────────────────────────────────────────────
 
-_ICLOUD_EXTRAS = os.path.expanduser(r'~/iCloudDrive/grocery_extras.txt')
+_ICLOUD_EXTRAS = os.getenv('EXTRAS_QUEUE_PATH') or os.path.expanduser('~/iCloudDrive/grocery_extras.txt')
 
 
 @app.route('/extras-queue', methods=['GET'])

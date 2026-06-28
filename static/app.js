@@ -588,7 +588,11 @@ function cycleComplexity(day) {
   } else if (cx === 'leftovers') {
     meals.push({ day, meal: 'Leftovers', isLeftovers: true, isNew: false });
   } else {
-    meals.push({ day, meal: '', isNew: false });
+    const existing = meals.find(m => m.day === day);
+    const entry = existing || { day, meal: '', isNew: false };
+    if (cx === 'quick') entry.easyMode = true;
+    else entry.easyMode = false;
+    if (!existing) meals.push(entry);
   }
   const _ord = SCHEDULE_DAYS.map(d => d.key);
   meals.sort((a, b) => _ord.indexOf(a.day) - _ord.indexOf(b.day));
@@ -789,8 +793,12 @@ function openDashMealRecipe(name) {
   const nameEl = document.getElementById('recipeModalName');
   const bodyEl = document.getElementById('recipeModalBody');
   if (!nameEl || !bodyEl) return;
-  nameEl.textContent = name;
-  const r = recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
+  const cleanName = name.replace(' [NEW]', '').trim();
+  nameEl.textContent = cleanName;
+  const _norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  const _nn = _norm(cleanName);
+  let r = recipes.find(r => _norm(r.name) === _nn);
+  if (!r) r = recipes.find(r => { const rn = _norm(r.name); return rn.includes(_nn) || _nn.includes(rn); });
   if (r) {
     openRecipeModal(r);
   } else {
@@ -3440,6 +3448,13 @@ Set isNew:true only for the brand new recipes.`;
     });
     const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
     meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
+    // Defensive fill: ensure every planned day has a meal (Claude occasionally drops one)
+    planDays.forEach(day => {
+      if (!meals.some(m => m.day === day)) meals.push({ day, meal: '—', isNew: false });
+    });
+    meals.sort((a, b) => _dayOrder.indexOf(a.day) - _dayOrder.indexOf(b.day));
+    // Auto easy-mode for quick nights
+    meals.forEach(m => { if (schedule[m.day]?.complexity === 'quick') m.easyMode = true; });
     athleteItems = await athletePromise;
     if (athleteItems.length) {
       renderAthleteItems(athleteItems);
@@ -5195,6 +5210,7 @@ async function openMealRecipe(i) {
 
   // Not in recipe book — generate it
   _pendingGeneratedRecipe = null;
+  const body = document.getElementById('recipeModalBody');
   body.innerHTML = `<div class="recipe-modal-generating"><div class="dot"></div><span>Generating recipe...</span></div>`;
 
   try {
@@ -5261,8 +5277,10 @@ async function handlePantryImport(input) {
     await loadPantry();
     renderPantryPanel();
     if (btn) btn.textContent = `✓ ${result.imported} added, ${result.updated} updated`;
+    showToast(`Pantry import: ${result.imported} added, ${result.updated} updated`);
   } catch(e) {
     if (btn) btn.textContent = '✗ import failed';
+    showToast('Import failed — check file format', { type: 'error' });
   }
   input.value = '';
   if (btn) setTimeout(() => { btn.textContent = 'import CSV'; btn.disabled = false; }, 3000);
@@ -5377,8 +5395,10 @@ async function handleRecipesImport(input) {
     await loadRecipes();
     renderRecipesPanel();
     if (btn) btn.textContent = `✓ ${result.imported} added, ${result.updated} updated`;
+    showToast(`Recipes import: ${result.imported} added, ${result.updated} updated`);
   } catch(e) {
     if (btn) btn.textContent = '✗ import failed';
+    showToast('Import failed — check file format', { type: 'error' });
   }
   input.value = '';
   if (btn) setTimeout(() => { btn.textContent = 'import CSV'; btn.disabled = false; }, 3000);
