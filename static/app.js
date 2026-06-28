@@ -5635,6 +5635,42 @@ async function deleteHistoryWeek(date) {
   renderHistoryDashboard();
 }
 
+async function deleteMealHistoryWeek(weekDate) {
+  if (!confirm(`Delete meal history for week of ${weekDate}?`)) return;
+  prefs.mealHistory = (prefs.mealHistory || []).filter(w => w.week !== weekDate);
+  await fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs) }).catch(() => {});
+  showToast('Meal history week removed');
+  renderHistoryDashboard();
+}
+
+async function generateMonthlySummary() {
+  const btn  = document.getElementById('monthlySummaryBtn');
+  const body = document.getElementById('monthlySummaryBody');
+  if (!btn || !body) return;
+  btn.disabled = true;
+  btn.textContent = 'generating...';
+  try {
+    const resp = await fetch('/generate-monthly-summary', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Failed');
+    body.innerHTML = (data.sections || []).map(sec => `
+      <div style="margin-bottom:14px">
+        <div class="card-label" style="margin-bottom:6px;font-size:11px">${sec.title}</div>
+        <ul style="margin:0;padding-left:18px">
+          ${(sec.tasks || []).map(t => `<li class="recap-hint" style="margin-bottom:4px">${t}</li>`).join('')}
+        </ul>
+      </div>`).join('');
+    btn.textContent = '↺ regenerate';
+    btn.disabled = false;
+  } catch(e) {
+    body.innerHTML = `<p class="recap-hint" style="color:var(--error)">Couldn't generate summary — check Terminal.</p>`;
+    btn.disabled = false;
+    btn.textContent = 'generate monthly summary →';
+  }
+}
+
 async function renderHistoryDashboard() {
   const el = document.getElementById('historyDashboard');
   if (!el) return;
@@ -5683,6 +5719,7 @@ async function renderHistoryDashboard() {
       return `<div class="spend-meal-week">
         <span class="spend-meal-week-label">${label}</span>
         <span class="spend-meal-list">${(w.meals || []).join(' · ')}</span>
+        <button class="spend-bar-delete" onclick="deleteMealHistoryWeek('${w.week}')" title="Delete meal history for ${label}" aria-label="Delete ${label}">×</button>
       </div>`;
     }).join('') || '<div class="hh-loading">no meal history yet</div>';
 
@@ -5709,6 +5746,12 @@ async function renderHistoryDashboard() {
       <div class="card">
         <div class="card-label">recent meal plans</div>
         <div class="spend-meal-history">${mealHistoryHtml}</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-label">monthly summary</div>
+        <p class="prefs-sublabel" style="margin:6px 0 10px">Claude analyzes your meal rotation, spend trend, and staples to surface patterns and recommendations.</p>
+        <button class="btn primary" id="monthlySummaryBtn" onclick="generateMonthlySummary()">generate monthly summary →</button>
+        <div id="monthlySummaryBody" style="margin-top:12px"></div>
       </div>`;
   } catch(e) {
     el.innerHTML = '<div class="hh-loading">could not load history — make sure the server is running</div>';

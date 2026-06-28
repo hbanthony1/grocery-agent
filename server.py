@@ -1465,6 +1465,89 @@ Rules:
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/generate-monthly-summary', methods=['POST'])
+def generate_monthly_summary():
+    try:
+        with open(_dpath('prefs.json'), encoding='utf-8') as f:
+            prefs = json.load(f)
+    except Exception:
+        prefs = {}
+    try:
+        with open(_dpath('spend_history.json'), encoding='utf-8') as f:
+            spend_history = json.load(f)
+    except Exception:
+        spend_history = []
+    try:
+        with open(_dpath('staples.json'), encoding='utf-8') as f:
+            staples = json.load(f)
+    except Exception:
+        staples = []
+
+    recent_spend   = spend_history[-8:]
+    meal_history   = prefs.get('mealHistory', [])
+    household      = prefs.get('household', {})
+    brand_rules    = prefs.get('brandRules', [])
+    dietary_notes  = prefs.get('dietaryNotes', [])
+    budget_target  = household.get('budgetTarget', 175)
+    budget_max     = household.get('budgetMax', 225)
+
+    spend_lines = '\n'.join(
+        f"  Week of {w['date']}: ${w['total']:.2f} ({w['mealCount']} meals)"
+        for w in recent_spend
+    ) or '  No spend data available'
+
+    meal_lines = '\n'.join(
+        f"  Week of {w['week']}: {', '.join(w.get('meals', []))}"
+        for w in meal_history
+    ) or '  No meal history available'
+
+    staple_names = ', '.join(s.get('name', '') for s in staples[:20]) or 'none recorded'
+    brand_lines  = ', '.join(f"{r['item']} → {r['brand']}" for r in brand_rules) or 'none set'
+    diet_lines   = ', '.join(dietary_notes) or 'none'
+
+    prompt = f"""You are a grocery and meal planning analyst for a family of 4 in Livingston, MT.
+Budget: target ${budget_target}/week, max ${budget_max}/week.
+
+RECENT SPEND (last 8 weeks):
+{spend_lines}
+
+MEAL HISTORY (recent weeks):
+{meal_lines}
+
+WEEKLY STAPLES: {staple_names}
+BRAND PREFERENCES: {brand_lines}
+DIETARY NOTES: {diet_lines}
+
+Generate a concise monthly planning summary. Return ONLY valid JSON:
+{{
+  "sections": [
+    {{"title": "Meals this month", "tasks": ["specific observation about meal rotation and variety"]}},
+    {{"title": "Spend trend", "tasks": ["specific observation about spending vs budget"]}},
+    {{"title": "Recurring staples", "tasks": ["observation about staple patterns or brand consistency"]}},
+    {{"title": "Recommendations", "tasks": ["specific, actionable suggestion for next month"]}}
+  ]
+}}
+
+Rules:
+- Be specific to the data above — no generic advice
+- Each task is one clear, concrete sentence
+- Maximum 3 tasks per section
+- Only include a section if there is real data to support it
+- Recommendations should reference actual meals or spending patterns observed"""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model=MODEL, max_tokens=600,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        text = msg.content[0].text.strip().replace('```json', '').replace('```', '').strip()
+        return jsonify(json.loads(text))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 def _resolve_recipients() -> list[str]:
     """Return recipient emails from prefs (emails array), falling back to GMAIL_TO env var."""
     try:
