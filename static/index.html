@@ -75,6 +75,15 @@
     <div class="dash-pantry-chips" id="dashPantryChips"></div>
   </div>
 
+  <!-- Prep guide (persisted from last session) -->
+  <div id="dashPrepGuide" style="display:none">
+    <div class="dash-section-row">
+      <span class="dash-section-label">Sunday prep</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div id="dashPrepGuideBody"></div>
+  </div>
+
   <!-- Bottom CTA -->
   <div class="dash-cta-row">
     <span class="dash-cta-hint" id="dashCtaHint"></span>
@@ -415,6 +424,7 @@
         <span class="total-val" id="cartTotal">$0</span>
       </div>
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
+      <div id="absurdBox" class="cart-info-box warn" style="display:none"></div>
       <div id="notFoundBox" class="cart-info-box warn" style="display:none"></div>
       <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>

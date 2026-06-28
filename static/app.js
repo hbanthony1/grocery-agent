@@ -784,6 +784,27 @@ async function loadDashboard() {
   nextSunday.setDate(now.getDate() + (7 - now.getDay()) % 7 || 7);
   const nextSundayStr = nextSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   if (hintEl) hintEl.textContent = `next planning session · ${nextSundayStr}`;
+
+  // Prep guide — show if generated within the past 7 days
+  const pg = prefs.prepGuide;
+  if (pg?.sections?.length && pg.date) {
+    const daysSince = (Date.now() - new Date(pg.date)) / 86400000;
+    if (daysSince <= 7) _renderDashPrepGuide(pg);
+  }
+}
+
+function _renderDashPrepGuide(pg) {
+  const el   = document.getElementById('dashPrepGuide');
+  const body = document.getElementById('dashPrepGuideBody');
+  if (!el || !body) return;
+  body.innerHTML = pg.sections.map(sec => `
+    <div style="margin-bottom:14px">
+      <div class="card-label" style="margin-bottom:6px;font-size:11px">${sec.title}</div>
+      <ul style="margin:0;padding-left:18px">
+        ${(sec.tasks || []).map(t => `<li class="recap-hint" style="margin-bottom:4px">${t}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+  el.style.display = 'block';
 }
 
 function openDashMealRecipe(name) {
@@ -3385,6 +3406,22 @@ async function runMealPlan() {
   ];
   const outNote = skipNotes.length ? `\nSkip these days entirely: ${skipNotes.join(', ')}\n` : '';
 
+  // Double-batch hints: prior planned dinner should yield extra servings
+  const _dayOrder = SCHEDULE_DAYS.map(d => d.key);
+  const batchNotes = leftoverDays.map(lday => {
+    const ldayIdx = _dayOrder.indexOf(lday);
+    for (let i = ldayIdx - 1; i >= 0; i--) {
+      if (planDays.includes(_dayOrder[i]))
+        return `- Plan ${_dayOrder[i]}'s dinner as a double batch (${servingSize * 2} servings) — ${lday} will use the leftovers`;
+    }
+    return null;
+  }).filter(Boolean);
+  const lunchLeftovers = weekLunches.some(l => /leftovers?/i.test(l));
+  const batchNote = [
+    batchNotes.length ? `\nDOUBLE BATCH DINNERS:\n${batchNotes.join('\n')}` : '',
+    lunchLeftovers ? '\nNOTE: This family eats dinner leftovers for some lunches — plan generous dinners that yield enough for the next day.' : '',
+  ].join('');
+
   const quickRecipes = recipes.filter(r => (r.tags||[]).some(t => /quick|easy|fast/i.test(t))).map(r => r.name);
   const quickRule = quickRecipes.length
     ? `- For QUICK nights you MUST choose from these quick-tagged recipes in the book: ${quickRecipes.join(', ')}. Only deviate if none fit the week's variety rules.`
@@ -3399,7 +3436,7 @@ ${prefsText}
 
 SCHEDULE (match meal complexity to each day's availability):
 ${buildSchedulePrompt()}
-${outNote}
+${outNote}${batchNote}
 ${newMealInstruction}
 
 Rules:
@@ -3571,6 +3608,9 @@ function renderMeals() {
     const mealPhoto = matchedRecipe?.photo ? `<img class="meal-card-photo" src="${matchedRecipe.photo}" alt="${mealName}">` : '';
     const easyLabel = m.easyLoading ? '...' : (m.easyMode ? '✓ easy' : 'use easy');
     const easyTitle = m.easyMode ? 'Using a store-bought version — click to switch back to homemade' : 'Switch to a store-bought or frozen version';
+    const _dayIdx = SCHEDULE_DAYS.findIndex(d => d.key === m.day);
+    const _nextDayKey = SCHEDULE_DAYS[_dayIdx + 1]?.key;
+    const isDoubleBatch = _nextDayKey && schedule[_nextDayKey]?.complexity === 'leftovers';
     return `
       <div class="meal-card ${m.isNew ? 'new-meal' : ''} ${isSwapping ? 'swapping' : ''} ${m.easyMode ? 'easy-meal' : ''}" id="meal${i}">
         <div class="day-badge">
@@ -3582,6 +3622,7 @@ function renderMeals() {
           <div class="meal-tags">
             ${m.isNew ? '<span class="new-badge">✦ new</span>' : ''}
             ${m.easyMode ? '<span class="easy-badge">⚡ easy</span>' : ''}
+            ${isDoubleBatch ? `<span class="double-batch-badge" title="${_nextDayKey} leftovers">⬆ double batch</span>` : ''}
             ${tagsHtml}
           </div>
         </div>
@@ -4194,6 +4235,8 @@ async function generatePrepGuide() {
     if (!resp.ok || data.error) throw new Error(data.error || 'Failed');
     _prepGuideSections = data.sections || [];
     _renderPrepGuide();
+    prefs.prepGuide = { date: new Date().toISOString().split('T')[0], sections: _prepGuideSections };
+    fetch('/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {});
   } catch(e) {
     if (body) body.innerHTML = `<p class="recap-hint" style="color:var(--error)">Couldn't generate guide — check Terminal.</p>`;
     if (btn)  { btn.disabled = false; btn.textContent = 'try again'; }
@@ -4557,6 +4600,18 @@ function checkPriceSpikes(groups) {
 
 
 
+function _checkAbsurdItems(groups) {
+  const flagged = [];
+  Object.entries(groups).forEach(([src, items]) =>
+    items.forEach((item, i) => {
+      const price = parseFloat((item.price || '').replace('$', ''));
+      const isBulk = /\b\d{2,}-?\s*(count|ct|pk|pack|case)\b/i.test(item.name);
+      if (price > 50 || isBulk) flagged.push({ src, i, item, price });
+    })
+  );
+  return flagged;
+}
+
 function _renderNotFoundBox() {
   const notFoundBox = document.getElementById('notFoundBox');
   if (!notFoundBox) return;
@@ -4620,6 +4675,27 @@ function renderCart(groups, mealOrder, total, url, notFound, skipSanity = false)
 
   // Not-found items — interactive retry rows
   _renderNotFoundBox();
+
+  // Absurd item guard — auto-deselect items that look like bulk/commercial size
+  const absurdItems = _checkAbsurdItems(groups);
+  const absurdBox = document.getElementById('absurdBox');
+  if (absurdItems.length) {
+    absurdItems.forEach(({ src, i }) => _cartDeselected.add(`${src}-${i}`));
+    if (absurdBox) {
+      absurdBox.style.display = 'block';
+      absurdBox.innerHTML = `<strong>⚠ Flagged items — auto-removed (price or pack size looks wrong):</strong>` +
+        absurdItems.map(({ src, i, item }) => {
+          const key = `${src}-${i}`;
+          return `<div class="not-found-row">
+            <span class="not-found-name">${item.name}</span>
+            <span style="color:var(--text3);font-size:12px;margin-left:4px">${item.price}</span>
+            <button class="btn not-found-btn" onclick="toggleCartItem('${key}');this.closest('.not-found-row').remove();if(!document.querySelector('#absurdBox .not-found-row'))document.getElementById('absurdBox').style.display='none'">restore →</button>
+          </div>`;
+        }).join('');
+    }
+  } else if (absurdBox) {
+    absurdBox.style.display = 'none';
+  }
 
   // Price spike detection
   const spikes = checkPriceSpikes(groups);
