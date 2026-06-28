@@ -1616,6 +1616,7 @@ function openStaplesPage(fromHistory = false) {
   document.getElementById('staplesPage').style.display = 'flex';
   _syncPanelOpen();
   renderStaplesPanel();
+  loadExtrasQueue();
   _staplesTrap = _trapFocus(document.getElementById('staplesPage'));
 }
 
@@ -1746,6 +1747,7 @@ function renderStaplesPanel() {
       </div>
     </div>`;
   }).join('');
+  _renderOneTimeList();
 }
 
 function addStapleFromPanel() {
@@ -1862,20 +1864,14 @@ async function loadExtrasQueue() {
     if (newItems.length) {
       newItems.forEach(name => staplesOneTime.push({ name, qty: 1 }));
       _renderOneTimeList();
-      const badge = document.createElement('div');
-      badge.textContent = `${newItems.length} item${newItems.length > 1 ? 's' : ''} added from your phone`;
-      badge.style.cssText = 'background:var(--accent,#4caf50);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:12px';
-      badge.id = 'extrasQueueBadge';
-      document.getElementById('staplesOneTimeList')?.before(badge);
-      setTimeout(() => badge.remove(), 5000);
+      showToast(`${newItems.length} item${newItems.length > 1 ? 's' : ''} added from your phone`);
     } else if (!data.exists && !document.getElementById('icloudSetupHint')) {
       const hint = document.createElement('p');
       hint.id = 'icloudSetupHint';
       hint.className = 'review-hint';
       hint.style.cssText = 'margin-top:8px;font-size:11px;color:var(--text3)';
       hint.innerHTML = `📱 <strong>iPhone extras:</strong> create <code>${data.path}</code> — type items one per line and they'll appear here.`;
-      const anchor = document.querySelector('#step4 .card') || document.getElementById('staplesOneTimeList');
-      anchor?.after(hint);
+      document.querySelector('.staple-extras-section')?.prepend(hint);
     }
   } catch (_) {}
 }
@@ -3795,9 +3791,15 @@ function combineReviewItems(keepKey, removeKey) {
 }
 
 function openReviewRecipe(mealName) {
-  const recipe = recipes.find(r => r.name.toLowerCase() === mealName.toLowerCase());
-  if (recipe) openRecipeModal(recipe);
-  else showToast(`No saved recipe for "${mealName}"`, { type: 'error' });
+  const clean = mealName.replace(' [NEW]', '').trim();
+  const _norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  const _nn = _norm(clean);
+  let r = recipes.find(r => _norm(r.name) === _nn);
+  if (!r) r = recipes.find(r => { const rn = _norm(r.name); return rn.includes(_nn) || _nn.includes(rn); });
+  if (r) { openRecipeModal(r); return; }
+  const idx = meals.findIndex(m => _norm(m.meal.replace(' [NEW]','').trim()) === _nn);
+  if (idx >= 0) openMealRecipe(idx);
+  else showToast(`No saved recipe for "${clean}"`, { type: 'error' });
 }
 
 function _renderReviewList() {

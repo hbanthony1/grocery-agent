@@ -347,14 +347,6 @@
       <div class="card-label">weekly staples — confirm what you need this week</div>
       <div id="staplesStepList"><span class="hh-loading">loading staples...</span></div>
     </div>
-    <div class="card">
-      <div class="card-label">anything extra this week? <span class="card-label-hint">(one-time, not saved)</span></div>
-      <div id="staplesOneTimeList"></div>
-      <div class="hh-extra-input-row">
-        <input class="schedule-note" id="staplesOneTimeInput" placeholder="add a one-time item..." onkeydown="if(event.key==='Enter')addOneTimeStaple()" />
-        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addOneTimeStaple()">add</button>
-      </div>
-    </div>
     <div class="actions">
       <button class="btn" onclick="goToStep(3)">← back</button>
       <button class="btn mustard" onclick="proceedToReview()">Continue to Review →</button>
@@ -613,6 +605,14 @@
     <div class="recipes-page-body">
       <p class="prefs-sublabel" style="margin:16px 0 4px">Your recurring purchases — confirmed each week in Step 4.</p>
       <div id="staplesPanelList"></div>
+      <div class="staple-extras-section">
+        <div class="card-label" style="margin:20px 0 6px">one-time this week <span class="card-label-hint">(not saved)</span></div>
+        <div id="staplesOneTimeList"></div>
+        <div class="hh-extra-input-row">
+          <input class="schedule-note" id="staplesOneTimeInput" placeholder="add a one-time item..." onkeydown="if(event.key==='Enter')addOneTimeStaple()" />
+          <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addOneTimeStaple()">add</button>
+        </div>
+      </div>
     </div>
   </div>
 
