@@ -252,7 +252,7 @@
     .then(d => {
       if (d.error && d.error.includes('invite code')) {
         // invite required — show field (default)
-      } else if (d.error && !d.error.includes('invite')) {
+      } else if (!d.error || (d.error && !d.error.includes('invite'))) {
         // first run — no invite needed
         document.getElementById('inviteWrap').style.display = 'none';
         document.getElementById('firstRunHint').style.display = 'block';

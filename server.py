@@ -720,6 +720,11 @@ def register():
     if len(password) < 6:
         return jsonify({'error': 'password must be at least 6 characters'}), 400
     users_data = _load_users()
+    # Probe request from login page — just report first-run status without side effects
+    if username == '__probe__':
+        if users_data['users']:
+            return jsonify({'error': 'An invite code is required'}), 403
+        return jsonify({'ok': True, 'firstRun': True})
     # First registration needs no invite code — lets the owner set up their account
     if users_data['users']:
         valid_codes = [c.strip() for c in os.getenv('INVITE_CODES', '').split(',') if c.strip()]
