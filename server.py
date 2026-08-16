@@ -529,7 +529,6 @@ def week_glance():
 
     return jsonify({
         'days': days_data,
-        'weekMonday': week_monday_iso,
         'calendarEvents': calendar_events,
         'expiringPantry': expiring,
         'breakfasts': prefs_data.get('defaultBreakfasts', []),
@@ -1014,6 +1013,7 @@ def import_recipe_from_url():
     page_text = s.get_data()[:8000]
 
     try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         msg = client.messages.create(model=MODEL, max_tokens=1024, messages=[{
             'role': 'user',
             'content': (

@@ -316,19 +316,25 @@ def send_summary(schedule, calendar_events, monday, sunday) -> None:
 def main():
     test_mode = '--test' in sys.argv
     tz        = _get_timezone()
-    schedule  = _load_json(SCHEDULE_PATH) or []
     today     = datetime.datetime.now(tz).date()
+    monday, sunday = _current_week(tz)
 
-    monday, sunday = _week_range_from_schedule(schedule)
-    # If no schedule or it's from a past week, fall back to the current Sun–Sat week
-    if monday is None or monday < today:
-        monday, sunday = _current_week(tz)
+    # Build schedule from prefs.lastWeekMeals — covers all 7 days including
+    # weekends and Leftovers nights (meal_schedule.json is Mon–Fri reminders only)
+    prefs     = _load_json(PREFS_PATH) or {}
+    last_meals = prefs.get('lastWeekMeals', [])
+    schedule  = [{'day': m['day'], 'meal': m['meal']} for m in last_meals if m.get('day') and m.get('meal')]
 
-    # Only include entries that fall within the selected week
-    schedule = [
-        e for e in schedule
-        if _safe_date(e.get('date')) is not None and monday <= _safe_date(e['date']) <= sunday
-    ]
+    # Fall back to meal_schedule.json if prefs has no meal data
+    if not schedule:
+        file_sched = _load_json(SCHEDULE_PATH) or []
+        file_monday, file_sunday = _week_range_from_schedule(file_sched)
+        if file_monday and file_monday >= today - datetime.timedelta(days=7):
+            monday, sunday = file_monday, file_sunday
+            schedule = [
+                e for e in file_sched
+                if _safe_date(e.get('date')) is not None and monday <= _safe_date(e['date']) <= sunday
+            ]
 
     cal_events = _get_calendar_events(monday, sunday, tz)
 
