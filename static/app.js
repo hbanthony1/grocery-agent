@@ -81,6 +81,7 @@ let _nonDinnerExpanded    = new Set();
 let swappingIndex = -1;
 let recipes = [];
 let pantry = [];
+let pantrySort = 'name'; // 'name' | 'expiry'
 let prefs = {};
 const pendingRatings = {};
 let _pendingGeneratedRecipe = null;
@@ -1974,18 +1975,41 @@ function navigateToStaples() {
   renderStaplesStep();
 }
 
+function togglePantrySort() {
+  pantrySort = pantrySort === 'name' ? 'expiry' : 'name';
+  const btn = document.getElementById('pantrySortBtn');
+  if (btn) btn.textContent = pantrySort === 'expiry' ? 'sort: expiry ✓' : 'sort: A–Z';
+  renderPantryPanel();
+}
+
 function renderPantryPanel() {
   const query = (document.getElementById('pantrySearch')?.value || '').toLowerCase();
   let filtered = query
     ? pantry.filter(i => i.name.toLowerCase().includes(query))
     : [...pantry];
 
-  // Sort: expired first, then expiring soon, then by name
-  const order = { expired: 0, soon: 1, week: 2, ok: 3, none: 4 };
-  filtered.sort((a, b) => {
-    const diff = order[pantryExpiryStatus(a.expiresOn)] - order[pantryExpiryStatus(b.expiresOn)];
-    return diff !== 0 ? diff : a.name.localeCompare(b.name);
-  });
+  if (pantrySort === 'expiry') {
+    // Sort by exact expiration date ascending; items with no date go to the bottom
+    filtered.sort((a, b) => {
+      const da = a.expiresOn || null;
+      const db = b.expiresOn || null;
+      if (da && db) return da < db ? -1 : da > db ? 1 : a.name.localeCompare(b.name);
+      if (da) return -1;
+      if (db) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  } else {
+    // Default: alphabetical, with expiry-status urgency as a tiebreaker for expired/soon
+    const order = { expired: 0, soon: 1, week: 2, ok: 3, none: 4 };
+    filtered.sort((a, b) => {
+      const sa = pantryExpiryStatus(a.expiresOn);
+      const sb = pantryExpiryStatus(b.expiresOn);
+      // Pin expired/soon to top regardless of name
+      const urgent = v => v === 'expired' || v === 'soon';
+      if (urgent(sa) !== urgent(sb)) return urgent(sa) ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
 
   document.getElementById('pantryList').innerHTML = filtered.length
     ? filtered.map(i => pantryItemHtml(i)).join('')

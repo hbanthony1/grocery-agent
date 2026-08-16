@@ -709,7 +709,10 @@
       </div>
     </div>
     <div class="recipes-page-body">
-      <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:0">
+        <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" style="margin-bottom:0;flex:1" />
+        <button class="btn" id="pantrySortBtn" onclick="togglePantrySort()" style="white-space:nowrap;flex-shrink:0">sort: A–Z</button>
+      </div>
       <div id="pantryList"></div>
       <div id="orderUploadCard" style="display:none">
         <div class="card" style="margin-top:12px">
