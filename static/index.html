@@ -17,45 +17,135 @@
 
 <!-- TOP NAV -->
 <nav class="top-nav">
-  <span class="top-nav-logo" onclick="resetApp()" style="cursor:pointer">Grocery <em>Agent</em></span>
+  <div class="top-nav-logo" onclick="resetApp()" style="cursor:pointer">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#2d1b69"/><rect x="6" y="8" width="16" height="3.5" rx="1.75" fill="#a78bfa"/><rect x="8" y="13" width="12" height="3.5" rx="1.75" fill="#8b5cf6"/><rect x="10" y="18" width="8" height="3.5" rx="1.75" fill="#6d28d9"/><path d="M22 3L22.6 5L25 5.5L22.6 6L22 8L21.4 6L19 5.5L21.4 5Z" fill="#ddd6fe"/></svg>
+    Grocery <em>Agent</em>
+  </div>
   <div class="top-nav-actions">
     <button class="btn-nav" id="navRecipes" onclick="toggleRecipesPanel()">recipes</button>
     <button class="btn-nav" id="navPantry" onclick="togglePantryPanel()">pantry</button>
-    <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">holiday</button>
-    <button class="btn-nav" id="navPrefs" onclick="openPrefsPage()">preferences</button>
+    <button class="btn-nav" id="navStaples" onclick="toggleStaplesPanel()">staples</button>
+    <button class="btn-nav" id="navTraining" onclick="toggleTrainingPanel()">training</button>
+    <button class="btn-nav" id="navHoliday" onclick="openHolidayPlanner()">occasions</button>
+    <button class="btn-nav" id="navHistory" onclick="openHistoryPage()">history</button>
+    <button class="btn-nav btn-nav-icon" id="navPrefs" onclick="openPrefsPage()" aria-label="Settings" title="Settings">&#9881;</button>
+    <button class="btn-nav" id="navLogout" onclick="doLogout()" title="Sign out">sign out</button>
   </div>
 </nav>
 
-<div class="app" id="mainApp">
+<!-- WEEK AT A GLANCE DASHBOARD -->
+<div id="dashboardView">
+
+  <div class="dash-greeting-row">
+    <div class="dash-greeting-left">
+      <div class="dash-time-of-day" id="dashTimeOfDay"></div>
+      <h1 class="dash-date-headline" id="dashDateHeadline">
+        <span class="dash-day-name" id="dashDayName"></span><span id="dashDateRest"></span>
+      </h1>
+    </div>
+    <button class="btn primary" onclick="startPlanning()">Start planning →</button>
+  </div>
+
+  <!-- Tonight hero -->
+  <div class="dash-tonight-card" id="dashTonightCard">
+    <div class="dash-tonight-eyebrow">
+      <span class="dash-tonight-label" id="dashTonightLabel">Tonight</span>
+      <span class="dash-tonight-date-tag" id="dashTonightDateTag"></span>
+    </div>
+    <div class="dash-tonight-meal" id="dashTonightMeal">Loading…</div>
+    <div id="dashTonightMeta" class="dash-tonight-meta"></div>
+    <div id="dashTonightEvents" class="dash-tonight-events"></div>
+  </div>
+
+  <!-- Week grid -->
+  <div class="dash-week-section">
+    <div class="dash-section-row">
+      <span class="dash-section-label">This week</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div class="dash-week-grid" id="dashWeekGrid"></div>
+  </div>
+
+  <!-- Expiring pantry -->
+  <div class="dash-pantry-section" id="dashPantrySection" style="display:none">
+    <div class="dash-section-row">
+      <span class="dash-section-label">Use this week</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div class="dash-pantry-chips" id="dashPantryChips"></div>
+  </div>
+
+  <!-- Prep guide (persisted from last session) -->
+  <div id="dashPrepGuide" style="display:none">
+    <div class="dash-section-row">
+      <span class="dash-section-label">Sunday prep</span>
+      <div class="dash-section-line"></div>
+    </div>
+    <div id="dashPrepGuideBody"></div>
+  </div>
+
+  <!-- Bottom CTA -->
+  <div class="dash-cta-row">
+    <span class="dash-cta-hint" id="dashCtaHint"></span>
+    <button class="btn" onclick="startPlanning()">Go to planning →</button>
+  </div>
+
+</div>
+
+<div class="app" id="mainApp" style="display:none">
 
   <!-- STEP PROGRESS CARDS -->
   <div class="hero-steps">
     <div class="hero-step-card todo" id="heroStep0" onclick="goToStep(0)">
       <div class="hero-step-num">1</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Your Week</div>
-        <div class="hero-step-desc">Schedule &amp; calendar</div>
+        <div class="hero-step-label">Recap</div>
+        <div class="hero-step-desc">Last week's meals</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
-    <div class="hero-step-card todo" id="heroStep1">
+    <div class="hero-step-card todo" id="heroStep1" onclick="goToStep(1)">
       <div class="hero-step-num">2</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Meal Plan</div>
-        <div class="hero-step-desc">7 dinners, AI-matched</div>
+        <div class="hero-step-label">Your Week</div>
+        <div class="hero-step-desc">Schedule &amp; calendar</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
     <div class="hero-step-card todo" id="heroStep2">
       <div class="hero-step-num">3</div>
       <div class="hero-step-info">
-        <div class="hero-step-label">Household</div>
-        <div class="hero-step-desc">Items to add</div>
+        <div class="hero-step-label">Meal Plan</div>
+        <div class="hero-step-desc">7 dinners, AI-matched</div>
       </div>
     </div>
     <div class="hero-step-arrow">›</div>
     <div class="hero-step-card todo" id="heroStep3">
       <div class="hero-step-num">4</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Extras</div>
+        <div class="hero-step-desc">Items to add</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep4" onclick="goToStep(4)">
+      <div class="hero-step-num">5</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Staples</div>
+        <div class="hero-step-desc">Weekly essentials</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep5">
+      <div class="hero-step-num">6</div>
+      <div class="hero-step-info">
+        <div class="hero-step-label">Review</div>
+        <div class="hero-step-desc">Ingredients &amp; overlaps</div>
+      </div>
+    </div>
+    <div class="hero-step-arrow">›</div>
+    <div class="hero-step-card todo" id="heroStep6">
+      <div class="hero-step-num">7</div>
       <div class="hero-step-info">
         <div class="hero-step-label">Cart</div>
         <div class="hero-step-desc">Build &amp; check out</div>
@@ -63,16 +153,10 @@
     </div>
   </div>
 
-  <!-- STEP 0: Your Week -->
+  <!-- STEP 0: Last Week's Recap -->
   <div id="step0">
 
-    <!-- HOLIDAY SUMMARY CARD (shown when a holiday is planned) -->
-    <div id="holidayCard" class="card" style="display:none">
-      <div class="card-label">🎄 holiday meal</div>
-      <div id="holidaySection"></div>
-    </div>
-
-    <!-- WEEKLY RECAP CARD (shown if last week's data exists) -->
+    <!-- WEEKLY RECAP CARD -->
     <div id="recapCard" class="card recap-card" style="display:none">
 
       <!-- Collapsed state (shown after saving) -->
@@ -87,6 +171,8 @@
           <span class="card-label" style="margin-bottom:0">last week's recap</span>
           <button class="btn-link" onclick="dismissRecap()">skip →</button>
         </div>
+
+        <div id="spendHistoryRow" style="display:none" class="recap-spend-row"></div>
 
         <div class="recap-section">
           <button class="recap-sec-hdr" onclick="toggleRecapSection('order')">
@@ -145,66 +231,83 @@
       </div>
     </div>
 
-    <div class="step0-grid">
-      <!-- Left: Calendar + Schedule -->
-      <div class="step0-col">
-        <div id="calSection"></div>
-        <div class="card">
-          <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
-          <div class="schedule-grid" id="scheduleGrid"></div>
-          <div class="schedule-legend">
-            <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
-            <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
-            <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
-          </div>
-        </div>
-      </div>
-      <!-- Right: Breakfast + Lunch picks -->
-      <div class="step0-col">
-        <div class="card">
-          <div class="card-label">breakfast this week</div>
-          <div id="breakfastSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">lunch this week</div>
-          <div id="lunchSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">dessert this week</div>
-          <div id="dessertSection"><span class="hh-loading">loading...</span></div>
-        </div>
-        <div class="card">
-          <div class="card-label">snacks this week</div>
-          <div id="snacksSection"><span class="hh-loading">loading...</span></div>
+  <div class="actions">
+    <button class="btn mustard" onclick="goToStep(1)">Continue to Your Week →</button>
+  </div>
+</div>
+
+<!-- STEP 1: Your Week -->
+<div id="step1" style="display:none">
+
+  <!-- HOLIDAY SUMMARY CARD (shown when a holiday is planned) -->
+  <div id="holidayCard" class="card" style="display:none">
+    <div class="card-label">🎄 holiday meal</div>
+    <div id="holidaySection"></div>
+  </div>
+
+  <div class="step0-grid">
+    <!-- Left: Calendar + Schedule -->
+    <div class="step0-col">
+      <div id="calSection"></div>
+      <div class="card">
+        <div class="card-label">this week's schedule — auto-set from calendar, click to adjust</div>
+        <div class="schedule-grid" id="scheduleGrid"></div>
+        <div class="schedule-legend">
+          <div class="schedule-legend-item"><span class="cx cx-quick">Quick</span>30 min or less</div>
+          <div class="schedule-legend-item"><span class="cx cx-normal">Normal</span>up to 1 hour</div>
+          <div class="schedule-legend-item"><span class="cx cx-open">Open</span>plenty of time</div>
         </div>
       </div>
     </div>
-    <div class="actions step0-actions">
-      <div class="step0-toggles">
-        <div class="new-meal-toggle">
-          <input type="checkbox" id="includeNew" checked />
-          <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
-        </div>
-        <div class="new-meal-toggle" id="pantryToggleRow" style="display:none">
-          <input type="checkbox" id="usePantry" checked />
-          <label for="usePantry">Use pantry items where possible</label>
-        </div>
-        <div class="serving-size-row">
-          <span class="serving-size-label">cooking for</span>
-          <div class="serving-stepper">
-            <button class="stepper-btn" onclick="updateServingSize(servingSize - 1)" aria-label="Fewer servings">−</button>
-            <strong id="servingSizeVal">4</strong>
-            <button class="stepper-btn" onclick="updateServingSize(servingSize + 1)" aria-label="More servings">+</button>
-          </div>
-          <span class="serving-size-hint">dinner servings</span>
-        </div>
+    <!-- Right: Breakfast + Lunch picks -->
+    <div class="step0-col">
+      <div class="card">
+        <div class="card-label">breakfast this week</div>
+        <div id="breakfastSection"><span class="hh-loading">loading...</span></div>
       </div>
+      <div class="card">
+        <div class="card-label">lunch this week</div>
+        <div id="lunchSection"><span class="hh-loading">loading...</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">dessert this week</div>
+        <div id="dessertSection"><span class="hh-loading">loading...</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">snacks this week</div>
+        <div id="snacksSection"><span class="hh-loading">loading...</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="actions step0-actions">
+    <div class="step0-toggles">
+      <div class="new-meal-toggle">
+        <input type="checkbox" id="includeNew" checked />
+        <label for="includeNew">Include 1–2 new recipes we haven't tried before</label>
+      </div>
+      <div class="new-meal-toggle" id="pantryToggleRow" style="display:none">
+        <input type="checkbox" id="usePantry" checked />
+        <label for="usePantry">Use pantry items where possible</label>
+      </div>
+      <div class="serving-size-row">
+        <span class="serving-size-label">cooking for</span>
+        <div class="serving-stepper">
+          <button class="stepper-btn" onclick="updateServingSize(servingSize - 1)" aria-label="Fewer servings">−</button>
+          <strong id="servingSizeVal">4</strong>
+          <button class="stepper-btn" onclick="updateServingSize(servingSize + 1)" aria-label="More servings">+</button>
+        </div>
+        <span class="serving-size-hint">dinner servings</span>
+      </div>
+    </div>
+    <div class="step1-nav">
+      <button class="btn" onclick="goToStep(0)">← recap</button>
       <button class="btn primary" onclick="runMealPlan()">Generate meal plan →</button>
     </div>
   </div>
+</div>
 
-  <!-- STEP 1: Meal Plan -->
-  <div id="step1" style="display:none">
+<!-- STEP 2: Meal Plan -->
+<div id="step2" style="display:none">
     <div id="loadingBar" class="loading-spinner" style="display:none">
       <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="loadingMsg" aria-live="polite">Thinking up something delicious...</div>
@@ -223,14 +326,14 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" onclick="goToStep(0)">← back</button>
+      <button class="btn" onclick="goToStep(1)">← back</button>
       <button class="btn" id="regenerateBtn" onclick="runMealPlan()" style="display:none">↺ regenerate</button>
       <button class="btn mustard" id="approveBtn" onclick="approveMealPlan()" style="display:none">Approve & continue →</button>
     </div>
   </div>
 
-  <!-- STEP 2: Household Items -->
-  <div id="step2" style="display:none">
+  <!-- STEP 3: Household Items -->
+  <div id="step3" style="display:none">
     <div class="card">
       <div class="card-label hh-label">household items — <span id="hhCount">0 selected</span></div>
       <div class="hh-grid" id="hhGrid"><span class="hh-loading">loading...</span></div>
@@ -241,26 +344,61 @@
       </div>
       <button class="btn prefs-add-btn" id="hhAddBtn" onclick="showHhAddRow()" style="margin-top:10px">+ add item</button>
     </div>
-    <div class="card" id="fsCard" style="display:none">
-      <div class="card-label hh-label">frequent staples — <span id="fsCount">0 of 0</span></div>
-      <div class="hh-grid" id="fsGrid"></div>
-    </div>
-    <div class="card hh-extras-card">
-      <div class="card-label">anything else needed this week?</div>
-      <div id="hhExtrasList"></div>
-      <div class="hh-extra-input-row">
-        <input class="schedule-note" id="hhExtraInput" placeholder="add a one-off item..." onkeydown="handleHhExtraKey(event)" />
-        <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addHhExtra()">add</button>
-      </div>
-    </div>
     <div class="actions">
-      <button class="btn" onclick="goToStep(1)">← back</button>
-      <button class="btn mustard" onclick="navigateAndBuildCart()">Build cart →</button>
+      <button class="btn" onclick="goToStep(2)">← back</button>
+      <button class="btn mustard" onclick="navigateAndBuildCart()">Continue to Staples →</button>
     </div>
   </div>
 
-  <!-- STEP 3: Cart -->
-  <div id="step3" style="display:none">
+  <!-- STEP 4: Staples -->
+  <div id="step4" style="display:none">
+    <div class="card">
+      <div class="card-label">weekly staples — confirm what you need this week</div>
+      <div id="staplesStepList"><span class="hh-loading">loading staples...</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(3)">← back</button>
+      <button class="btn mustard" onclick="proceedToReview()">Continue to Review →</button>
+    </div>
+  </div>
+
+  <!-- STEP 5: Ingredient Review -->
+  <div id="step5" style="display:none">
+    <div id="reviewLoadingBar" class="loading-spinner" style="display:none">
+      <div class="loading-spinner-circle"></div>
+      <div class="cart-loader-msg" id="reviewLoadingMsg" aria-live="polite">Loading ingredients from recipe book...</div>
+    </div>
+    <div id="reviewError" class="error-box" style="display:none"></div>
+    <div id="reviewCard" class="card" style="display:none">
+      <div class="cart-card-header">
+        <span class="card-label" style="margin-bottom:0">ingredient review</span>
+        <div class="cart-view-pills" role="group" aria-label="Review view">
+          <button class="cart-view-pill active" id="reviewViewRecipe"   onclick="setReviewView('recipe')">by recipe</button>
+          <button class="cart-view-pill"         id="reviewViewCategory" onclick="setReviewView('category')">by category</button>
+        </div>
+      </div>
+      <p class="review-hint">Uncheck anything you don't need, mark items already in pantry, or switch to <strong>by category</strong> to spot overlaps across meals and combine them.</p>
+      <div class="review-summary-row">
+        <span class="review-summary" id="reviewSummary"></span>
+        <div style="display:flex;gap:6px">
+          <button class="btn" onclick="copyShoppingList()" style="font-size:12px;padding:2px 10px;height:26px">copy list</button>
+          <button class="btn" onclick="exportShoppingList()" style="font-size:12px;padding:2px 10px;height:26px">export list</button>
+        </div>
+      </div>
+      <div id="reviewList"></div>
+      <div id="nonDinnerReviewSection" style="display:none">
+        <div class="review-group-label" style="margin-top:16px">breakfasts, lunches &amp; more</div>
+        <div id="nonDinnerReviewList"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="goToStep(4)">← back</button>
+      <button class="btn mustard" id="buildCartFromReviewBtn" onclick="buildCartFromReview()" style="display:none">Build cart →</button>
+    </div>
+  </div>
+
+  <!-- STEP 6: Cart -->
+  <div id="step6" style="display:none">
     <div id="cartLoadingBar" class="loading-spinner" style="display:none">
       <div class="loading-spinner-circle"></div>
       <div class="cart-loader-msg" id="cartLoadingMsg" aria-live="polite">Building your Walmart cart...</div>
@@ -286,38 +424,54 @@
         <span class="total-val" id="cartTotal">$0</span>
       </div>
       <div id="budgetBar" class="budget-bar" style="display:none"></div>
+      <div id="absurdBox" class="cart-info-box warn" style="display:none"></div>
       <div id="notFoundBox" class="cart-info-box warn" style="display:none"></div>
       <div id="spikeBox" class="cart-info-box warn" style="display:none"></div>
-      <div id="reuseBox" class="cart-info-box note" style="display:none"></div>
       <div id="swapSuggestBox" class="swap-suggest-box" style="display:none"></div>
-      <div id="sanityBox" class="sanity-box" style="display:none"></div>
       <div class="cart-url-box" id="cartUrlBox" style="display:none">
         <button class="open-btn" id="openCartBtn">open in Walmart →</button>
       </div>
     </div>
+    <!-- PREP GUIDE CARD (shown after cart is built) -->
+    <div id="prepGuideCard" class="card" style="display:none;margin-top:12px">
+      <div class="card-label">sunday prep guide</div>
+      <div id="prepGuideBody">
+        <p class="review-hint" style="margin-bottom:12px">Get a personalized checklist of what to prep tonight so weeknight dinners go smoothly.</p>
+        <button class="btn primary" id="prepGuideGenBtn" onclick="generatePrepGuide()">generate prep guide →</button>
+      </div>
+    </div>
+
     <div class="actions">
-      <button class="btn" onclick="goToStep(2)">← back</button>
+      <button class="btn" onclick="goToStep(4)">← back</button>
       <button class="btn primary" id="buildCartBtn" onclick="startCartBuild()" style="display:none">retry →</button>
       <button class="btn mustard" id="doneBtn" onclick="confirmOrder()" style="display:none">I checked out →</button>
     </div>
   </div>
 
-  <!-- RECIPE MODAL -->
-  <div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
-    <div class="recipe-modal-card" onclick="event.stopPropagation()">
+</div><!-- end #mainApp -->
+
+<!-- OVERLAYS — position: fixed, outside #mainApp so they work from the dashboard and planning flow alike -->
+
+  <!-- PICKER CONFIRM MODAL -->
+  <div id="pickerConfirmBackdrop" class="recipe-modal-backdrop" style="display:none" onclick="document.getElementById('pickerConfirmBackdrop').style.display='none'">
+    <div class="recipe-modal-card" onclick="event.stopPropagation()" style="max-width:360px" role="dialog" aria-modal="true" aria-labelledby="pickerConfirmTitle">
       <div class="recipe-modal-header">
-        <span class="recipe-modal-name" id="recipeModalName"></span>
-        <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'" aria-label="Close recipe">×</button>
+        <span class="recipe-modal-name" id="pickerConfirmTitle"></span>
+        <button class="btn-icon" onclick="document.getElementById('pickerConfirmBackdrop').style.display='none'" aria-label="Close">×</button>
       </div>
-      <div id="recipeModalBody"></div>
+      <div id="pickerConfirmBody" style="padding:16px 0 4px"></div>
     </div>
   </div>
+
 
   <!-- ONBOARDING WIZARD -->
   <div id="wizardBackdrop" class="wizard-backdrop" style="display:none" onclick="closeWizardBackdrop(event)">
     <div class="wizard-card" onclick="event.stopPropagation()">
       <div class="wizard-header">
-        <span class="wizard-logo">Grocery <em>Agent</em></span>
+        <div class="wizard-logo">
+          <svg width="22" height="22" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#2d1b69"/><rect x="6" y="8" width="16" height="3.5" rx="1.75" fill="#a78bfa"/><rect x="8" y="13" width="12" height="3.5" rx="1.75" fill="#8b5cf6"/><rect x="10" y="18" width="8" height="3.5" rx="1.75" fill="#6d28d9"/><path d="M22 3L22.6 5L25 5.5L22.6 6L22 8L21.4 6L19 5.5L21.4 5Z" fill="#ddd6fe"/></svg>
+          Grocery <em>Agent</em>
+        </div>
         <div class="wizard-progress" id="wizardProgress"></div>
       </div>
       <div class="wizard-title" id="wizardTitle">Welcome</div>
@@ -330,18 +484,39 @@
   <div id="prefsPage" class="prefs-page" style="display:none">
     <div class="prefs-page-header">
       <button class="btn" onclick="closePrefsPage()">← back</button>
-      <span class="prefs-page-title">preferences</span>
+      <span class="prefs-page-title">settings</span>
       <button class="btn mustard" id="prefsSaveBtn" onclick="savePrefsPage()">save →</button>
     </div>
     <div class="prefs-page-tabs">
-      <button class="prefs-tab active" id="prefTab-household" onclick="switchPrefsTab('household')">Household</button>
-      <button class="prefs-tab" id="prefTab-mealplan" onclick="switchPrefsTab('mealplan')">Meal Plan</button>
-      <button class="prefs-tab" id="prefTab-staples" onclick="switchPrefsTab('staples')">Staples</button>
-      <button class="prefs-tab" id="prefTab-brands" onclick="switchPrefsTab('brands')">Brands</button>
+      <button class="prefs-tab active" id="prefTab-appearance" onclick="switchPrefsTab('appearance')">Appearance</button>
+      <button class="prefs-tab" id="prefTab-household" onclick="switchPrefsTab('household')">Household</button>
+      <button class="prefs-tab" id="prefTab-food" onclick="switchPrefsTab('food')">Food</button>
+      <button class="prefs-tab" id="prefTab-history" onclick="switchPrefsTab('history')">History</button>
+      <button class="prefs-tab" id="prefTab-account" onclick="switchPrefsTab('account')">Account</button>
     </div>
     <div class="prefs-page-body">
+      <!-- TAB: Appearance -->
+      <div class="prefs-tab-content" id="prefContent-appearance" style="display:none">
+        <div class="card">
+          <div class="card-label">color theme</div>
+          <div class="theme-option-row">
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="auto" onchange="_applyTheme(this.value)">
+              Auto (follows system)
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="dark" onchange="_applyTheme(this.value)">
+              Dark
+            </label>
+            <label class="theme-option">
+              <input type="radio" name="pf-theme" value="light" onchange="_applyTheme(this.value)">
+              Light
+            </label>
+          </div>
+        </div>
+      </div>
       <!-- TAB: Household -->
-      <div class="prefs-tab-content" id="prefContent-household">
+      <div class="prefs-tab-content" id="prefContent-household" style="display:none">
         <div class="card">
           <div class="card-label">household</div>
           <div class="prefs-household-grid">
@@ -352,17 +527,18 @@
             <div class="prefs-field"><label>budget target ($)</label><input type="number" id="pf-budgetTarget" /></div>
             <div class="prefs-field"><label>budget max ($)</label><input type="number" id="pf-budgetMax" /></div>
             <div class="prefs-field prefs-field-wide"><label>time zone</label><input type="text" id="pf-timezone" placeholder="e.g. America/Denver" /></div>
+            <div class="prefs-field prefs-field-wide"><label>reminder emails</label><input type="text" id="pf-emails" placeholder="e.g. you@gmail.com, spouse@gmail.com" /></div>
           </div>
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-label">household items</div>
-          <p class="prefs-sublabel" style="margin-bottom:10px">Items you buy most weeks — set category to fix cart grouping, brand to remember preferences.</p>
+          <p class="prefs-sublabel" style="margin-bottom:10px">Items you buy most weeks — set category to fix cart grouping, brand to remember preferences. Set <strong>days</strong> for a reorder reminder (e.g. 30 = monthly, 42 = every 6 weeks).</p>
           <div id="pf-hhItemsList" class="prefs-hh-items"></div>
           <button class="btn prefs-add-btn" onclick="addHhItemPref()">+ add item</button>
         </div>
       </div>
-      <!-- TAB: Meal Plan -->
-      <div class="prefs-tab-content" id="prefContent-mealplan" style="display:none">
+      <!-- TAB: Food -->
+      <div class="prefs-tab-content" id="prefContent-food" style="display:none">
         <div class="card">
           <div class="card-label">diet &amp; preferences</div>
           <div id="pf-dietList" class="prefs-list"></div>
@@ -379,35 +555,142 @@
             </select>
           </div>
           <div style="margin-top:14px">
-            <span class="prefs-sublabel">general notes</span>
-            <textarea class="prefs-notes-area" id="pf-notes" placeholder="Additional notes for the meal planner..."></textarea>
+            <span class="prefs-sublabel">brand preferences</span>
+            <div id="pf-brandList" class="prefs-brand-list"></div>
+            <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
           </div>
-        </div>
-      </div>
-      <!-- TAB: Staples -->
-      <div class="prefs-tab-content" id="prefContent-staples" style="display:none">
-        <div class="card">
-          <div class="card-label">weekly staples — ordered every week</div>
-          <div id="pf-weeklyList" class="prefs-list"></div>
-          <button class="btn prefs-add-btn" onclick="addPrefItem('weekly')">+ add staple</button>
-        </div>
-        <div class="card">
-          <div class="card-label">frequent staples — ordered most weeks</div>
-          <div id="pf-frequentList" class="prefs-list"></div>
-          <button class="btn prefs-add-btn" onclick="addPrefItem('frequent')">+ add staple</button>
-        </div>
-      </div>
-      <!-- TAB: Brands -->
-      <div class="prefs-tab-content" id="prefContent-brands" style="display:none">
-        <div class="card">
-          <div class="card-label">brand rules</div>
-          <div id="pf-brandList" class="prefs-brand-list"></div>
-          <button class="btn prefs-add-btn" onclick="addBrandRule()">+ add rule</button>
           <div style="margin-top:14px">
-            <span class="prefs-sublabel">store brand / Great Value ok for</span>
-            <textarea class="prefs-notes-area" id="pf-storeOk" placeholder="e.g. flour, pasta, canned goods..."></textarea>
+            <span class="prefs-sublabel">shopping notes</span>
+            <textarea class="prefs-notes-area" id="pf-notes" placeholder="Brand preferences, store brand guidance, specific product notes..."></textarea>
           </div>
         </div>
+      </div>
+      <!-- TAB: History -->
+      <div class="prefs-tab-content" id="prefContent-history" style="display:none">
+        <div class="card">
+          <div class="card-label">meal planning history</div>
+          <div id="mealHistoryCard"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Account -->
+      <div class="prefs-tab-content" id="prefContent-account" style="display:none">
+        <div class="card">
+          <div class="card-label">change password</div>
+          <div class="prefs-field prefs-field-wide" style="margin-bottom:10px">
+            <label>signed in as</label>
+            <input type="text" id="acct-username" readonly style="opacity:.6;cursor:default">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>current password</label>
+            <input type="password" id="acct-current-pw" autocomplete="current-password">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>new password</label>
+            <input type="password" id="acct-new-pw" autocomplete="new-password">
+          </div>
+          <div class="prefs-field prefs-field-wide">
+            <label>confirm new password</label>
+            <input type="password" id="acct-confirm-pw" autocomplete="new-password">
+          </div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+            <button class="btn primary" onclick="changePassword()">update password</button>
+            <span id="acct-pw-msg" style="font-size:12px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STAPLES PANEL (full-screen) -->
+  <div id="staplesPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeStaplesPage()">← back</button>
+      <span class="prefs-page-title">staples</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" onclick="clearStapleCache()" id="clearCacheBtn">clear cache</button>
+        <button class="btn" onclick="addStapleFromPanel()">+ add staple</button>
+      </div>
+    </div>
+    <div class="recipes-page-body">
+      <p class="prefs-sublabel" style="margin:16px 0 4px">Your recurring purchases — confirmed each week in Step 4.</p>
+      <div id="staplesPanelList"></div>
+      <div class="staple-extras-section">
+        <div class="card-label" style="margin:20px 0 6px">one-time this week <span class="card-label-hint">(not saved)</span></div>
+        <div id="staplesOneTimeList"></div>
+        <div class="hh-extra-input-row">
+          <input class="schedule-note" id="staplesOneTimeInput" placeholder="add a one-time item..." onkeydown="if(event.key==='Enter')addOneTimeStaple()" />
+          <button class="btn primary" style="height:30px;padding:0 14px;font-size:12px" onclick="addOneTimeStaple()">add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRAINING PANEL (full-screen) -->
+  <div id="trainingPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeTrainingPage()">← back</button>
+      <span class="prefs-page-title">training</span>
+      <button class="btn primary" onclick="saveTrainingPrefs()">save →</button>
+    </div>
+    <div class="recipes-page-body">
+      <div class="card">
+        <div class="card-label">athlete training</div>
+        <label class="prefs-toggle-row">
+          <input type="checkbox" id="tr-enabled" onchange="toggleTrainingEnabled()">
+          <span>enabled</span>
+        </label>
+        <div id="tr-fields" style="display:none;margin-top:14px">
+          <div class="prefs-household-grid" style="margin-bottom:10px">
+            <div class="prefs-field prefs-field-wide"><label>race</label><input type="text" id="tr-raceName" placeholder="e.g. Portland Marathon" /></div>
+            <div class="prefs-field prefs-field-wide"><label>race date</label><input type="text" id="tr-raceDate" placeholder="e.g. October 4, 2026" /></div>
+            <div class="prefs-field prefs-field-wide">
+              <label>training phase</label>
+              <select id="tr-trainingPhase" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                <option value="Base Building">Base Building</option>
+                <option value="Aerobic Development">Aerobic Development</option>
+                <option value="Peak Mileage">Peak Mileage</option>
+                <option value="Race Week">Race Week</option>
+                <option value="Taper">Taper</option>
+              </select>
+            </div>
+            <div class="prefs-field">
+              <label>long run day</label>
+              <select id="tr-longRunDay" class="schedule-note" style="width:100%;padding:7px 10px;font-size:13px">
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+            <div class="prefs-field"><label>long run this week (mi)</label><input type="number" id="tr-longRunMi" min="1" max="30" placeholder="10" /></div>
+          </div>
+          <div style="margin-bottom:8px">
+            <span class="prefs-sublabel" style="display:block;margin-bottom:6px">run days this week</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <label class="athlete-day-pill"><input type="checkbox" value="Monday" class="tr-runDay" /> Mon</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Tuesday" class="tr-runDay" /> Tue</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="tr-runDay" /> Wed</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Thursday" class="tr-runDay" /> Thu</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Friday" class="tr-runDay" /> Fri</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Saturday" class="tr-runDay" /> Sat</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Sunday" class="tr-runDay" /> Sun</label>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
+            <input type="checkbox" id="tr-appetiteSensitive" />
+            <span class="prefs-sublabel" style="margin-bottom:0">timing-sensitive appetite (pre-run meals small + easy to digest)</span>
+          </label>
+        </div>
+      </div>
+      <div id="tr-itemsCard" class="card" style="display:none;margin-top:10px">
+        <div class="card-label">this week's items</div>
+        <p class="review-hint" style="margin-bottom:4px">Personal athlete nutrition — added to your cart separately from the family grocery list. Uncheck anything you already have.</p>
+        <div id="tr-itemsCount" class="review-hint" style="margin-bottom:8px;color:var(--text3)"></div>
+        <div id="tr-itemsList" class="athlete-items-list"></div>
       </div>
     </div>
   </div>
@@ -422,11 +705,37 @@
         <a class="btn" href="/pantry/export" download="pantry.csv">export CSV</a>
         <button class="btn" id="pantryImportBtn" onclick="document.getElementById('pantryImportFile').click()">import CSV</button>
         <input type="file" id="pantryImportFile" accept=".csv" style="display:none" onchange="handlePantryImport(this)">
+        <button class="btn" onclick="openOrderUpload()">from order →</button>
       </div>
     </div>
     <div class="recipes-page-body">
       <input class="recipes-search" id="pantrySearch" type="text" placeholder="search pantry..." oninput="renderPantryPanel()" />
       <div id="pantryList"></div>
+      <div id="orderUploadCard" style="display:none">
+        <div class="card" style="margin-top:12px">
+          <div class="card-label">import from walmart order</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn order-tab-btn active" id="orderTabCsv" onclick="switchOrderTab('csv')">paste CSV</button>
+            <button class="btn order-tab-btn" id="orderTabPdf" onclick="switchOrderTab('pdf')">upload PDF</button>
+          </div>
+          <div id="orderCsvSection">
+            <textarea id="orderCsvInput" class="prefs-notes-area" rows="5" placeholder="Paste your Walmart order history CSV text here…"></textarea>
+          </div>
+          <div id="orderPdfSection" style="display:none">
+            <input type="file" id="orderPdfInput" accept=".pdf" style="font-size:13px;margin-bottom:4px">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <button class="btn primary" onclick="parseWalmartOrder()">parse →</button>
+            <button class="btn" onclick="closeOrderUpload()">cancel</button>
+            <span id="orderParseStatus" style="font-size:12px;color:var(--text3)"></span>
+          </div>
+          <div id="orderResultsSection" style="display:none;margin-top:12px">
+            <div class="card-label" style="margin-bottom:8px">found items — check what to add</div>
+            <div id="orderItemsList"></div>
+            <button class="btn primary" style="margin-top:8px" onclick="confirmOrderItems()">add to pantry →</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -434,17 +743,52 @@
   <div id="holidayPage" class="prefs-page" style="display:none">
     <div class="prefs-page-header">
       <button class="btn" onclick="closeHolidayPlanner()">← back</button>
-      <span class="prefs-page-title">holiday planner</span>
+      <span class="prefs-page-title">occasions planner</span>
       <button class="btn primary" onclick="saveHolidayPlan()">save →</button>
     </div>
     <div class="prefs-page-body holiday-planner-body">
       <div class="card">
         <div class="card-label">event</div>
         <div class="meal-pick-grid" id="hpTypePicker"></div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <div id="hpGuestsRow" style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
           <span class="prefs-sublabel" style="margin:0">guests</span>
           <input id="hpGuests" type="number" class="schedule-note" min="1" max="80" style="width:72px">
           <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpGenerateBtn" onclick="generateHolidayMenu()">generate menu →</button>
+        </div>
+        <div id="hpVacationControls" style="display:none;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <span class="prefs-sublabel" style="margin:0">trip type</span>
+            <select id="hpTripType" class="schedule-note" style="width:auto;padding:5px 10px;font-size:12px" onchange="_updateKitchenToggleVisibility(this.value)">
+              <option>Road trip</option>
+              <option>Flight</option>
+              <option>Hotel stay</option>
+              <option>Cabin / Rental</option>
+            </select>
+          </div>
+          <div id="hpKitchenRow" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" id="hpHasKitchen"> we'll have a kitchen at the destination
+            </label>
+          </div>
+          <div style="margin-bottom:10px">
+            <span class="prefs-sublabel" style="display:block;margin-bottom:6px">which days are you away?</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <label class="athlete-day-pill"><input type="checkbox" value="Sunday"    class="hp-vac-day"> Sun</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Monday"    class="hp-vac-day"> Mon</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Tuesday"   class="hp-vac-day"> Tue</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Wednesday" class="hp-vac-day"> Wed</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Thursday"  class="hp-vac-day"> Thu</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Friday"    class="hp-vac-day"> Fri</label>
+              <label class="athlete-day-pill"><input type="checkbox" value="Saturday"  class="hp-vac-day"> Sat</label>
+            </div>
+          </div>
+          <button class="btn primary" style="height:28px;padding:0 14px;font-size:12px" id="hpVacGenBtn" onclick="generateVacationPlan()">plan this trip →</button>
+        </div>
+        <div id="hpHostingControls" style="display:none;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="prefs-sublabel" style="margin:0">how many nights are they staying?</span>
+            <input type="number" id="hpVisitDays" min="1" max="10" value="3" class="schedule-note" style="width:60px">
+          </div>
         </div>
       </div>
       <div id="hpMenuCard" style="display:none">
@@ -453,18 +797,35 @@
           <div id="hpMenuBody"></div>
         </div>
       </div>
+      <div id="hpTravelCard" style="display:none">
+        <div class="card">
+          <div class="card-label">travel food</div>
+          <div id="hpTravelBody"></div>
+        </div>
+      </div>
       <div id="hpNotesCard" style="display:none">
         <div class="card" style="display:flex;flex-direction:column;gap:14px">
           <div>
-            <span class="prefs-sublabel">guest notes</span>
+            <span class="prefs-sublabel">notes</span>
             <textarea id="hpNotes" class="prefs-notes-area" rows="3" placeholder="dietary restrictions, special guests, allergies..."></textarea>
           </div>
-          <div>
+          <div id="hpTimelineRow">
             <span class="prefs-sublabel">prep timeline</span>
             <textarea id="hpTimeline" class="prefs-notes-area" rows="4" placeholder="e.g. Thursday 8am: turkey in oven · 2pm: prep sides..."></textarea>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- SPEND HISTORY PAGE (full-screen) -->
+  <div id="historyPage" class="prefs-page" style="display:none">
+    <div class="prefs-page-header">
+      <button class="btn" onclick="closeHistoryPage()">← back</button>
+      <span class="prefs-page-title">spend history</span>
+    </div>
+    <div class="recipes-page-body">
+      <div id="historyDashboard"><span class="hh-loading">loading...</span></div>
     </div>
   </div>
 
@@ -475,10 +836,11 @@
       <span class="prefs-page-title">recipe book</span>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" onclick="addRecipeManual()">+ add</button>
+        <button class="btn" onclick="openRecipeUrlImport()">import URL</button>
         <a class="btn" href="/recipes/export" download="recipes.csv">export CSV</a>
         <button class="btn" id="recipesImportBtn" onclick="document.getElementById('recipesImportFile').click()">import CSV</button>
         <input type="file" id="recipesImportFile" accept=".csv" style="display:none" onchange="handleRecipesImport(this)">
-        <button class="btn" id="recipesBackfillBtn" onclick="backfillRecipes()">fill missing</button>
+        <button class="btn" id="recipesBackfillBtn" onclick="rebuildAllRecipes()">rebuild all</button>
       </div>
     </div>
     <div class="recipes-page-body">
@@ -487,6 +849,60 @@
     </div>
   </div>
 
+<!-- RECIPE MODAL — lives outside #mainApp so it works from the dashboard too -->
+<div id="recipeModal" class="recipe-modal-backdrop" style="display:none" onclick="closeRecipeModal(event)">
+  <div class="recipe-modal-card" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="recipeModalName">
+    <div class="recipe-modal-header">
+      <span class="recipe-modal-name" id="recipeModalName"></span>
+      <button class="btn-icon" onclick="document.getElementById('recipeModal').style.display='none'" aria-label="Close recipe">×</button>
+    </div>
+    <div id="recipeModalBody"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD PANTRY IDEAS SHEET -->
+<div id="dashPantrySheet" class="dash-sheet-backdrop" style="display:none" onclick="_closeDashSheet(event,'dashPantrySheet')">
+  <div class="dash-sheet-card">
+    <div class="dash-sheet-header">
+      <div>
+        <div class="dash-sheet-label">Ideas for using</div>
+        <div class="dash-sheet-day-name" id="dashPantrySheetItem"></div>
+      </div>
+      <button class="btn-icon" onclick="document.getElementById('dashPantrySheet').style.display='none'">×</button>
+    </div>
+    <div id="dashPantrySheetBody" style="padding:4px 20px 8px"></div>
+    <div class="dash-sheet-footer">
+      <button class="btn" onclick="document.getElementById('dashPantrySheet').style.display='none'">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD MEAL EDITOR SHEET -->
+<div id="dashMealSheet" class="dash-sheet-backdrop" style="display:none" onclick="_closeDashSheet(event,'dashMealSheet')">
+  <div class="dash-sheet-card">
+    <div class="dash-sheet-header">
+      <div>
+        <div class="dash-sheet-label">Change dinner</div>
+        <div class="dash-sheet-day-name" id="dashMealSheetDay"></div>
+      </div>
+      <button class="btn-icon" onclick="document.getElementById('dashMealSheet').style.display='none'">×</button>
+    </div>
+    <div class="dash-sheet-quick-row" id="dashMealSheetQuick"></div>
+    <div style="padding:0 20px 4px">
+      <input id="dashMealSheetInput" type="text" class="dash-sheet-input"
+             placeholder="Search recipes or type a meal…"
+             oninput="renderDashMealSearch()" onkeydown="dashMealKeydown(event)" autocomplete="off">
+    </div>
+    <div id="dashMealSheetResults" class="dash-sheet-results"></div>
+    <div id="dashSheetPantryRow" style="display:none">
+      <div class="dash-sheet-pantry-label">Pantry — use this week</div>
+      <div id="dashSheetPantryChips" class="dash-pantry-chips" style="padding:0 20px 8px"></div>
+    </div>
+    <div class="dash-sheet-footer">
+      <button class="btn" onclick="document.getElementById('dashMealSheet').style.display='none'">cancel</button>
+      <button class="btn primary" onclick="saveDashMeal()">save</button>
+    </div>
+  </div>
 </div>
 
 <input type="file" id="photoUploadInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">
@@ -497,5 +913,23 @@
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   }
 </script>
+
+<!-- FEEDBACK FAB + MODAL -->
+<button id="feedbackBtn" class="feedback-fab" onclick="openFeedbackModal()" aria-label="Give feedback" title="Give feedback">?</button>
+<div id="feedbackModal" class="feedback-modal" style="display:none" onclick="_closeFeedbackModal(event)">
+  <div class="feedback-modal-box">
+    <div class="feedback-modal-header">
+      <span class="feedback-modal-title">send feedback</span>
+      <button class="feedback-modal-close" onclick="closeFeedbackModal()">&#215;</button>
+    </div>
+    <div class="feedback-type-row">
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="bug" checked> bug</label>
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="suggestion"> suggestion</label>
+      <label class="feedback-type-pill"><input type="radio" name="feedbackType" value="other"> other</label>
+    </div>
+    <textarea id="feedbackText" class="feedback-textarea" rows="4" placeholder="What's on your mind?"></textarea>
+    <button class="btn primary" onclick="submitFeedback()">send</button>
+  </div>
+</div>
 </body>
 </html>

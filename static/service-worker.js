@@ -1,6 +1,5 @@
 const CACHE = 'grocery-agent-dev'; // overwritten at serve time by server.py with startup timestamp
 const SHELL = [
-  '/',
   '/static/app.js',
   '/static/style.css',
   '/static/icon-192.png',

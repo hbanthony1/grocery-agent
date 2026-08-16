@@ -212,7 +212,6 @@ mozzarella string cheese, crushed tomatoes, frozen potatoes, distilled water, vi
 ## Seasonal / special occasion notes
 - **Holiday baking:** Ghirardelli Chocolate Chips, Jet-Puffed Mini Marshmallows, Rice Krispies, vanilla extract, sprinkles → Rice Krispie treats + chocolate desserts for Christmas
 - **Holiday entertaining:** High-end cheese board (Kerrygold, Vermont Creamery Goat Cheese, President Brie), charcuterie, fruit tray, artisan crackers — *buy these for gatherings, not weekly*
-- **Kids' treats/gifts:** Bath bombs, drawing tablets observed in Dec orders — *don't include in meal plan budget*
 
 ---
 
